@@ -1,0 +1,10 @@
+{
+  "name": "dcsmart-etl",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@google-cloud/bigquery": "^7.9.0",
+    "pg": "^8.13.0"
+  }
+}

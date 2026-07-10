@@ -1,0 +1,13 @@
+{
+  "hosting": [
+    {
+      "target": "analytics",
+      "public": "frontend/dist",
+      "ignore": ["**/.*"],
+      "rewrites": [
+        { "source": "/api/**", "run": { "serviceId": "dcsmart-analytics-api", "region": "us-central1" } },
+        { "source": "**", "destination": "/index.html" }
+      ]
+    }
+  ]
+}

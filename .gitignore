@@ -1,0 +1,27 @@
+# Dependencias
+**/node_modules
+
+# Variables de entorno / secretos (nunca versionar los reales)
+backend/.env
+**/.env
+**/.env.*.local
+!**/.env.example
+
+# Build output
+frontend/dist
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+.firebaserc.local
+
+# Scripts de prueba temporales (patrón usado durante desarrollo)
+*.tmp.mjs
+*.tmp.js
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,13 @@
+{
+  "projects": {},
+  "targets": {
+    "dc-smart-mvp": {
+      "hosting": {
+        "analytics": [
+          "dcsmart-analytics"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
