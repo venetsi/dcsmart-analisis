@@ -36,7 +36,10 @@ export async function resolveAccess (fastify, user) {
 
 export default async function (fastify) {
   // POST /api/auth/login  { email, password }
-  fastify.post('/login', async (req, reply) => {
+  // Rate limit por IP para frenar fuerza bruta de contraseñas.
+  fastify.post('/login', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+  }, async (req, reply) => {
     const { email, password } = req.body || {}
     if (!email || !password) return reply.code(400).send({ error: 'Email y contraseña requeridos' })
 

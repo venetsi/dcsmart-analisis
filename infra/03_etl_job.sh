@@ -26,4 +26,4 @@ gcloud scheduler jobs create http dcsmart-etl-trigger --project=$PROJECT --locat
   --oauth-service-account-email=dcsmart-etl@$PROJECT.iam.gserviceaccount.com || \
 gcloud scheduler jobs update http dcsmart-etl-trigger --project=$PROJECT --location=$REGION \
   --schedule="0 7,15,23 * * *" --time-zone="America/Argentina/Buenos_Aires"
-echo "✓ ETL job + scheduler (06:00, 12:00, 20:00 AR)"
+echo "✓ ETL job + scheduler (07:00, 15:00, 23:00 AR)"

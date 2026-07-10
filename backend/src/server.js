@@ -4,6 +4,7 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
+import rateLimit from '@fastify/rate-limit'
 import 'dotenv/config'
 
 import dbPlugin from './plugins/db.js'
@@ -14,7 +15,9 @@ import presetsRoutes from './routes/presets.js'
 import datasetsRoutes from './routes/datasets.js'
 import aiRoutes from './routes/ai.js'
 
-const app = Fastify({ logger: true })
+// trustProxy: Cloud Run/Firebase Hosting están delante nuestro — sin esto, req.ip
+// (y por lo tanto el rate limit) vería siempre la IP del proxy, no la del cliente real.
+const app = Fastify({ logger: true, trustProxy: true })
 
 await app.register(cors, {
   origin: (origin, cb) => {
@@ -26,6 +29,8 @@ await app.register(cors, {
 })
 
 await app.register(jwt, { secret: process.env.ANALYTICS_JWT_SECRET })
+// global:false = opt-in por ruta (ver config.rateLimit en auth.js) en vez de limitar todo el API
+await app.register(rateLimit, { global: false })
 await app.register(dbPlugin)
 await app.register(bqPlugin)
 
