@@ -43,6 +43,9 @@ export default function Sidebar() {
       <NavLink to="/pyl" className={navClass}>
         <span className="ic">▣</span> P&amp;L
       </NavLink>
+      <NavLink to="/financiero" className={navClass}>
+        <span className="ic">◆</span> Resumen Financiero
+      </NavLink>
 
       {user?.admin && (
         <>

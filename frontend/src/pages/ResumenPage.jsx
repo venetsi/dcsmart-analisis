@@ -26,7 +26,7 @@ const directLabels = {
     ctx.save()
     ctx.font = '600 10.5px Montserrat, sans-serif'
     chart.data.datasets.forEach((ds, i) => {
-      if (ds.proy || !chart.isDatasetVisible(i)) return
+      if (ds.proy || !ds.label || !chart.isDatasetVisible(i)) return
       const meta = chart.getDatasetMeta(i)
       const last = [...meta.data].reverse().find((p) => p && !isNaN(p.y))
       if (!last) return
@@ -36,7 +36,8 @@ const directLabels = {
     ctx.restore()
   }
 }
-ChartJS.register(directLabels)
+// NO se registra global (contaminaba otros charts con "undefined"): se pasa
+// por-instancia vía plugins={[directLabels]} solo en el gráfico de esta página.
 
 function fmtSemana(iso) {
   const d = new Date(iso + 'T00:00:00')
@@ -152,6 +153,7 @@ export default function ResumenPage() {
         <div className="dash-chart-wrap">
           {chart && (
             <Line
+              plugins={[directLabels]}
               data={{ labels: chart.labels, datasets: chart.datasets }}
               options={{
                 responsive: true,

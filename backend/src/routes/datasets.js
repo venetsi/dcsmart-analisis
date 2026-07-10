@@ -258,6 +258,87 @@ export default async function (fastify) {
     }
   })
 
+  // GET /api/data/resumen-financiero?mes=YYYY-MM&grupo=&local= — panel financiero.
+  // Sólo lo derivable de flujos: márgenes de rentabilidad, flujo de caja neto (base caja)
+  // y días de proveedores aprox. Los ratios de balance (liquidez, ROA/ROE) NO se calculan
+  // acá porque requieren saldos (activo/pasivo/patrimonio) que la data transaccional no tiene.
+  fastify.get('/resumen-financiero', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const mes = /^\d{4}-\d{2}$/.test(req.query.mes || '') ? req.query.mes : null
+    if (!mes) return reply.code(400).send({ error: 'mes (YYYY-MM) requerido' })
+    const [y, m] = mes.split('-').map(Number)
+    const desde = `${mes}-01`
+    const hasta = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+    const diasMes = new Date(Date.UTC(y, m, 0)).getUTCDate()
+    const local = req.query.local ? String(req.query.local) : null
+    const grupo = req.query.grupo ? String(req.query.grupo) : null
+    const scopeCond = local ? ' AND local = @local' : (grupo ? ' AND grupo = @grupo' : '')
+    const params = { desde, hasta }
+    if (local) params.local = local
+    else if (grupo) params.grupo = grupo
+
+    // rubros que NO son gasto operativo (tesorería / financiación / distribución)
+    const NO_OP = "('Caja Mayor','Local','Plan de Pagos','Socios','Aportes')"
+
+    const [[ventasRow], [clasesRows]] = await Promise.all([
+      fastify.bq.query({
+        query: `SELECT CAST(ROUND(SUM(total)) AS INT64) total FROM ${DS}.vw_cajas
+                WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}`,
+        params
+      }),
+      fastify.bq.query({
+        query: `SELECT
+                  CASE WHEN STARTS_WITH(UPPER(rubro),'CMV') THEN 'cmv'
+                       WHEN rubro IN ${NO_OP} THEN 'no_op' ELSE 'op' END AS clase,
+                  ingresa_egreso, pagado,
+                  CAST(ROUND(SUM(importe)) AS INT64) AS total
+                FROM ${DS}.vw_pagos
+                WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}
+                GROUP BY 1, 2, 3`,
+        params
+      })
+    ])
+
+    const rows = plainRows(clasesRows).map(r => ({ ...r, total: Number(r.total || 0) }))
+    const sum = (f) => rows.filter(f).reduce((a, r) => a + r.total, 0)
+    const egr = (r) => r.ingresa_egreso === 'EGRESO'
+    const ing = (r) => r.ingresa_egreso === 'INGRESO'
+
+    const ventas = Number(ventasRow[0]?.total || 0)
+    const cmv = sum(r => r.clase === 'cmv' && egr(r))
+    const opex = sum(r => r.clase === 'op' && egr(r))
+    const noOp = sum(r => r.clase === 'no_op' && egr(r))
+    const otrosIngresos = sum(ing)
+    const pendienteProv = sum(r => (r.clase === 'cmv' || r.clase === 'op') && egr(r) && r.pagado === false)
+    const salidasOpPagadas = sum(r => (r.clase === 'cmv' || r.clase === 'op') && egr(r) && r.pagado === true)
+    const salidasFinPagadas = sum(r => r.clase === 'no_op' && egr(r) && r.pagado === true)
+
+    const pct = (x) => (ventas ? +(x / ventas * 100).toFixed(1) : null)
+    const resultadoBruto = ventas - cmv
+    const resultadoOperativo = resultadoBruto - opex
+    const resultadoNeto = resultadoOperativo + otrosIngresos
+    const comprasDiarias = (cmv + opex) / diasMes
+    const flujoNeto = ventas + otrosIngresos - salidasOpPagadas - salidasFinPagadas
+
+    return {
+      mes, scope: { grupo, local },
+      rentabilidad: {
+        ventas, cmv, resultadoBruto, resultadoOperativo, resultadoNeto,
+        margenBruto: pct(resultadoBruto), margenOperativo: pct(resultadoOperativo), margenNeto: pct(resultadoNeto)
+      },
+      flujoCaja: {
+        entradas_operativas: ventas,
+        salidas_operativas: salidasOpPagadas,
+        entradas_financieras: otrosIngresos,
+        salidas_financieras: salidasFinPagadas,
+        neto: flujoNeto
+      },
+      capitalTrabajo: {
+        deuda_proveedores_pendiente: pendienteProv,
+        dias_proveedores: comprasDiarias ? +(pendienteProv / comprasDiarias).toFixed(0) : null
+      }
+    }
+  })
+
   // GET /api/data/:dataset/options — valores para poblar los dropdowns (acotados por grupo)
   fastify.get('/:dataset/options', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const def = DATASETS[req.params.dataset]
