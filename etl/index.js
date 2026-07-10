@@ -7,6 +7,7 @@
 import pg from 'pg'
 import { BigQuery } from '@google-cloud/bigquery'
 import crypto from 'node:crypto'
+import { Readable } from 'node:stream'
 
 const {
   PGHOST, PGDATABASE = 'postgres', PGUSER = 'analytics_ro', PGPASSWORD,
@@ -106,24 +107,41 @@ async function setWatermark (tabla, wm) {
   })
 }
 
+// Carga por LOAD JOB (no streaming). El streaming insert() deja los datos en un
+// buffer que no queda disponible de inmediato para DML/queries: correr el MERGE
+// justo después leía un staging incompleto y dejaba datos viejos/corruptos
+// (p.ej. ingresa_egreso). Los load jobs son consistentes al terminar.
+async function loadJob (bqTable, rows, writeDisposition) {
+  const ndjson = rows.map(r => JSON.stringify(r)).join('\n')
+  await new Promise((resolve, reject) => {
+    const ws = ds.table(bqTable).createWriteStream({
+      sourceFormat: 'NEWLINE_DELIMITED_JSON',
+      writeDisposition,
+      ignoreUnknownValues: true
+    })
+    ws.on('error', reject).on('job', job => job.on('complete', () => resolve()).on('error', reject))
+    Readable.from([ndjson]).pipe(ws)
+  })
+}
+
 async function loadRows (bqTable, rows, mode, mergeKeys = ['id']) {
   if (!rows.length && mode === 'incremental') return 0
   const loadedAt = new Date().toISOString()
   rows = rows.map(r => ({ ...r, _etl_loaded_at: bqTable.startsWith('raw_') ? loadedAt : undefined }))
 
   if (mode === 'full') {
-    // dims: truncado + insert (chicas, sin partición)
-    await bq.query(`TRUNCATE TABLE ${BQ_DATASET}.${bqTable}`)
-    if (rows.length) await ds.table(bqTable).insert(rows, { ignoreUnknownValues: true })
+    // dims: reemplazo atómico por load job (WRITE_TRUNCATE); si viene vacío, truncar
+    if (rows.length) await loadJob(bqTable, rows, 'WRITE_TRUNCATE')
+    else await bq.query(`TRUNCATE TABLE ${BQ_DATASET}.${bqTable}`)
     return rows.length
   }
 
-  // incremental: staging + MERGE por id (idempotente, soporta updates)
+  // incremental: staging (load job, consistente) + MERGE por id (idempotente)
   const staging = `${bqTable}_stg_${runId.slice(0, 8)}`
   const [table] = await ds.table(bqTable).get()
   const schema = table.metadata.schema
   await ds.createTable(staging, { schema, expirationTime: Date.now() + 3600_000 })
-  await ds.table(staging).insert(rows, { ignoreUnknownValues: true })
+  await loadJob(staging, rows, 'WRITE_TRUNCATE')
 
   const cols = schema.fields.map(f => f.name)
   const on = mergeKeys.map(k => `T.${k} = S.${k}`).join(' AND ')

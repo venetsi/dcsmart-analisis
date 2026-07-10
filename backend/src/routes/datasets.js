@@ -195,6 +195,69 @@ export default async function (fastify) {
     }
   })
 
+  // GET /api/data/pyl?mes=YYYY-MM&grupo=&local= — Estado de Resultados (P&L) mensual.
+  // Ventas de vw_cajas (con split efectivo/fiscal nativo). Gastos = pagos EGRESO por
+  // rubro+categoria, split fiscal (metodo != Efectivo) vs efectivo. El frontend arma
+  // la estructura de secciones del P&L; el backend devuelve los agregados.
+  fastify.get('/pyl', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const mes = /^\d{4}-\d{2}$/.test(req.query.mes || '') ? req.query.mes : null
+    if (!mes) return reply.code(400).send({ error: 'mes (YYYY-MM) requerido' })
+    const [y, m] = mes.split('-').map(Number)
+    const desde = `${mes}-01`
+    const hasta = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) // último día del mes
+    const local = req.query.local ? String(req.query.local) : null
+    const grupo = req.query.grupo ? String(req.query.grupo) : null
+    const scopeCond = local ? ' AND local = @local' : (grupo ? ' AND grupo = @grupo' : '')
+    const params = { desde, hasta }
+    if (local) params.local = local
+    else if (grupo) params.grupo = grupo
+
+    const [[ventasRows], [origenRows], [gastosRows]] = await Promise.all([
+      fastify.bq.query({
+        query: `SELECT CAST(ROUND(SUM(total)) AS INT64) total,
+                       CAST(ROUND(SUM(efectivo)) AS INT64) efectivo,
+                       CAST(ROUND(SUM(fiscal)) AS INT64) fiscal,
+                       SUM(comensales) AS comensales, SUM(tickets) AS tickets
+                FROM ${DS}.vw_cajas WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}`,
+        params
+      }),
+      fastify.bq.query({
+        query: `SELECT origin AS origen, CAST(ROUND(SUM(total)) AS INT64) total,
+                       CAST(ROUND(SUM(efectivo)) AS INT64) efectivo, CAST(ROUND(SUM(fiscal)) AS INT64) fiscal
+                FROM ${DS}.vw_cajas WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}
+                GROUP BY 1 ORDER BY total DESC`,
+        params
+      }),
+      fastify.bq.query({
+        query: `SELECT rubro, categoria,
+                       CAST(ROUND(SUM(importe)) AS INT64) total,
+                       CAST(ROUND(SUM(IF(metodo != 'Efectivo' OR metodo IS NULL, importe, 0))) AS INT64) fiscal,
+                       CAST(ROUND(SUM(IF(metodo = 'Efectivo', importe, 0))) AS INT64) efectivo
+                FROM ${DS}.vw_pagos
+                WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desde AND @hasta${scopeCond}
+                GROUP BY 1, 2 ORDER BY total DESC`,
+        params
+      })
+    ])
+
+    const v = plainRows(ventasRows)[0] || {}
+    return {
+      mes, scope: { grupo, local },
+      ventas: {
+        total: Number(v.total || 0), fiscal: Number(v.fiscal || 0), efectivo: Number(v.efectivo || 0),
+        comensales: Number(v.comensales || 0), tickets: Number(v.tickets || 0),
+        por_origen: plainRows(origenRows).map(r => ({
+          origen: r.origen || '(sin origen)', total: Number(r.total || 0),
+          fiscal: Number(r.fiscal || 0), efectivo: Number(r.efectivo || 0)
+        }))
+      },
+      gastos: plainRows(gastosRows).map(r => ({
+        rubro: r.rubro || '(sin rubro)', categoria: r.categoria || '(sin categoría)',
+        total: Number(r.total || 0), fiscal: Number(r.fiscal || 0), efectivo: Number(r.efectivo || 0)
+      }))
+    }
+  })
+
   // GET /api/data/:dataset/options — valores para poblar los dropdowns (acotados por grupo)
   fastify.get('/:dataset/options', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const def = DATASETS[req.params.dataset]

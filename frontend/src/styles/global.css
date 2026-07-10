@@ -208,3 +208,51 @@ tbody tr:hover{background:#4e4d4c}
   padding:4px 12px;background:rgba(0,0,0,.18)}
 .dash-chart-wrap{position:relative;height:320px}
 .dash-table{border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.28), 0 10px 26px rgba(0,0,0,.25)}
+
+/* ===== P&L ===== */
+.pyl-actions{display:flex;gap:10px;align-items:center}
+.btn-pdf{padding:9px 18px;border-radius:9px;border:1px solid var(--teal);background:rgba(8,124,133,.15);
+  color:#fff;font-size:12.5px;font-weight:600;cursor:pointer}
+.btn-pdf:hover{background:var(--teal)}
+.pyl-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:var(--gap);margin-bottom:var(--gap)}
+@media(max-width:1000px){.pyl-grid{grid-template-columns:1fr}}
+.pyl-card{position:relative;border-radius:16px;padding:16px 20px;
+  background:linear-gradient(170deg,#4b4a49 0%,var(--card) 60%);border:1px solid rgba(255,255,255,.07);
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 2px 4px rgba(0,0,0,.3), 0 14px 34px rgba(0,0,0,.34)}
+.pyl-card h4{font-size:12.5px;font-weight:600;margin-bottom:10px}
+.pyl-card .wrap{position:relative;height:280px}
+.pyl-card .wrap.sm{height:230px}
+
+.pyl-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.pyl-table th{text-align:right;padding:7px 10px;color:var(--txt2);font-size:10px;text-transform:uppercase;
+  letter-spacing:.5px;border-bottom:2px solid var(--border)}
+.pyl-table th:first-child{text-align:left}
+.pyl-table td{padding:5px 10px;border-bottom:1px solid #4a4948}
+.pyl-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.pyl-cat td{color:var(--txt2);font-size:11.5px;padding-left:24px}
+.pyl-sec{background:rgba(8,124,133,.10)}
+.pyl-sec td{font-weight:700;border-top:1px solid var(--border)}
+.pyl-result td{font-weight:700;font-size:13.5px;border-top:2px solid var(--border);border-bottom:2px solid var(--border)}
+.pyl-result.bruto td{background:rgba(122,168,172,.14)}
+.pyl-result.econ td{background:rgba(8,124,133,.20)}
+.pyl-result.pos td:nth-child(2){color:var(--ok)} .pyl-result.neg td:nth-child(2){color:var(--bad)}
+.pyl-memo td{color:var(--txt2)}
+.pyl-pct{color:var(--beige);font-size:11px}
+.pyl-toggle{cursor:pointer;user-select:none}
+.pyl-toggle .caret{display:inline-block;width:12px;color:var(--txt2)}
+
+/* ===== Impresión: P&L en PDF prolijo (fondo claro) ===== */
+@media print {
+  @page { margin: 14mm; size: A4; }
+  .side, .pyl-noprint, .step-label { display: none !important; }
+  .app { display: block !important; }
+  .main { padding: 0 !important; max-width: none !important; }
+  body { background: #fff !important; color: #1a1a1a !important; }
+  .pyl-card, .dash-kpi { box-shadow: none !important; border: 1px solid #ddd !important;
+    background: #fff !important; break-inside: avoid; }
+  .pyl-table td, .pyl-table th { border-color: #ccc !important; }
+  .pyl-table td, .pyl-cat td, .pyl-memo td { color: #1a1a1a !important; }
+  .pyl-sec { background: #f0f0f0 !important; }
+  .pyl-result.econ td { background: #e6f2f2 !important; }
+  .page-hdr h2, .page-hdr p { color: #1a1a1a !important; }
+}

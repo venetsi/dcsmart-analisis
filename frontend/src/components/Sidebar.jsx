@@ -40,6 +40,9 @@ export default function Sidebar() {
       <NavLink to="/cashflow" className={navClass}>
         <span className="ic">⇅</span> Cashflow
       </NavLink>
+      <NavLink to="/pyl" className={navClass}>
+        <span className="ic">▣</span> P&amp;L
+      </NavLink>
 
       {user?.admin && (
         <>

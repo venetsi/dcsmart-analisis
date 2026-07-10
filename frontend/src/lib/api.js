@@ -67,6 +67,7 @@ export const api = {
 
   getGrupos: () => request('/data/grupos'),
   getDashboard: (query) => request(`/data/dashboard${toQueryString(query)}`),
+  getPyl: (query) => request(`/data/pyl${toQueryString(query)}`),
   getDatasetOptions: (dataset, query) => request(`/data/${dataset}/options${toQueryString(query)}`),
   getDataset: (dataset, query) => request(`/data/${dataset}${toQueryString(query)}`),
   getEtlStatus: () => request('/data/etl/status'),
