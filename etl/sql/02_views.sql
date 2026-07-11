@@ -34,6 +34,21 @@ FROM dcsmart_analytics.raw_cajas c
 LEFT JOIN dcsmart_analytics.dim_locales l ON l.id = c.id_local
 LEFT JOIN dcsmart_analytics.dim_apps    a ON a.id = l.id_app;
 
+-- Detalle de pagos por turno: cómo se cobró cada caja por método/canal
+-- (MP Point, MP QR, Transferencia, Rappi, Pedido Ya, LaPOS/Payway, etc.).
+-- Toma fecha/local/cajero del turno (raw_cajas); el detalle no tiene fecha propia.
+CREATE OR REPLACE VIEW dcsmart_analytics.vw_caja_detalles AS
+SELECT
+  d.id, d.id_caja, c.nro_turno, c.fecha_dia, c.cajero,
+  l.nombre AS local, a.nombre AS grupo,
+  d.nombre AS metodo,
+  IFNULL(NULLIF(d.tipo, ''), 'ingreso') AS tipo,
+  d.monto
+FROM dcsmart_analytics.raw_caja_detalles d
+LEFT JOIN dcsmart_analytics.raw_cajas    c ON c.id = d.id_caja
+LEFT JOIN dcsmart_analytics.dim_locales  l ON l.id = c.id_local
+LEFT JOIN dcsmart_analytics.dim_apps     a ON a.id = l.id_app;
+
 -- Cashflow: ingresos (ventas de cajas por día) vs egresos con criterio de caja:
 -- solo pagos EFECTIVAMENTE pagados, ubicados por DATE(cashflow) con fallback a DATE(fecha_pago).
 CREATE OR REPLACE VIEW dcsmart_analytics.vw_flujo_caja AS

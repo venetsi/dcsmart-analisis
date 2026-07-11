@@ -28,6 +28,12 @@ const DATASETS = {
     view: 'vw_flujo_caja', dateCol: 'fecha_dia', amount: 'neto',
     filters: { grupo: 'grupo', local: 'local', cuadratura: 'cuadratura' },
     dims: ['local']
+  },
+  // Detalle de pagos por turno: cómo se cobró cada caja por método/canal.
+  caja_detalles: {
+    view: 'vw_caja_detalles', dateCol: 'fecha_dia', amount: 'monto',
+    filters: { grupo: 'grupo', local: 'local', metodo: 'metodo', cajero: 'cajero', tipo: 'tipo' },
+    dims: ['metodo', 'local', 'cajero']
   }
 }
 

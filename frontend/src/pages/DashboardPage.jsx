@@ -120,8 +120,40 @@ const DATASET_META = {
       'Analizá la cuadratura: ¿dónde hay días parciales?',
       'Proyectá el flujo del próximo mes según la tendencia'
     ]
+  },
+  caja_detalles: {
+    label: 'Detalle de pagos',
+    amountCol: 'monto',
+    dims: ['metodo', 'local', 'cajero'],
+    filterFields: [
+      { key: 'local', label: 'Local' },
+      { key: 'metodo', label: 'Método' },
+      { key: 'cajero', label: 'Cajero' },
+      { key: 'tipo', label: 'Tipo', options: ['ingreso', 'egreso'] }
+    ],
+    columns: [
+      { key: 'fecha_dia', label: 'Fecha' },
+      { key: 'nro_turno', label: 'Turno' },
+      { key: 'local', label: 'Local' },
+      { key: 'cajero', label: 'Cajero' },
+      { key: 'metodo', label: 'Método' },
+      { key: 'tipo', label: 'Tipo', pill: (v) => (v === 'egreso' ? 'egreso' : 'ingreso') },
+      { key: 'monto', label: 'Monto', numeric: true, money: true }
+    ],
+    aiSuggestions: [
+      '¿Qué medio de cobro concentra más ventas?',
+      'Compará efectivo/QR vs tarjetas y apps de delivery',
+      '¿Cómo evolucionó el mix de medios de pago?',
+      '¿Qué comisiones estimás según el mix de cobros?'
+    ]
   }
 }
+
+// La pantalla Ventas alterna entre dos reportes: turnos (cajas) y detalle de pagos.
+const VENTAS_REPORTES = [
+  { key: 'turnos', label: 'Turnos', dataset: 'cajas' },
+  { key: 'pagos', label: 'Detalle de pagos', dataset: 'caja_detalles' }
+]
 
 // Mismo default que aplica el backend cuando no se manda "desde" (ver datasets.js).
 function defaultDesde() {
@@ -133,7 +165,11 @@ export default function DashboardPage({ screen }) {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const sc = SCREENS[screen]
-  const dataset = sc.dataset
+  // En Ventas, el reporte (turnos/pagos) define el dataset; en el resto es fijo.
+  const reporte = screen === 'ventas' ? (searchParams.get('reporte') || 'turnos') : null
+  const dataset = screen === 'ventas'
+    ? (VENTAS_REPORTES.find((r) => r.key === reporte)?.dataset || 'cajas')
+    : sc.dataset
   const meta = DATASET_META[dataset]
 
   const [options, setOptions] = useState({})
@@ -185,6 +221,21 @@ export default function DashboardPage({ screen }) {
         <h2>{sc.title} <small style={{ color: 'var(--beige)', fontWeight: 400, fontSize: 13 }}>· {grupo}</small></h2>
         <p>{sc.desc}</p>
       </div>
+
+      {screen === 'ventas' && (
+        <div className="rep-toggle">
+          {VENTAS_REPORTES.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              className={reporte === r.key ? 'on' : ''}
+              onClick={() => setSearchParams(new URLSearchParams({ reporte: r.key }))}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="step-label"><div className="step-num">1</div><h3>Filtrá la data</h3></div>
       <FilterBar

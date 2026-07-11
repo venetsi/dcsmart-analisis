@@ -1,15 +1,27 @@
+import { useEffect, useState } from 'react'
 import { fmtMoney, fmtNum } from '../lib/format.js'
 
-const MAX_ROWS = 100
+const PAGE_SIZE = 100
 
 export default function DataTable({ meta, rows, totalRows }) {
-  const shown = rows.slice(0, MAX_ROWS)
+  const [page, setPage] = useState(0)
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+
+  // Al cambiar de dataset/filtros (cambia la cantidad de filas) volvemos a la página 1.
+  useEffect(() => { setPage(0) }, [rows])
+
+  const start = page * PAGE_SIZE
+  const shown = rows.slice(start, start + PAGE_SIZE)
+  const hasta = start + shown.length
 
   return (
     <section className="tbl-card">
       <div className="tbl-head">
         <h4>Detalle</h4>
-        <div className="info">Mostrando {shown.length} de {fmtNum(totalRows)} registros</div>
+        <div className="info">
+          {rows.length ? `${fmtNum(start + 1)}–${fmtNum(hasta)} de ${fmtNum(rows.length)}` : '0'} filas
+          {totalRows > rows.length ? ` (de ${fmtNum(totalRows)} traídas)` : ''}
+        </div>
       </div>
       <table>
         <thead>
@@ -21,7 +33,7 @@ export default function DataTable({ meta, rows, totalRows }) {
         </thead>
         <tbody>
           {shown.map((r, i) => (
-            <tr key={r.id ?? i}>
+            <tr key={r.id ?? start + i}>
               {meta.columns.map((c) => {
                 const v = r[c.key]
                 if (c.pill) {
@@ -44,6 +56,15 @@ export default function DataTable({ meta, rows, totalRows }) {
           )}
         </tbody>
       </table>
+      {pages > 1 && (
+        <div className="pager">
+          <button type="button" onClick={() => setPage(0)} disabled={page === 0}>« Primera</button>
+          <button type="button" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>‹ Anterior</button>
+          <span className="pager-info">Página {page + 1} de {pages}</span>
+          <button type="button" onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}>Siguiente ›</button>
+          <button type="button" onClick={() => setPage(pages - 1)} disabled={page >= pages - 1}>Última »</button>
+        </div>
+      )}
     </section>
   )
 }
