@@ -11,7 +11,7 @@ import { useGroup } from '../context/GroupContext.jsx'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
-const DONUT_COLORS = ['#0EA3AE', '#CEAC81', '#AC79CC', '#5FCF8A', '#E5B454', '#7AA8AC']
+const DONUT_COLORS = ['#6BA6E0', '#C9B086', '#B5A7EA', '#4CAF7D', '#D4952A', '#E1CBA0']
 
 function prevMonth() {
   const d = new Date()
@@ -74,10 +74,10 @@ export default function PyLPage() {
     let running = 0
     const ranges = [], colors = []
     for (const s of steps) {
-      if (s.tipo === 'ingreso') { ranges.push([0, s.valor]); running = s.valor; colors.push('#0EA3AE') }
-      else if (s.tipo === 'subtotal') { ranges.push([0, running]); colors.push('#7AA8AC') }
-      else if (s.tipo === 'resultado') { ranges.push([0, running]); colors.push(running >= 0 ? '#5FCF8A' : '#E87171') }
-      else { const nr = running + s.valor; ranges.push([nr, running]); running = nr; colors.push('#CEAC81') }
+      if (s.tipo === 'ingreso') { ranges.push([0, s.valor]); running = s.valor; colors.push('#6BA6E0') }
+      else if (s.tipo === 'subtotal') { ranges.push([0, running]); colors.push('#E1CBA0') }
+      else if (s.tipo === 'resultado') { ranges.push([0, running]); colors.push(running >= 0 ? '#4CAF7D' : '#E05C5C') }
+      else { const nr = running + s.valor; ranges.push([nr, running]); running = nr; colors.push('#C9B086') }
     }
     return { labels: steps.map(s => s.label), ranges, colors }
   }, [pyl])
@@ -124,9 +124,9 @@ export default function PyLPage() {
               <div className="dk-sub">{fmtNum(pyl.ventas.tickets)} tickets · {fmtNum(pyl.ventas.comensales)} cub.</div>
             </div>
             <div className="dash-kpi">
-              <div className="dk-glow" style={{ background: t.resultadoEconomico >= 0 ? '#5FCF8A' : '#E87171' }} />
+              <div className="dk-glow" style={{ background: t.resultadoEconomico >= 0 ? '#4CAF7D' : '#E05C5C' }} />
               <div className="dk-label">Resultado económico</div>
-              <div className="dk-value" style={{ color: t.resultadoEconomico >= 0 ? '#7fd6a0' : '#e88' }}>{money(t.resultadoEconomico)}</div>
+              <div className="dk-value" style={{ color: t.resultadoEconomico >= 0 ? '#4CAF7D' : '#E05C5C' }}>{money(t.resultadoEconomico)}</div>
               <div className="dk-sub">{t.margenPct}% sobre ventas</div>
             </div>
             <Semaforo label="Food cost (CMV)" value={t.foodCostPct} unit="%" buenoMax={35} maloMin={42} sub="objetivo 28–35%" />
@@ -144,8 +144,8 @@ export default function PyLPage() {
                       responsive: true, maintainAspectRatio: false, animation: false,
                       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => money(Math.abs(c.raw[1] - c.raw[0])) } } },
                       scales: {
-                        x: { ticks: { color: '#B0AFAE', font: { size: 9.5 }, maxRotation: 40, minRotation: 40 }, grid: { display: false } },
-                        y: { ticks: { color: '#B0AFAE', font: { size: 10 }, callback: (v) => '$' + (v / 1e6).toFixed(1) + 'M' }, grid: { color: 'rgba(90,89,88,.35)' } }
+                        x: { ticks: { color: 'rgba(240,237,232,0.55)', font: { size: 9.5 }, maxRotation: 40, minRotation: 40 }, grid: { display: false } },
+                        y: { ticks: { color: 'rgba(240,237,232,0.55)', font: { size: 10 }, callback: (v) => '$' + (v / 1e6).toFixed(1) + 'M' }, grid: { color: 'rgba(255,255,255,0.08)' } }
                       }
                     }}
                   />
@@ -159,9 +159,9 @@ export default function PyLPage() {
                   ? <Doughnut
                     data={{
                       labels: pyl.secciones.find(s => s.cmv).lineas.slice(0, 6).map(l => l.categoria),
-                      datasets: [{ data: pyl.secciones.find(s => s.cmv).lineas.slice(0, 6).map(l => l.total), backgroundColor: DONUT_COLORS, borderColor: '#3C3B3A', borderWidth: 2 }]
+                      datasets: [{ data: pyl.secciones.find(s => s.cmv).lineas.slice(0, 6).map(l => l.total), backgroundColor: DONUT_COLORS, borderColor: '#19232f', borderWidth: 2 }]
                     }}
-                    options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'right', labels: { color: '#B0AFAE', font: { size: 10.5 }, boxWidth: 12 } } } }}
+                    options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'right', labels: { color: 'rgba(240,237,232,0.55)', font: { size: 10.5 }, boxWidth: 12 } } } }}
                   />
                   : <div className="empty-state">Sin CMV en el período</div>}
               </div>

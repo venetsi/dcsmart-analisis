@@ -51,7 +51,7 @@ const DATASET_META = {
     ],
     columns: [
       { key: 'nro_ord', label: 'Orden' },
-      { key: 'fecha_dia', label: 'Fecha' },
+      { key: 'fecha_dia', label: 'Fecha', date: true },
       { key: 'local', label: 'Local' },
       { key: 'proveedor', label: 'Proveedor' },
       { key: 'rubro', label: 'Rubro' },
@@ -79,7 +79,8 @@ const DATASET_META = {
     ],
     columns: [
       { key: 'nro_turno', label: 'Turno' },
-      { key: 'fecha_dia', label: 'Fecha' },
+      { key: 'fecha_inicio', label: 'Apertura', datetime: true },
+      { key: 'fecha_cierre', label: 'Cierre', datetime: true },
       { key: 'local', label: 'Local' },
       { key: 'cajero', label: 'Cajero' },
       { key: 'origin', label: 'Origen' },
@@ -105,7 +106,7 @@ const DATASET_META = {
       { key: 'cuadratura', label: 'Cuadratura', options: ['OK', 'PARCIAL'] }
     ],
     columns: [
-      { key: 'fecha_dia', label: 'Fecha' },
+      { key: 'fecha_dia', label: 'Fecha', date: true },
       { key: 'local', label: 'Local' },
       { key: 'ingresos', label: 'Ingresos', numeric: true, money: true },
       { key: 'egresos', label: 'Egresos', numeric: true, money: true },
@@ -132,7 +133,7 @@ const DATASET_META = {
       { key: 'tipo', label: 'Tipo', options: ['ingreso', 'egreso'] }
     ],
     columns: [
-      { key: 'fecha_dia', label: 'Fecha' },
+      { key: 'fecha_dia', label: 'Fecha', date: true },
       { key: 'nro_turno', label: 'Turno' },
       { key: 'local', label: 'Local' },
       { key: 'cajero', label: 'Cajero' },

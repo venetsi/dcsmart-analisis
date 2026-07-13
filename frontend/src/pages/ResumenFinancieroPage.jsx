@@ -53,7 +53,7 @@ export default function ResumenFinancieroPage() {
       labels: ['Entradas op.', 'Salidas op.', 'Entradas fin.', 'Salidas fin.', 'Flujo neto'],
       datasets: [{
         data: [f.entradas_operativas, -f.salidas_operativas, f.entradas_financieras, -f.salidas_financieras, f.neto],
-        backgroundColor: ['#5FCF8A', '#E87171', '#5FCF8A', '#E87171', '#0EA3AE'],
+        backgroundColor: ['#4CAF7D', '#E05C5C', '#4CAF7D', '#E05C5C', '#6BA6E0'],
         borderRadius: 5
       }]
     }
@@ -92,13 +92,13 @@ export default function ResumenFinancieroPage() {
             <div className="dash-kpi ventas">
               <div className="dk-glow" />
               <div className="dk-label">Flujo de caja neto</div>
-              <div className="dk-value" style={{ color: f.neto >= 0 ? '#7fd6dd' : '#e88' }}>{fmtMoney(f.neto)}</div>
+              <div className="dk-value" style={{ color: f.neto >= 0 ? '#6BA6E0' : '#E05C5C' }}>{fmtMoney(f.neto)}</div>
               <div className="dk-sub">período · base caja</div>
             </div>
             <div className="dash-kpi">
-              <div className="dk-glow" style={{ background: '#CEAC81' }} />
+              <div className="dk-glow" style={{ background: '#C9B086' }} />
               <div className="dk-label">Margen operativo</div>
-              <div className="dk-value" style={{ color: '#e2b57e' }}>{r.margenOperativo != null ? `${r.margenOperativo}%` : '—'}</div>
+              <div className="dk-value" style={{ color: '#E1CBA0' }}>{r.margenOperativo != null ? `${r.margenOperativo}%` : '—'}</div>
               <div className="dk-sub">resultado operativo / ventas</div>
             </div>
             <div className="dash-kpi pendiente">
@@ -124,8 +124,8 @@ export default function ResumenFinancieroPage() {
                     responsive: true, maintainAspectRatio: false, animation: false,
                     plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmtMoney(c.raw) } } },
                     scales: {
-                      x: { ticks: { color: '#B0AFAE', font: { size: 10 } }, grid: { display: false } },
-                      y: { ticks: { color: '#B0AFAE', font: { size: 10 }, callback: (v) => '$' + (v / 1e6).toFixed(0) + 'M' }, grid: { color: 'rgba(90,89,88,.35)' } }
+                      x: { ticks: { color: 'rgba(240,237,232,0.55)', font: { size: 10 } }, grid: { display: false } },
+                      y: { ticks: { color: 'rgba(240,237,232,0.55)', font: { size: 10 }, callback: (v) => '$' + (v / 1e6).toFixed(0) + 'M' }, grid: { color: 'rgba(255,255,255,0.08)' } }
                     }
                   }} />
                 )}
@@ -158,10 +158,10 @@ export default function ResumenFinancieroPage() {
                     labels: ['Resultado operativo', 'CMV', 'Otros gastos'],
                     datasets: [{
                       data: [Math.max(0, r.resultadoOperativo), r.cmv, Math.max(0, r.ventas - r.cmv - r.resultadoOperativo)],
-                      backgroundColor: ['#5FCF8A', '#CEAC81', '#7AA8AC'], borderColor: '#3C3B3A', borderWidth: 2
+                      backgroundColor: ['#4CAF7D', '#C9B086', '#6BA6E0'], borderColor: '#19232f', borderWidth: 2
                     }]
                   }}
-                  options={{ responsive: true, maintainAspectRatio: false, animation: false, cutout: '62%', plugins: { legend: { position: 'right', labels: { color: '#B0AFAE', font: { size: 10.5 }, boxWidth: 12 } } } }}
+                  options={{ responsive: true, maintainAspectRatio: false, animation: false, cutout: '62%', plugins: { legend: { position: 'right', labels: { color: 'rgba(240,237,232,0.55)', font: { size: 10.5 }, boxWidth: 12 } } } }}
                 />
               </div>
             </div>

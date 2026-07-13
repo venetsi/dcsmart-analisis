@@ -30,8 +30,20 @@ export function AuthProvider({ children }) {
     setUser(user)
   }, [])
 
+  const loginGoogle = useCallback(async (credential) => {
+    const { token, user } = await api.loginGoogle(credential)
+    setToken(token)
+    setUser(user)
+  }, [])
+
+  const loginSso = useCallback(async (ticket) => {
+    const { token, user } = await api.loginSso(ticket)
+    setToken(token)
+    setUser(user)
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, ready, login, logout }}>
+    <AuthContext.Provider value={{ user, ready, login, loginGoogle, loginSso, logout }}>
       {children}
     </AuthContext.Provider>
   )
