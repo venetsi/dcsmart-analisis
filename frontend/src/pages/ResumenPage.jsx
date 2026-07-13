@@ -10,12 +10,12 @@ import { useGroup } from '../context/GroupContext.jsx'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
-// Paleta de series validada (scripts/validate_palette.js, superficie #454443, modo dark):
-// lightness/chroma/CVD PASS; el violeta (2.94:1) lleva refuerzo: leyenda + etiquetas + tabla.
+// Paleta de series (acorde al sistema de diseño dark/gold): ventas en azul,
+// pagos en dorado, CMV en violeta — coincide con las variantes de .dash-kpi.
 const SERIES = [
-  { key: 'ventas', label: 'Ventas', color: '#0EA3AE' },
-  { key: 'pagos', label: 'Pagos', color: '#BD8440' },
-  { key: 'cmv', label: 'CMV', color: '#AC79CC' }
+  { key: 'ventas', label: 'Ventas', color: '#6BA6E0' },
+  { key: 'pagos', label: 'Pagos', color: '#C9B086' },
+  { key: 'cmv', label: 'CMV', color: '#B5A7EA' }
 ]
 
 // Etiquetas directas al final de cada línea histórica (refuerzo de identidad, no solo color)
@@ -165,13 +165,13 @@ export default function ResumenPage() {
                   legend: {
                     position: 'top', align: 'end',
                     labels: {
-                      color: '#B0AFAE', font: { size: 11 }, boxWidth: 14, boxHeight: 3, usePointStyle: false,
+                      color: 'rgba(240,237,232,0.55)', font: { size: 11 }, boxWidth: 14, boxHeight: 3, usePointStyle: false,
                       filter: (item) => !item.text.includes('proyección')
                     }
                   },
                   tooltip: {
-                    backgroundColor: '#2c2b2a', borderColor: '#5A5958', borderWidth: 1,
-                    titleColor: '#fff', bodyColor: '#e8e6e4', padding: 10,
+                    backgroundColor: '#1e2b3a', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
+                    titleColor: '#F0EDE8', bodyColor: '#F0EDE8', padding: 10,
                     filter: (item) => !isNaN(item.parsed.y),
                     callbacks: {
                       label: (ctx) => ` ${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}`
@@ -179,10 +179,10 @@ export default function ResumenPage() {
                   }
                 },
                 scales: {
-                  x: { ticks: { color: '#B0AFAE', font: { size: 10.5 }, maxRotation: 0 }, grid: { color: 'rgba(90,89,88,.35)' } },
+                  x: { ticks: { color: 'rgba(240,237,232,0.55)', font: { size: 10.5 }, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.08)' } },
                   y: {
-                    ticks: { color: '#B0AFAE', font: { size: 10.5 }, callback: (v) => '$' + (v / 1e6).toFixed(1) + 'M' },
-                    grid: { color: 'rgba(90,89,88,.35)' }
+                    ticks: { color: 'rgba(240,237,232,0.55)', font: { size: 10.5 }, callback: (v) => '$' + (v / 1e6).toFixed(1) + 'M' },
+                    grid: { color: 'rgba(255,255,255,0.08)' }
                   }
                 }
               }}

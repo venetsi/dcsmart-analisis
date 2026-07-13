@@ -63,6 +63,8 @@ function toQueryString(query = {}) {
 
 export const api = {
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password }, auth: false }),
+  loginGoogle: (credential) => request('/auth/google', { method: 'POST', body: { credential }, auth: false }),
+  loginSso: (ticket) => request('/auth/sso', { method: 'POST', body: { ticket }, auth: false }),
   me: () => request('/auth/me'),
 
   getGrupos: () => request('/data/grupos'),

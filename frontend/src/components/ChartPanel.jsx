@@ -11,13 +11,13 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
-const DIM_COLORS = ['#087C85', '#CEAC81', '#7AA8AC', '#E5B454', '#5FCF8A', '#B58CC9', '#E87171', '#8FA8E0']
+const DIM_COLORS = ['#C9B086', '#6BA6E0', '#4CAF7D', '#D4952A', '#B5A7EA', '#E05C5C', '#E1CBA0', '#A98F63']
 
 const axisScales = {
-  x: { ticks: { color: '#B0AFAE', font: { size: 10.5 } }, grid: { color: '#4e4d4c' } },
+  x: { ticks: { color: 'rgba(240,237,232,0.55)', font: { size: 10.5 } }, grid: { color: 'rgba(255,255,255,0.08)' } },
   y: {
-    ticks: { color: '#B0AFAE', font: { size: 10.5 }, callback: (v) => '$' + (v / 1e6).toFixed(1) + 'M' },
-    grid: { color: '#4e4d4c' }
+    ticks: { color: 'rgba(240,237,232,0.55)', font: { size: 10.5 }, callback: (v) => '$' + (v / 1e6).toFixed(1) + 'M' },
+    grid: { color: 'rgba(255,255,255,0.08)' }
   }
 }
 
@@ -31,8 +31,8 @@ export default function ChartPanel({ meta, agg }) {
       {
         label: meta.label,
         data: porMes.map((m) => Number(m.total)),
-        backgroundColor: '#087C85CC',
-        borderColor: '#0ea3ae',
+        backgroundColor: '#C9B086CC',
+        borderColor: '#E1CBA0',
         borderWidth: 1,
         borderRadius: 6
       }
@@ -68,7 +68,7 @@ export default function ChartPanel({ meta, agg }) {
                 labels: dimLabels,
                 datasets: [{
                   data: dimValues,
-                  backgroundColor: dimValues.map((v) => (v >= 0 ? '#5FCF8ACC' : '#E87171CC')),
+                  backgroundColor: dimValues.map((v) => (v >= 0 ? '#4CAF7DCC' : '#E05C5CCC')),
                   borderRadius: 6
                 }]
               }}
@@ -84,7 +84,7 @@ export default function ChartPanel({ meta, agg }) {
             <Doughnut
               data={{
                 labels: dimLabels,
-                datasets: [{ data: dimValues, backgroundColor: DIM_COLORS, borderColor: '#3C3B3A', borderWidth: 2 }]
+                datasets: [{ data: dimValues, backgroundColor: DIM_COLORS, borderColor: '#19232f', borderWidth: 2 }]
               }}
               options={{
                 responsive: true,
@@ -94,7 +94,7 @@ export default function ChartPanel({ meta, agg }) {
                   legend: {
                     display: true,
                     position: 'right',
-                    labels: { color: '#B0AFAE', font: { size: 10.5 }, boxWidth: 12 }
+                    labels: { color: 'rgba(240,237,232,0.55)', font: { size: 10.5 }, boxWidth: 12 }
                   }
                 }
               }}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fmtMoney, fmtNum } from '../lib/format.js'
+import { fmtDate, fmtDateTime, fmtMoney, fmtNum } from '../lib/format.js'
 
 const PAGE_SIZE = 100
 
@@ -46,6 +46,12 @@ export default function DataTable({ meta, rows, totalRows }) {
                 }
                 if (c.numeric) {
                   return <td key={c.key} className="num">{fmtNum(v)}</td>
+                }
+                if (c.datetime) {
+                  return <td key={c.key} className="td-mono">{fmtDateTime(v)}</td>
+                }
+                if (c.date) {
+                  return <td key={c.key} className="td-mono">{fmtDate(v)}</td>
                 }
                 return <td key={c.key}>{v ?? '—'}</td>
               })}

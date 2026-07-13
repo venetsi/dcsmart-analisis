@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext.jsx'
 import { useGroup } from './context/GroupContext.jsx'
 import AppShell from './components/AppShell.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import SsoPage from './pages/SsoPage.jsx'
 import GroupSelectPage from './pages/GroupSelectPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import ResumenPage from './pages/ResumenPage.jsx'
@@ -33,6 +34,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/sso" element={<SsoPage />} />
       <Route
         path="/grupo"
         element={
