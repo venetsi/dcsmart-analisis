@@ -28,13 +28,22 @@ async function getGrant (fastify, userId) {
 
 export async function resolveAccess (fastify, user) {
   const roles = await getUserRoles(fastify, user.id)
-  const grant = await getGrant(fastify, user.id)
   const rolePermitido = roles.some(r => ALLOWED_ROLES.includes(r))
 
-  if (grant && grant.enabled === false) return { ok: false }           // revocado explícito
-  if (!rolePermitido && !(grant && grant.enabled)) return { ok: false } // ni rol ni grant
+  // super_admin / dcsmart (roles en ALLOWED_ROLES) siempre tienen acceso, sin
+  // importar el grant individual -- un grant revocado (enabled: false) NO debe
+  // poder bloquearlos. El grant individual solo decide el acceso de los roles
+  // que no están en ALLOWED_ROLES.
+  if (rolePermitido) {
+    const grant = await getGrant(fastify, user.id)
+    const admin = roles.includes('super_admin') || roles.includes('dcsmart') || Boolean(grant?.is_admin)
+    return { ok: true, roles, admin }
+  }
 
-  const admin = roles.includes('super_admin') || roles.includes('dcsmart') || Boolean(grant?.is_admin)
+  const grant = await getGrant(fastify, user.id)
+  if (!grant || !grant.enabled) return { ok: false }
+
+  const admin = Boolean(grant?.is_admin)
   return { ok: true, roles, admin }
 }
 
