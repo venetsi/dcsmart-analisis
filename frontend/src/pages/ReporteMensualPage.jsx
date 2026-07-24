@@ -11,6 +11,8 @@ function prevMonth() {
   return d.toISOString().slice(0, 7)
 }
 
+const SECCIONES_MANUALES = ['alquiler', 'impositivos', 'pasivo', 'socios']
+
 export default function ReporteMensualPage() {
   const { grupo } = useGroup()
   const [mes, setMes] = useState(prevMonth())
@@ -20,6 +22,9 @@ export default function ReporteMensualPage() {
   const [manuales, setManuales] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [manualMsg, setManualMsg] = useState('')
 
   useEffect(() => {
     api.getDatasetOptions('pagos', { grupo })
@@ -33,7 +38,7 @@ export default function ReporteMensualPage() {
     Promise.all([
       api.getReporteMensual({ mes, grupo, local: local || undefined }),
       local ? api.getReporteManual({ grupo, local, mes }) : Promise.resolve([]),
-    ]).then(([a, m]) => { setAuto(a); setManuales(m || []) })
+    ]).then(([a, m]) => { setAuto(a); setManuales(m || []); setDirty(false); setManualMsg('') })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [grupo, mes, local])
@@ -41,6 +46,41 @@ export default function ReporteMensualPage() {
   const rep = auto ? buildReporte({ ventas: auto.ventas, gastos: auto.gastos, manuales }) : null
   const t = rep?.totales
   const money = (x) => fmtMoney(x)
+
+  function editFila(i, patch) {
+    setManuales((ms) => ms.map((m, idx) => (idx === i ? { ...m, ...patch } : m)))
+    setDirty(true); setManualMsg('')
+  }
+  function addFila(seccion) {
+    setManuales((ms) => [...ms, { seccion, concepto: '', monto: 0, columna: 1 }])
+    setDirty(true); setManualMsg('')
+  }
+  function removeFila(i) {
+    setManuales((ms) => ms.filter((_, idx) => idx !== i))
+    setDirty(true); setManualMsg('')
+  }
+  async function traerMesAnterior() {
+    setManualMsg('')
+    try {
+      const prev = await api.getReporteManualAnterior({ grupo, local, mes })
+      setManuales(prev || [])
+      setDirty(true)
+    } catch (e) {
+      setManualMsg(`Error: ${e.message}`)
+    }
+  }
+  async function guardarManual() {
+    setSaving(true); setManualMsg('')
+    try {
+      await api.putReporteManual({ grupo, local, mes, filas: manuales })
+      setDirty(false)
+      setManualMsg('Guardado.')
+    } catch (e) {
+      setManualMsg(`Error al guardar: ${e.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="pyl">
@@ -144,6 +184,46 @@ export default function ReporteMensualPage() {
               </tbody>
             </table>
           </section>
+
+          {local && (
+            <section className="manual-panel no-print">
+              <div className="manual-head">
+                <h3>Carga manual — {local} · {mes}</h3>
+                <div className="manual-actions">
+                  <button className="btn" type="button" onClick={traerMesAnterior}>Traer del mes anterior</button>
+                  <button className="btn" type="button" disabled={!dirty || saving} onClick={guardarManual}>
+                    {saving ? 'Guardando…' : 'Guardar'}
+                  </button>
+                  {manualMsg && <span className="manual-msg">{manualMsg}</span>}
+                </div>
+              </div>
+              {SECCIONES_MANUALES.map((sec) => (
+                <fieldset className="manual-sec" key={sec}>
+                  <legend>{sec}</legend>
+                  {manuales.map((m, i) => (m.seccion === sec ? (
+                    <div className="manual-row" key={i}>
+                      <input
+                        value={m.concepto}
+                        placeholder="concepto"
+                        onChange={(e) => editFila(i, { concepto: e.target.value })}
+                      />
+                      <input
+                        type="number"
+                        value={m.monto}
+                        onChange={(e) => editFila(i, { monto: Number(e.target.value) })}
+                      />
+                      <select value={m.columna} onChange={(e) => editFila(i, { columna: Number(e.target.value) })}>
+                        <option value={1}>Col 1 · Bancarizado</option>
+                        <option value={2}>Col 2 · Efectivo</option>
+                      </select>
+                      <button type="button" className="btn-icon" onClick={() => removeFila(i)}>✕</button>
+                    </div>
+                  ) : null))}
+                  <button type="button" className="btn-sm" onClick={() => addFila(sec)}>+ agregar</button>
+                </fieldset>
+              ))}
+            </section>
+          )}
         </>
       )}
     </div>
