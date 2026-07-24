@@ -412,10 +412,16 @@ Expected: FAIL (`Cannot find module './reporteMensual.js'` o export inexistente)
 // Mapeo tipo de comprobante -> columna. SOLO los confirmados por el usuario.
 // Cualquier tipo ausente cae en "sin asignar" (visible), no se adivina.
 // Col 1 = bancarizado/blanco/facturado. Col 2 = efectivo/sin factura.
+// OJO: los valores REALES en vw_pagos.tipo son strings de display, no el
+// enum de gestión. Verificado contra BigQuery (todos los grupos):
+//   "A"(13032) "B"(12589) "STK"(1325) "C"(752) "DC (1)"(578) "NCA"(239)
+//   "CM"(67) NULL(55) "DC (2)"(53) "X"(13) "M"(9) "NCB"(8) "NDA"(6)
+//   "DDJJ"(4) "FF"(3) "LF"(1) "ND"(1)
 export const MAPEO_TIPOS = {
-  A: 1, C: 1, NCA: 1, DC_1: 1,
-  B: 2, NCB: 2, DC_2: 2, STK: 2,
-  // PENDIENTE VALIDAR y agregar: M, NDA, ND, CM, DDJJ, FF, LF, X
+  'A': 1, 'C': 1, 'NCA': 1, 'DC (1)': 1,
+  'B': 2, 'NCB': 2, 'DC (2)': 2, 'STK': 2,
+  // PENDIENTE VALIDAR con el usuario (bajo volumen, hoy caen en "sin asignar"):
+  // 'CM', 'X', 'M', 'NDA', 'DDJJ', 'FF', 'LF', 'ND', y NULL/''.
 }
 
 export function columnaDeTipo(tipo) {
