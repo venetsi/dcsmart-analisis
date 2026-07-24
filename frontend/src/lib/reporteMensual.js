@@ -61,18 +61,31 @@ export function buildReporte({ ventas, gastos = [], manuales = [] }) {
     if (RUBROS_EXCLUIDOS_AUTO.includes(g.rubro)) continue
     const key = rubroToSection[g.rubro] || 'otros'
     const col = columnaDeTipo(g.tipo)
+    const total = Number(g.total || 0) // drivers Postgres pueden traer NUMERIC como string
     if (col === null) {
-      sinAsignar.total += g.total
+      sinAsignar.total += total
       sinAsignar.tipos.add(g.tipo || '(vacío)')
-      addLinea(acc[key], `${g.categoria} · tipo ${g.tipo || '?'} (sin asignar)`, 0, g.total)
+      addLinea(acc[key], `${g.categoria} · tipo ${g.tipo || '?'} (sin asignar)`, 0, total)
       continue
     }
-    addLinea(acc[key], g.categoria || g.rubro, col, g.total)
+    addLinea(acc[key], g.categoria || g.rubro, col, total)
   }
 
   // 2) Capa manual.
+  // Si m.seccion no matchea ninguna key de SECCIONES (typo, mayúscula, etc.)
+  // NO crear un Map huérfano que nunca se lee (se perdería en silencio):
+  // se acumula en manualesSinUbicar, visible en el resultado.
+  const manualesSinUbicar = []
   for (const m of manuales) {
-    if (!acc[m.seccion]) acc[m.seccion] = nuevaLineaMap()
+    if (!acc[m.seccion]) {
+      manualesSinUbicar.push({
+        seccion: m.seccion,
+        concepto: m.concepto,
+        monto: Number(m.monto || 0),
+        columna: Number(m.columna),
+      })
+      continue
+    }
     addLinea(acc[m.seccion], m.concepto, Number(m.columna), Number(m.monto || 0))
   }
 
@@ -106,5 +119,6 @@ export function buildReporte({ ventas, gastos = [], manuales = [] }) {
       resultadoEconomico, resultadoMes, foodCostPct, primeCostPct,
     },
     sinAsignar: { ...sinAsignar, tipos: [...sinAsignar.tipos] },
+    manualesSinUbicar,
   }
 }

@@ -60,3 +60,43 @@ test('resultado bruto = ventas - cmv', () => {
   assert.equal(r.totales.cmv, -300)
   assert.equal(r.totales.resultadoBruto, 700)
 })
+
+test('manual con seccion desconocida no se pierde: aparece en manualesSinUbicar', () => {
+  const r = buildReporte({
+    ventas: { total: 1000, por_origen: [] },
+    gastos: [],
+    // 'Impositivos' (mayúscula) NO matchea la key real 'impositivos'
+    manuales: [{ seccion: 'Impositivos', concepto: 'IVA', monto: -200, columna: 1 }],
+  })
+  const imp = r.secciones.find(s => s.key === 'impositivos')
+  assert.equal(imp.total, 0) // no cayó en la sección real
+  assert.equal(r.manualesSinUbicar.length, 1)
+  assert.deepEqual(r.manualesSinUbicar[0], {
+    seccion: 'Impositivos', concepto: 'IVA', monto: -200, columna: 1,
+  })
+  // no debe aparecer huérfano en ninguna otra sección tampoco
+  const totalSecciones = r.secciones.reduce((a, s) => a + s.total, 0)
+  assert.equal(totalSecciones, 0) // no hay gastos ni manuales validos en este caso
+})
+
+test('gasto con total como string se suma numericamente (no concatena)', () => {
+  const r = buildReporte({
+    ventas: { total: 1000, por_origen: [] },
+    gastos: [{ rubro: 'CMV Alimentos', categoria: 'Carnes', tipo: 'A', total: '-100' }],
+    manuales: [],
+  })
+  assert.equal(r.totales.cmv, -100)
+  assert.equal(typeof r.totales.cmv, 'number')
+})
+
+test('resultadoEconomico descuenta CMV y gastos operativos (ej. Sueldos)', () => {
+  const r = buildReporte({
+    ventas: { total: 1000, por_origen: [] },
+    gastos: [
+      { rubro: 'CMV Alimentos', categoria: 'Carnes', tipo: 'A', total: -100 },
+      { rubro: 'Sueldos', categoria: 'Sueldos', tipo: 'A', total: -200 },
+    ],
+    manuales: [],
+  })
+  assert.equal(r.totales.resultadoEconomico, 700)
+})
