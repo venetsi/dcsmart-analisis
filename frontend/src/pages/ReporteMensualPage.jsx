@@ -131,11 +131,15 @@ export default function ReporteMensualPage() {
               <tbody>
                 <tr className="pyl-sec"><td>INGRESOS · Ventas</td><td className="num">{money(t.ventas)}</td><td className="num">—</td><td className="num">—</td></tr>
 
-                {rep.secciones.map((s) => (
+                {rep.secciones.filter((s) => !s.belowLine).map((s) => (
                   <SectionRows key={s.key} s={s} money={money}
                     after={s.cmv ? <ResultRow cls="bruto" label="RESULTADO BRUTO" val={t.resultadoBruto} money={money} /> : null} />
                 ))}
                 <ResultRow cls={`econ ${t.resultadoEconomico >= 0 ? 'pos' : 'neg'}`} label="RESULTADO ECONÓMICO" val={t.resultadoEconomico} money={money} />
+
+                {rep.secciones.filter((s) => s.belowLine).map((s) => (
+                  <SectionRows key={s.key} s={s} money={money} />
+                ))}
                 <ResultRow cls={`${t.resultadoMes >= 0 ? 'pos' : 'neg'}`} label="RESULTADO DEL MES" val={t.resultadoMes} money={money} />
               </tbody>
             </table>
