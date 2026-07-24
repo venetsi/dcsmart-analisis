@@ -342,8 +342,9 @@ import { columnaDeTipo, buildReporte } from './reporteMensual.js'
 test('columnaDeTipo mapea confirmados y deja null los no asignados', () => {
   assert.equal(columnaDeTipo('A'), 1)
   assert.equal(columnaDeTipo('NCA'), 1)
-  assert.equal(columnaDeTipo('DC_1'), 1)
+  assert.equal(columnaDeTipo('DC (1)'), 1)   // valor real en BQ (con paréntesis)
   assert.equal(columnaDeTipo('B'), 2)
+  assert.equal(columnaDeTipo('DC (2)'), 2)
   assert.equal(columnaDeTipo('STK'), 2)
   assert.equal(columnaDeTipo('DDJJ'), null) // sin asignar
   assert.equal(columnaDeTipo(''), null)
