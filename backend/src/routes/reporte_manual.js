@@ -51,6 +51,13 @@ export default async function (fastify) {
       return reply.code(400).send({ error: 'grupo, local, mes y filas[] requeridos' })
     }
     const email = req.user.email
+    for (const f of filas) {
+      if (![1, 2].includes(Number(f.columna))) continue
+      if (!f.concepto || !f.seccion) continue
+      if (!Number.isFinite(Number(f.monto))) {
+        return reply.code(400).send({ error: 'monto invalido en una o mas filas' })
+      }
+    }
     const client = await fastify.analyticsDb.connect()
     try {
       await client.query('BEGIN')
