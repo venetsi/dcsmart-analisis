@@ -500,19 +500,50 @@ tbody tr:hover{background:var(--bg-tr-hover)}
 
 /* ===== Impresión: P&L en PDF prolijo (fondo claro) ===== */
 @media print {
-  @page { margin: 14mm; size: A4; }
+  @page { margin: 12mm; size: A4; }
+  /* forzar impresión de colores/fondos intencionales (resultados verde/rojo, headers) */
+  html, body { background: #fff !important; color: #1a1a1a !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body::before { display: none !important; }
   .side, .pyl-noprint, .no-print, .step-label { display: none !important; }
   .app { display: block !important; }
   .main { padding: 0 !important; max-width: none !important; }
-  body { background: #fff !important; color: #1a1a1a !important; }
-  body::before { display: none !important; }
-  .pyl-card, .dash-kpi { box-shadow: none !important; border: 1px solid #ddd !important;
-    background: #fff !important; break-inside: avoid; backdrop-filter: none !important; }
+
+  /* Encabezado */
+  .page-hdr h2, .page-hdr h2 small, .page-hdr p { color: #1a1a1a !important; }
+
+  /* KPI cards: grilla prolija en A4 y sin decoraciones que ensucian el papel */
+  .dash-kpis { grid-template-columns: repeat(3, 1fr) !important; gap: 8px !important; margin-bottom: 12px !important; }
+  .dash-kpi { background: #fff !important; border: 1px solid #ccc !important; border-radius: 8px !important;
+    padding: 10px 12px !important; box-shadow: none !important; backdrop-filter: none !important;
+    overflow: visible !important; break-inside: avoid !important; }
+  .dash-kpi::before { display: none !important; }
+  .dk-glow { display: none !important; }
+  .dk-label { color: #555 !important; }
+  .dk-value { font-size: 18px !important; }
+  .dk-sub { color: #777 !important; }
+
+  /* Avisos: sobrios en papel (no rojo chillón, en caja) */
+  .login-err { color: #333 !important; border: 1px solid #bbb !important; border-radius: 6px !important;
+    padding: 6px 10px !important; text-align: left !important; margin: 8px 0 !important; break-inside: avoid !important; }
+
+  /* Tabla P&L */
+  .tbl-card { background: #fff !important; border: 1px solid #ccc !important; border-radius: 6px !important;
+    box-shadow: none !important; overflow: visible !important; }
+  .pyl-table { width: 100% !important; }
   .pyl-table td, .pyl-table th { border-color: #ccc !important; }
-  .pyl-table td, .pyl-cat td, .pyl-memo td { color: #1a1a1a !important; }
+  .pyl-table td, .pyl-table th, .pyl-cat td, .pyl-memo td { color: #1a1a1a !important; }
+  .pyl-table thead th { background: #f0f0f0 !important; }
   .pyl-sec { background: #f0f0f0 !important; }
+  .pyl-sec td { color: #1a1a1a !important; font-weight: 700 !important; }
+  .pyl-result td { border-color: #999 !important; }
+  .pyl-result.bruto td { background: #eef4fb !important; }
   .pyl-result.econ td { background: #e6f2f2 !important; }
-  .page-hdr h2, .page-hdr p { color: #1a1a1a !important; }
+  tr, td, th { break-inside: avoid !important; }
+
+  /* legacy (PyLPage comparte estas clases) */
+  .pyl-card { box-shadow: none !important; border: 1px solid #ddd !important;
+    background: #fff !important; break-inside: avoid; backdrop-filter: none !important; }
 }
 
 /* ===== Resumen Financiero ===== */
