@@ -54,6 +54,17 @@ function IcoPyl() {
     </svg>
   )
 }
+function IcoReporteMensual() {
+  return (
+    <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="17" rx="2"/>
+      <line x1="3" y1="9" x2="21" y2="9"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <path d="M7 13h4"/><path d="M7 17h7"/>
+    </svg>
+  )
+}
 function IcoResumenFin() {
   return (
     <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -120,6 +131,9 @@ export default function Sidebar() {
       </NavLink>
       <NavLink to="/pyl" className={navClass}>
         <span className="ic"><IcoPyl /></span> P&amp;L
+      </NavLink>
+      <NavLink to="/reporte-mensual" className={navClass}>
+        <span className="ic"><IcoReporteMensual /></span> Reporte Mensual
       </NavLink>
       <NavLink to="/financiero" className={navClass}>
         <span className="ic"><IcoResumenFin /></span> Resumen Financiero
