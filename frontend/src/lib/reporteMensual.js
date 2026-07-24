@@ -100,17 +100,17 @@ export function buildReporte({ ventas, gastos = [], manuales = [] }) {
 
   const byKey = Object.fromEntries(secciones.map(s => [s.key, s]))
   const ventasTotal = Number(ventas?.total || 0)
-  const cmv = byKey.cmv?.total || 0
-  const resultadoBruto = ventasTotal + cmv // cmv es negativo
+  const cmv = byKey.cmv?.total || 0                          // positivo (gasto)
+  const resultadoBruto = ventasTotal - cmv
   const gastosOperativos = secciones
     .filter(s => s.op && s.key !== 'cmv')
-    .reduce((a, s) => a + s.total, 0)
-  const resultadoEconomico = resultadoBruto + gastosOperativos
-  const belowLine = secciones.filter(s => s.belowLine).reduce((a, s) => a + s.total, 0)
-  const resultadoMes = resultadoEconomico + belowLine
+    .reduce((a, s) => a + s.total, 0)                         // positivo
+  const resultadoEconomico = resultadoBruto - gastosOperativos
+  const belowLine = secciones.filter(s => s.belowLine).reduce((a, s) => a + s.total, 0)  // positivo
+  const resultadoMes = resultadoEconomico - belowLine
   const labor = byKey.labor?.total || 0
-  const foodCostPct = ventasTotal ? Math.abs(cmv) / ventasTotal * 100 : 0
-  const primeCostPct = ventasTotal ? Math.abs(cmv + labor) / ventasTotal * 100 : 0
+  const foodCostPct = ventasTotal ? cmv / ventasTotal * 100 : 0
+  const primeCostPct = ventasTotal ? (cmv + labor) / ventasTotal * 100 : 0
 
   return {
     secciones,

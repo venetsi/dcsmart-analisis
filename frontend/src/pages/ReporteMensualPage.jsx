@@ -72,7 +72,10 @@ export default function ReporteMensualPage() {
   async function guardarManual() {
     setSaving(true); setManualMsg('')
     try {
-      await api.putReporteManual({ grupo, local, mes, filas: manuales })
+      // Dedup por (seccion, concepto): si hay filas repetidas el backend
+      // viola el UNIQUE y falla con error genérico. Gana la última edición.
+      const dedup = [...new Map(manuales.map(f => [`${f.seccion}|${f.concepto}`, f])).values()]
+      await api.putReporteManual({ grupo, local, mes, filas: dedup })
       setDirty(false)
       setManualMsg('Guardado.')
     } catch (e) {
@@ -152,6 +155,11 @@ export default function ReporteMensualPage() {
             </div>
           </section>
 
+          {!local && (
+            <p className="login-err">
+              ⚠️ Vista consolidada: no incluye la carga manual (impuestos, pasivo, socios), que se carga por local.
+            </p>
+          )}
           {rep.sinAsignar.tipos.length > 0 && (
             <p className="login-err">
               ⚠️ {money(rep.sinAsignar.total)} en tipos sin asignar a columna: {rep.sinAsignar.tipos.join(', ')}
