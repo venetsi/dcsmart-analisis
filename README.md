@@ -1,6 +1,6 @@
 # DCSmart Analytics — Plataforma paralela (Opción B: BigQuery)
 
-Plataforma independiente en **analisis.dcsmart.app** para análisis customizable con IA sobre `pagos` y `cajas`, alimentada por un pipeline micro-batch Cloud SQL → BigQuery (3 cortes diarios: 06:00, 12:00 y 20:00, hora AR). **Cero modificaciones** al repo, backend, base o red de la app en producción.
+Plataforma independiente en **analisis.dcsmart.app** para análisis customizable con IA sobre `pagos` y `cajas`, alimentada por un pipeline micro-batch Cloud SQL → BigQuery (corte cada 1 hora, en punto, hora AR). **Cero modificaciones** al repo, backend, base o red de la app en producción.
 
 ---
 
