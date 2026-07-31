@@ -1,7 +1,7 @@
 // ============================================================
 // dcsmart-etl — Cloud Run Job
 // Extracción incremental Cloud SQL → BigQuery (micro-batch)
-// Disparado por Cloud Scheduler: 0 6,12,20 * * * (America/Argentina/Buenos_Aires)
+// Disparado por Cloud Scheduler: 0 * * * * (cada 1 hora, America/Argentina/Buenos_Aires)
 // Solo LEE la base de producción (usuario analytics_ro, statement_timeout 15s)
 // ============================================================
 import pg from 'pg'
@@ -19,9 +19,10 @@ const ds = bq.dataset(BQ_DATASET)
 const runId = crypto.randomUUID()
 const corte = corteActual()
 
+// Con corridas horarias, cada hora en punto es un corte válido (antes eran 3 fijos).
 function corteActual () {
   const h = new Date().toLocaleString('en-US', { hour: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' })
-  return { '06': '06:00', '12': '12:00', '20': '20:00' }[h] || 'manual'
+  return `${h}:00`
 }
 
 // ------- Definición de tablas a sincronizar -------

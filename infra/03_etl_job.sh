@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 03 — Cloud Run Job del ETL + Cloud Scheduler (cron 0 6,12,20 * * *)
+# 03 — Cloud Run Job del ETL + Cloud Scheduler (cron cada 1 hora, en punto)
 set -euo pipefail
 PROJECT=${PROJECT:-dc-smart-mvp}
 REGION=${REGION:-us-central1}
@@ -18,12 +18,12 @@ gcloud run jobs deploy dcsmart-etl --project=$PROJECT --region=$REGION \
   --set-secrets "PGPASSWORD=analytics-ro-password:latest" \
   --max-retries 1 --task-timeout 900
 
-# Scheduler: 3 cortes diarios hora Argentina
+# Scheduler: cada 1 hora en punto, hora Argentina
 gcloud scheduler jobs create http dcsmart-etl-trigger --project=$PROJECT --location=$REGION \
-  --schedule="0 7,15,23 * * *" --time-zone="America/Argentina/Buenos_Aires" \
+  --schedule="0 * * * *" --time-zone="America/Argentina/Buenos_Aires" \
   --uri="https://$REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/$PROJECT/jobs/dcsmart-etl:run" \
   --http-method=POST \
   --oauth-service-account-email=dcsmart-etl@$PROJECT.iam.gserviceaccount.com || \
 gcloud scheduler jobs update http dcsmart-etl-trigger --project=$PROJECT --location=$REGION \
-  --schedule="0 7,15,23 * * *" --time-zone="America/Argentina/Buenos_Aires"
-echo "✓ ETL job + scheduler (07:00, 15:00, 23:00 AR)"
+  --schedule="0 * * * *" --time-zone="America/Argentina/Buenos_Aires"
+echo "✓ ETL job + scheduler (cada 1 hora, AR)"
