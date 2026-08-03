@@ -264,6 +264,62 @@ export default async function (fastify) {
     }
   })
 
+  // GET /api/data/reporte-mensual?mes=YYYY-MM&grupo=&local= — Reporte de Ventas Mensuales.
+  // Ventas de vw_cajas (total/comensales/tickets + split por origen). Gastos = pagos EGRESO
+  // agregados por rubro+categoria+tipo de comprobante (vw_pagos.tipo = id_tipo), para que el
+  // frontend reparta cada línea en columnas por tipo de comprobante.
+  fastify.get('/reporte-mensual', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const mes = /^\d{4}-\d{2}$/.test(req.query.mes || '') ? req.query.mes : null
+    if (!mes) return reply.code(400).send({ error: 'mes (YYYY-MM) requerido' })
+    const [y, m] = mes.split('-').map(Number)
+    const desde = `${mes}-01`
+    const hasta = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) // último día del mes
+    const local = req.query.local ? String(req.query.local) : null
+    const grupo = req.query.grupo ? String(req.query.grupo) : null
+    const scopeCond = local ? ' AND local = @local' : (grupo ? ' AND grupo = @grupo' : '')
+    const params = { desde, hasta }
+    if (local) params.local = local
+    else if (grupo) params.grupo = grupo
+
+    const [[ventasRows], [origenRows], [gastosRows]] = await Promise.all([
+      fastify.bq.query({
+        query: `SELECT CAST(ROUND(SUM(total)) AS INT64) total,
+                       SUM(comensales) AS comensales, SUM(tickets) AS tickets
+                FROM ${DS}.vw_cajas WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}`,
+        params
+      }),
+      fastify.bq.query({
+        query: `SELECT origin, CAST(ROUND(SUM(total)) AS INT64) total
+                FROM ${DS}.vw_cajas WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}
+                GROUP BY 1 ORDER BY total DESC`,
+        params
+      }),
+      fastify.bq.query({
+        query: `SELECT rubro, categoria, tipo,
+                       CAST(ROUND(SUM(importe)) AS INT64) total
+                FROM ${DS}.vw_pagos
+                WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desde AND @hasta${scopeCond}
+                GROUP BY 1, 2, 3 ORDER BY total DESC`,
+        params
+      })
+    ])
+
+    const v = plainRows(ventasRows)[0] || {}
+    return {
+      mes, scope: { grupo, local },
+      ventas: {
+        total: Number(v.total || 0), comensales: Number(v.comensales || 0), tickets: Number(v.tickets || 0),
+        por_origen: plainRows(origenRows).map(r => ({
+          origin: r.origin || '(sin origen)', total: Number(r.total || 0)
+        }))
+      },
+      gastos: plainRows(gastosRows).map(r => ({
+        rubro: r.rubro || '(sin rubro)', categoria: r.categoria || '(sin categoría)',
+        tipo: r.tipo || '(sin tipo)', total: Number(r.total || 0)
+      }))
+    }
+  })
+
   // GET /api/data/resumen-financiero?mes=YYYY-MM&grupo=&local= — panel financiero.
   // Sólo lo derivable de flujos: márgenes de rentabilidad, flujo de caja neto (base caja)
   // y días de proveedores aprox. Los ratios de balance (liquidez, ROA/ROE) NO se calculan

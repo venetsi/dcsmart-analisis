@@ -458,21 +458,92 @@ tbody tr:hover{background:var(--bg-tr-hover)}
 .pyl-toggle{cursor:pointer;user-select:none}
 .pyl-toggle .caret{display:inline-block;width:12px;color:var(--txt3)}
 
+/* ===== Reporte Mensual: panel de carga manual ===== */
+.btn{padding:9px 16px;border-radius:9px;border:1px solid var(--border);background:rgba(255,255,255,.06);
+  color:var(--txt2);font-size:12.5px;font-weight:600;cursor:pointer;
+  transition:border-color .18s var(--ease),color .18s var(--ease),background .18s var(--ease)}
+.btn:hover{border-color:var(--border-hi);color:var(--txt);background:rgba(255,255,255,.09)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{padding:6px 12px;border-radius:8px;border:1px dashed var(--border-hi);background:transparent;
+  color:var(--teal-l);font-size:11.5px;font-weight:600;cursor:pointer;
+  transition:background .18s var(--ease),color .18s var(--ease)}
+.btn-sm:hover{background:rgba(201,176,134,.10);color:var(--txt)}
+.btn-icon{width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.04);
+  color:var(--txt3);font-size:12px;line-height:1;cursor:pointer;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:color .18s var(--ease),border-color .18s var(--ease),background .18s var(--ease)}
+.btn-icon:hover{color:var(--bad);border-color:var(--bad-border);background:var(--bad-bg)}
+
+.manual-panel{margin-top:calc(var(--gap)*1.5);padding:16px 20px;border-radius:var(--radius);
+  background:var(--card);border:1px solid var(--border);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 2px 4px rgba(0,0,0,.3), 0 14px 34px rgba(0,0,0,.34)}
+.manual-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+  margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.manual-head h3{font-size:14px;font-weight:700}
+.manual-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.manual-msg{font-size:11.5px;color:var(--txt3)}
+.manual-sec{border:1px solid var(--border);border-radius:12px;padding:12px 14px 14px;margin-bottom:12px;
+  background:rgba(255,255,255,.02)}
+.manual-sec legend{padding:0 8px;font-size:10px;font-weight:800;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.10em}
+.manual-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0;
+  border-bottom:1px solid rgba(255,255,255,.038)}
+.manual-row:last-of-type{border-bottom:none}
+.manual-row input,.manual-row select{padding:8px 10px;border:1px solid var(--border-input);border-radius:9px;
+  background:var(--bg-input);color:var(--txt);font-size:12.5px;font-weight:500;outline:none;
+  transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
+.manual-row input:focus,.manual-row select:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(201,176,134,.16)}
+.manual-row input:not([type]){flex:1 1 200px;min-width:120px}
+.manual-row input[type=number]{width:130px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
+.manual-row select{width:170px;flex:none}
+
 /* ===== Impresión: P&L en PDF prolijo (fondo claro) ===== */
 @media print {
-  @page { margin: 14mm; size: A4; }
-  .side, .pyl-noprint, .step-label { display: none !important; }
+  @page { margin: 12mm; size: A4; }
+  /* forzar impresión de colores/fondos intencionales (resultados verde/rojo, headers) */
+  html, body { background: #fff !important; color: #1a1a1a !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body::before { display: none !important; }
+  .side, .pyl-noprint, .no-print, .step-label { display: none !important; }
   .app { display: block !important; }
   .main { padding: 0 !important; max-width: none !important; }
-  body { background: #fff !important; color: #1a1a1a !important; }
-  body::before { display: none !important; }
-  .pyl-card, .dash-kpi { box-shadow: none !important; border: 1px solid #ddd !important;
-    background: #fff !important; break-inside: avoid; backdrop-filter: none !important; }
+
+  /* Encabezado */
+  .page-hdr h2, .page-hdr h2 small, .page-hdr p { color: #1a1a1a !important; }
+
+  /* KPI cards: grilla prolija en A4 y sin decoraciones que ensucian el papel */
+  .dash-kpis { grid-template-columns: repeat(3, 1fr) !important; gap: 8px !important; margin-bottom: 12px !important; }
+  .dash-kpi { background: #fff !important; border: 1px solid #ccc !important; border-radius: 8px !important;
+    padding: 10px 12px !important; box-shadow: none !important; backdrop-filter: none !important;
+    overflow: visible !important; break-inside: avoid !important; }
+  .dash-kpi::before { display: none !important; }
+  .dk-glow { display: none !important; }
+  .dk-label { color: #555 !important; }
+  .dk-value { font-size: 18px !important; }
+  .dk-sub { color: #777 !important; }
+
+  /* Avisos: sobrios en papel (no rojo chillón, en caja) */
+  .login-err { color: #333 !important; border: 1px solid #bbb !important; border-radius: 6px !important;
+    padding: 6px 10px !important; text-align: left !important; margin: 8px 0 !important; break-inside: avoid !important; }
+
+  /* Tabla P&L */
+  .tbl-card { background: #fff !important; border: 1px solid #ccc !important; border-radius: 6px !important;
+    box-shadow: none !important; overflow: visible !important; }
+  .pyl-table { width: 100% !important; }
   .pyl-table td, .pyl-table th { border-color: #ccc !important; }
-  .pyl-table td, .pyl-cat td, .pyl-memo td { color: #1a1a1a !important; }
+  .pyl-table td, .pyl-table th, .pyl-cat td, .pyl-memo td { color: #1a1a1a !important; }
+  .pyl-table thead th { background: #f0f0f0 !important; }
   .pyl-sec { background: #f0f0f0 !important; }
+  .pyl-sec td { color: #1a1a1a !important; font-weight: 700 !important; }
+  .pyl-result td { border-color: #999 !important; }
+  .pyl-result.bruto td { background: #eef4fb !important; }
   .pyl-result.econ td { background: #e6f2f2 !important; }
-  .page-hdr h2, .page-hdr p { color: #1a1a1a !important; }
+  tr, td, th { break-inside: avoid !important; }
+
+  /* legacy (PyLPage comparte estas clases) */
+  .pyl-card { box-shadow: none !important; border: 1px solid #ddd !important;
+    background: #fff !important; break-inside: avoid; backdrop-filter: none !important; }
 }
 
 /* ===== Resumen Financiero ===== */

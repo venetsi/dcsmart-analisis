@@ -75,6 +75,12 @@ export const api = {
   getDataset: (dataset, query) => request(`/data/${dataset}${toQueryString(query)}`),
   getEtlStatus: () => request('/data/etl/status'),
 
+  // Reporte de Ventas Mensuales (P&L por tipo de comprobante)
+  getReporteMensual: (query) => request(`/data/reporte-mensual${toQueryString(query)}`),
+  getReporteManual: (query) => request(`/reporte-manual${toQueryString(query)}`),
+  getReporteManualAnterior: (query) => request(`/reporte-manual/anterior${toQueryString(query)}`),
+  putReporteManual: (body) => request('/reporte-manual', { method: 'PUT', body }),
+
   askAi: (payload) => request('/ai', { method: 'POST', body: payload }),
 
   getUsers: (search) => request(`/access/users${toQueryString({ search })}`),
