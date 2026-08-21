@@ -3,6 +3,16 @@
 // Extracción incremental Cloud SQL → BigQuery (micro-batch)
 // Disparado por Cloud Scheduler: 0 * * * * (cada 1 hora, America/Argentina/Buenos_Aires)
 // Solo LEE la base de producción (usuario analytics_ro, statement_timeout 15s)
+//
+// ATENCIÓN (2026-08-21): este archivo YA NO es lo que corre en el Cloud Run
+// Job "dcsmart-etl" — alguien lo redesplegó por fuera de este repo el
+// 2026-08-07 con otro programa (sincroniza tablas "users"/"diag_columnas",
+// no relacionado a pagos/cajas). Las vistas vw_pagos/vw_cajas/etc. (ver
+// etl/sql/02_views.sql) ya NO leen de las tablas que este script llena
+// (dcsmart_analytics.raw_*) — leen de dcsmart_analytics_cdc, alimentado
+// por un Datastream (CDC) que replica Postgres en vivo. Este script queda
+// como referencia histórica hasta decidir si se borra o se reutiliza para
+// otra cosa; correrlo hoy no tiene efecto en lo que ve la plataforma.
 // ============================================================
 import pg from 'pg'
 import { BigQuery } from '@google-cloud/bigquery'

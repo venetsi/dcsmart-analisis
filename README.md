@@ -1,6 +1,8 @@
 # DCSmart Analytics — Plataforma paralela (Opción B: BigQuery)
 
-Plataforma independiente en **analisis.dcsmart.app** para análisis customizable con IA sobre `pagos` y `cajas`, alimentada por un pipeline micro-batch Cloud SQL → BigQuery (corte cada 1 hora, en punto, hora AR). **Cero modificaciones** al repo, backend, base o red de la app en producción.
+Plataforma independiente en **analisis.dcsmart.app** para análisis customizable con IA sobre `pagos` y `cajas`. **Cero modificaciones** al repo, backend, base o red de la app en producción.
+
+**Fuente de datos (desde 2026-08-21):** un **Datastream** (Google Cloud) replica Postgres en vivo (CDC) hacia el dataset `dcsmart_analytics_cdc`. Las vistas semánticas (`vw_pagos`, `vw_cajas`, `vw_caja_detalles`, `vw_flujo_caja`, ver `etl/sql/02_views.sql`) leen de ahí. El pipeline batch propio (`etl/index.js`, Cloud Scheduler cada 1 hora → Job `dcsmart-etl`) queda como referencia histórica: el Job `dcsmart-etl` fue redesplegado por fuera de este repo el 2026-08-07 para sincronizar otras tablas (`users`/`diag_columnas`), y las tablas que este script llenaba (`dcsmart_analytics.raw_pagos`/`raw_cajas`) dejaron de actualizarse desde esa fecha.
 
 ---
 

@@ -1,5 +1,16 @@
 -- ============================================================
 -- Capa semántica: vistas para el tablero y BI
+--
+-- Fuente de datos (desde 2026-08-21): Datastream (CDC) replica Postgres
+-- en vivo hacia el dataset dcsmart_analytics_cdc, con vistas puente
+-- (raw_pagos, raw_cajas, raw_caja_detalles, dim_*) que reproducen el
+-- mismo esquema que usaban las tablas del ETL propio en dcsmart_analytics.
+-- El ETL casero (Cloud Scheduler -> Job dcsmart-etl) dejó de sincronizar
+-- pagos/cajas el 2026-08-07 (ese Job pasó a sincronizar otras tablas:
+-- users/diag_columnas). dcsmart_analytics.raw_pagos/raw_cajas quedaron
+-- congeladas desde esa fecha. Verificado antes de migrar: comparación de
+-- agregados jul-2026 vs dcsmart_analytics_cdc, sin fan-out en los joins
+-- (ids únicos en public_locales/apps/rubcat/proveedores/metodos_pago).
 -- ============================================================
 
 CREATE OR REPLACE VIEW dcsmart_analytics.vw_pagos AS
@@ -17,12 +28,12 @@ SELECT
   pr.nombre AS proveedor,
   rc.rubro, rc.categoria,
   mp.nombre AS metodo
-FROM dcsmart_analytics.raw_pagos p
-LEFT JOIN dcsmart_analytics.dim_locales      l  ON l.id  = p.id_local
-LEFT JOIN dcsmart_analytics.dim_apps         a  ON a.id  = l.id_app
-LEFT JOIN dcsmart_analytics.dim_proveedores  pr ON pr.id = p.id_proveedor
-LEFT JOIN dcsmart_analytics.dim_rubcat       rc ON rc.id = p.id_rubcat
-LEFT JOIN dcsmart_analytics.dim_metodos_pago mp ON mp.id = p.id_metodo;
+FROM dcsmart_analytics_cdc.raw_pagos p
+LEFT JOIN dcsmart_analytics_cdc.dim_locales      l  ON l.id  = p.id_local
+LEFT JOIN dcsmart_analytics_cdc.dim_apps         a  ON a.id  = l.id_app
+LEFT JOIN dcsmart_analytics_cdc.dim_proveedores  pr ON pr.id = p.id_proveedor
+LEFT JOIN dcsmart_analytics_cdc.dim_rubcat       rc ON rc.id = p.id_rubcat
+LEFT JOIN dcsmart_analytics_cdc.dim_metodos_pago mp ON mp.id = p.id_metodo;
 
 CREATE OR REPLACE VIEW dcsmart_analytics.vw_cajas AS
 SELECT
@@ -30,9 +41,9 @@ SELECT
   c.cajero, c.total, c.efectivo, c.fiscal, c.tickets, c.comensales, c.origin,
   l.nombre AS local,
   a.nombre AS grupo
-FROM dcsmart_analytics.raw_cajas c
-LEFT JOIN dcsmart_analytics.dim_locales l ON l.id = c.id_local
-LEFT JOIN dcsmart_analytics.dim_apps    a ON a.id = l.id_app;
+FROM dcsmart_analytics_cdc.raw_cajas c
+LEFT JOIN dcsmart_analytics_cdc.dim_locales l ON l.id = c.id_local
+LEFT JOIN dcsmart_analytics_cdc.dim_apps    a ON a.id = l.id_app;
 
 -- Detalle de pagos por turno: cómo se cobró cada caja por método/canal
 -- (MP Point, MP QR, Transferencia, Rappi, Pedido Ya, LaPOS/Payway, etc.).
@@ -44,10 +55,10 @@ SELECT
   d.nombre AS metodo,
   IFNULL(NULLIF(d.tipo, ''), 'ingreso') AS tipo,
   d.monto
-FROM dcsmart_analytics.raw_caja_detalles d
-LEFT JOIN dcsmart_analytics.raw_cajas    c ON c.id = d.id_caja
-LEFT JOIN dcsmart_analytics.dim_locales  l ON l.id = c.id_local
-LEFT JOIN dcsmart_analytics.dim_apps     a ON a.id = l.id_app;
+FROM dcsmart_analytics_cdc.raw_caja_detalles d
+LEFT JOIN dcsmart_analytics_cdc.raw_cajas    c ON c.id = d.id_caja
+LEFT JOIN dcsmart_analytics_cdc.dim_locales  l ON l.id = c.id_local
+LEFT JOIN dcsmart_analytics_cdc.dim_apps     a ON a.id = l.id_app;
 
 -- Cashflow: ingresos (ventas de cajas por día) vs egresos con criterio de caja:
 -- solo pagos EFECTIVAMENTE pagados, ubicados por DATE(cashflow) con fallback a DATE(fecha_pago).
