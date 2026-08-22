@@ -25,3 +25,7 @@ firebase-debug.*.log
 Thumbs.db
 .vscode/
 .idea/
+
+# Logs de dev server local
+backend/backend.log
+frontend/frontend.log
