@@ -19,7 +19,10 @@ import reporteManualRoutes from './routes/reporte_manual.js'
 
 // trustProxy: Cloud Run/Firebase Hosting están delante nuestro — sin esto, req.ip
 // (y por lo tanto el rate limit) vería siempre la IP del proxy, no la del cliente real.
-const app = Fastify({ logger: true, trustProxy: true })
+// ignoreTrailingSlash: rutas registradas como '/' bajo un prefix (ej. reporte_manual.js
+// con prefix '/api/reporte-manual') solo matcheaban con la barra final por defecto,
+// mientras el frontend llama sin ella -> 404 en producción.
+const app = Fastify({ logger: true, trustProxy: true, ignoreTrailingSlash: true })
 
 await app.register(cors, {
   origin: (origin, cb) => {
