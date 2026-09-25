@@ -5,6 +5,9 @@
       "hosting": {
         "analytics": [
           "dcsmart-analytics"
+        ],
+        "analytics-dev": [
+          "dcsmart-analytics-dev"
         ]
       }
     }
