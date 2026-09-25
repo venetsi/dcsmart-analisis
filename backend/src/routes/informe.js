@@ -43,7 +43,9 @@ export default async function (fastify) {
     const { desde, hasta } = rangoMes(mes)
     const params = { grupo, local, desde, hasta }
 
-    const [[ventasRows], [gastosRows], [cajaRows], guardado, reglas, localRow, anio] = await Promise.all([
+    const [py, pm] = mes.split('-').map(Number)
+    const mesPrevio = pm === 1 ? `${py - 1}-12` : `${py}-${String(pm - 1).padStart(2, '0')}`
+    const [[ventasRows], [gastosRows], [cajaRows], guardado, reglas, localRow, anio, previo] = await Promise.all([
       // Ventas del mes: total, efectivo (columna 2), PAX y días con venta.
       fastify.bq.query({
         query: `SELECT CAST(ROUND(SUM(total)) AS INT64) total, CAST(ROUND(SUM(efectivo)) AS INT64) efectivo,
@@ -88,6 +90,9 @@ export default async function (fastify) {
                   FROM informe_mensual
                  WHERE grupo = $1 AND local = $2 AND mes LIKE $3 AND mes < $4
                  ORDER BY mes`, [grupo, local, `${mes.slice(0, 4)}-%`, mes]),
+      // Las líneas cargadas a mano el mes anterior, para copiarlas (autónomos,
+      // cargas, comisiones: se repiten y solo cambia el monto).
+      db.query("SELECT datos->'manuales' AS manuales FROM informe_mensual WHERE grupo = $1 AND local = $2 AND mes = $3", [grupo, local, mesPrevio]),
     ])
 
     // Razón social por defecto: la del proveedor vinculado al local en gestión.
@@ -120,6 +125,7 @@ export default async function (fastify) {
       reglas: reglas.rows,
       local: { razon_social: l.razon_social || razonSocialGestion || '', logo: l.logo || null, foto: l.foto || null },
       anio: anio.rows,
+      mesPrevio: { mes: mesPrevio, manuales: previo.rows[0]?.manuales || [] },
     }
   })
 

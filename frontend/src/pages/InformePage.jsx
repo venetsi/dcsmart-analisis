@@ -161,6 +161,8 @@ export default function InformePage() {
   const manualCambio = (id, patch) => setDatos((d) => ({ ...d, manuales: d.manuales.map((m) => (m.id === id ? { ...m, ...patch } : m)) }))
   const manualBorrar = (id) => setDatos((d) => ({ ...d, manuales: d.manuales.filter((m) => m.id !== id) }))
   const setCampo = (k, v) => setDatos((d) => ({ ...d, [k]: v }))
+  // Copia las líneas a mano del mes anterior (mismo concepto y sección, montos incluidos: se corrigen encima).
+  const copiarPrevio = () => setDatos((d) => ({ ...d, manuales: [...(d.manuales || []), ...(data?.mesPrevio?.manuales || []).map((m) => ({ ...m, id: nuevoId() }))] }))
 
   // Mover una categoría de gestión a otra sección: regla del grupo.
   const mover = async (pares, seccion) => {
@@ -279,6 +281,13 @@ export default function InformePage() {
 
           {tab === 'detalle' && (
             <>
+              {!cerrado && !(datos.manuales || []).length && data.mesPrevio?.manuales?.length > 0 && (
+                <div className="inf-aviso caja inf-copiar">
+                  <strong>¿Arrancás con lo de {nombreMes(data.mesPrevio.mes)}?</strong>
+                  <span>El mes anterior se cargaron {data.mesPrevio.manuales.length} línea(s) a mano ({data.mesPrevio.manuales.slice(0, 4).map((m) => m.concepto || 'sin nombre').join(', ')}{data.mesPrevio.manuales.length > 4 ? '…' : ''}). Copialas y corregí los montos.</span>
+                  <div><button className="btn-pri" onClick={copiarPrevio}>Copiar {data.mesPrevio.manuales.length} línea(s)</button></div>
+                </div>
+              )}
               {(avisoCaja || otrosAvisos.length > 0) && !cerrado && (
                 <div className="inf-avisos">
                   {avisoCaja && (
