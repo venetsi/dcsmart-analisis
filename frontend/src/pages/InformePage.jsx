@@ -101,7 +101,9 @@ export default function InformePage() {
 
   const cargar = useCallback(() => {
     if (!grupo || !local || !mes) return
-    setCargando(true); setError('')
+    // Se limpia antes de pedir: si quedara el mes anterior en pantalla, una
+    // edición hecha mientras carga se guardaría en el mes nuevo.
+    setData(null); setCargando(true); setError('')
     api.getInforme({ grupo, local, mes }).then((d) => {
       recienCargado.current = true
       setData(d)
