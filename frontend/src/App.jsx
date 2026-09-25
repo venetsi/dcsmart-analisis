@@ -5,6 +5,7 @@ import AppShell from './components/AppShell.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import SsoPage from './pages/SsoPage.jsx'
 import GroupSelectPage from './pages/GroupSelectPage.jsx'
+import InicioPage from './pages/InicioPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import ResumenPage from './pages/ResumenPage.jsx'
 import PyLPage from './pages/PyLPage.jsx'
@@ -54,7 +55,7 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route index element={<InicioPage />} />
         <Route path="dashboard" element={<ResumenPage />} />
         <Route path="pagos" element={<DashboardPage key="pagos" screen="pagos" />} />
         <Route path="ventas" element={<DashboardPage key="ventas" screen="ventas" />} />

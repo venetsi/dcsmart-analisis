@@ -7,6 +7,7 @@ import { Line } from 'react-chartjs-2'
 import { api } from '../lib/api.js'
 import { fmtMoney, fmtNum } from '../lib/format.js'
 import { useGroup } from '../context/GroupContext.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
@@ -105,10 +106,11 @@ export default function ResumenPage() {
 
   return (
     <div className="dash">
-      <div className="page-hdr">
-        <h2>Dashboard <small style={{ color: 'var(--beige)', fontWeight: 400, fontSize: 13 }}>· {grupo}</small></h2>
-        <p>Pagos por fecha factura · Ventas por fecha inicio · CMV = rubros que comienzan con "CMV". Proyección estacional estimada a 60 días.</p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        chips={[grupo]}
+        sub='Pagos por fecha factura · Ventas por fecha inicio · CMV = rubros que comienzan con "CMV". Proyección estacional estimada a 60 días.'
+      />
 
       <section className="filters dash-filters">
         <div className="fg" style={{ maxWidth: 170 }}>

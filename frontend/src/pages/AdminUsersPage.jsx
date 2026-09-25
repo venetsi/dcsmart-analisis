@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
+import PageHeader from '../components/PageHeader.jsx'
 
 export default function AdminUsersPage() {
   const [search, setSearch] = useState('')
@@ -30,14 +31,10 @@ export default function AdminUsersPage() {
 
   return (
     <div>
-      <div className="page-hdr">
-        <h2>Administrador de usuarios</h2>
-        <p>
-          Usuarios reales de la tabla <b>users</b> original (solo lectura). Habilitar/deshabilitar
-          escribe únicamente en <code>dcsmart_analytics.access_grants</code> — la base de producción
-          no se toca. Los roles <b>super_admin</b> y <b>dcsmart</b> (perfil DCADMIN) entran por defecto.
-        </p>
-      </div>
+      <PageHeader
+        title="Usuarios"
+        sub={<>Usuarios de gestión (solo lectura). Habilitar o deshabilitar el acceso escribe únicamente en la base de Analytics, nunca en la de gestión. Los roles <b>super_admin</b> y <b>dcsmart</b> entran siempre.</>}
+      />
 
       <div style={{ marginBottom: 14 }}>
         <input

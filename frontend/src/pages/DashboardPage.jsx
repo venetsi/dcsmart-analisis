@@ -8,6 +8,7 @@ import KpiCard from '../components/KpiCard.jsx'
 import ChartPanel from '../components/ChartPanel.jsx'
 import DataTable from '../components/DataTable.jsx'
 import AiPanel from '../components/AiPanel.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 
 // Las 3 pantallas fijas y su dataset del backend.
 const SCREENS = {
@@ -218,10 +219,7 @@ export default function DashboardPage({ screen }) {
 
   return (
     <div>
-      <div className="page-hdr">
-        <h2>{sc.title} <small style={{ color: 'var(--beige)', fontWeight: 400, fontSize: 13 }}>· {grupo}</small></h2>
-        <p>{sc.desc}</p>
-      </div>
+      <PageHeader title={sc.title} chips={[grupo]} sub={sc.desc} />
 
       {screen === 'ventas' && (
         <div className="rep-toggle">

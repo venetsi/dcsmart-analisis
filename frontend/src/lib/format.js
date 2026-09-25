@@ -36,3 +36,11 @@ export function fmtDateTime(v) {
   const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
   return `${date} ${time}`
 }
+
+// '2026-08' -> 'Agosto 2026' (para los chips de los encabezados).
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+export function fmtMesLargo(mes) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(mes || ''))
+  if (!m) return mes || ''
+  return `${MESES[Number(m[2]) - 1]} ${m[1]}`
+}

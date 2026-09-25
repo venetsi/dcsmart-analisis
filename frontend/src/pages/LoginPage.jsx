@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import Logo from '../components/Logo.jsx'
+import AppLogo from '../components/AppLogo.jsx'
 
 /* ---- SVG icon helpers (mismo set que la app de gestión) ---- */
 function IconMail() {
@@ -134,11 +134,11 @@ export default function LoginPage() {
       <div className="auth-center">
         <form className="login-card" onSubmit={handleSubmit} noValidate>
           <div className="auth-brand">
-            <Logo size={72} />
+            <AppLogo variant="horizontal" />
           </div>
           <div className="auth-h">
-            <h1>DCSMART <span style={{ color: 'var(--gold)', fontWeight: 400 }}>Analytics</span></h1>
-            <p>analisis.dcsmart.app</p>
+            <h1>DCSMART <span style={{ color: 'var(--gold-bright)', fontWeight: 400 }}>Analytics</span></h1>
+            <p>Reportes y análisis de tus locales</p>
           </div>
 
           {error && (
