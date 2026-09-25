@@ -581,3 +581,7 @@ tbody tr:hover{background:var(--bg-tr-hover)}
 @media (prefers-reduced-motion: reduce) {
   .kpi, .chart-card, .dash-kpi, .dash-chart-card, .pyl-card, .btn-login, .btn-ai, .nav-item { transition: none; }
 }
+
+/* Franja del ambiente de dev (ver AppShell.jsx) */
+.aviso-ambiente{position:sticky;top:0;z-index:50;display:flex;gap:.6rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.4rem 1rem;background:var(--warn-bg);border-bottom:1px solid var(--warn-border);color:var(--warn);font-size:.8rem;text-align:center}
+.aviso-ambiente strong{text-transform:uppercase;letter-spacing:.06em}
