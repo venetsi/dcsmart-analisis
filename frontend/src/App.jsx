@@ -9,7 +9,7 @@ import InicioPage from './pages/InicioPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import ResumenPage from './pages/ResumenPage.jsx'
 import PyLPage from './pages/PyLPage.jsx'
-import ReporteMensualPage from './pages/ReporteMensualPage.jsx'
+import InformePage from './pages/InformePage.jsx'
 import ResumenFinancieroPage from './pages/ResumenFinancieroPage.jsx'
 import AdminUsersPage from './pages/AdminUsersPage.jsx'
 
@@ -61,7 +61,7 @@ export default function App() {
         <Route path="ventas" element={<DashboardPage key="ventas" screen="ventas" />} />
         <Route path="cashflow" element={<DashboardPage key="cashflow" screen="cashflow" />} />
         <Route path="pyl" element={<PyLPage />} />
-        <Route path="reporte-mensual" element={<ReporteMensualPage />} />
+        <Route path="reporte-mensual" element={<InformePage />} />
         <Route path="financiero" element={<ResumenFinancieroPage />} />
         <Route
           path="admin/usuarios"

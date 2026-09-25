@@ -110,7 +110,7 @@ export const TABLEROS = [
   { to: '/ventas',          label: 'Ventas',             sub: 'Venta por local, canal y turno', Icon: IcoVentas },
   { to: '/cashflow',        label: 'Cashflow',           sub: 'Entradas y salidas de dinero', Icon: IcoCashflow },
   { to: '/pyl',             label: 'P&L',                sub: 'Resultado mensual por rubro', Icon: IcoPyl },
-  { to: '/reporte-mensual', label: 'Reporte Mensual',    sub: 'Ventas mensuales con carga manual', Icon: IcoReporteMensual },
+  { to: '/reporte-mensual', label: 'Informe Mensual',    sub: 'P&L, resumen y presentación del mes', Icon: IcoReporteMensual },
   { to: '/financiero',      label: 'Resumen Financiero', sub: 'Flujo, márgenes y rentabilidad', Icon: IcoResumenFin },
 ]
 
