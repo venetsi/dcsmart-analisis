@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { GroupProvider } from './context/GroupContext.jsx'
 import './styles/global.css'
 import './styles/shell.css'
+import './styles/informe.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

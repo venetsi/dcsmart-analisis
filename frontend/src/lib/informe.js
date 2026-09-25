@@ -134,11 +134,11 @@ export function construirInforme({ auto = {}, reglas = [], datos = {} } = {}) {
   const tiposSinClasificar = new Map()
   const agregar = (seccion, concepto, col, monto, extra = {}) => {
     const k = claveLinea(seccion, concepto)
-    const l = lineas.get(k) || { clave: k, seccion, concepto, auto: cero(), rubros: new Set(), sub: extra.sub, origen: 'auto' }
+    const l = lineas.get(k) || { clave: k, seccion, concepto, auto: cero(), rubros: new Map(), sub: extra.sub, origen: 'auto' }
     l.auto.total += monto
     if (col === 2) l.auto.col2 += monto
     else l.auto.col1 += monto
-    if (extra.rubro) l.rubros.add(`${extra.rubro} / ${extra.categoria}`)
+    if (extra.rubro) l.rubros.set(`${extra.rubro}||${extra.categoria}`, { rubro: extra.rubro, categoria: extra.categoria })
     lineas.set(k, l)
   }
 
@@ -148,7 +148,7 @@ export function construirInforme({ auto = {}, reglas = [], datos = {} } = {}) {
   if (ventasTotal || ventasEfectivo) {
     const k = claveLinea('ventas', 'Local')
     lineas.set(k, {
-      clave: k, seccion: 'ventas', concepto: 'Local', origen: 'auto', rubros: new Set(['Cajas del mes']),
+      clave: k, seccion: 'ventas', concepto: 'Local', origen: 'auto', rubros: new Map(),
       // La columna 2 de ventas es el efectivo de las cajas; la 1, el resto.
       // Loreto 08-26: 27.406.497 y 43.072.737, igual que la planilla.
       auto: { total: ventasTotal, col1: ventasTotal - ventasEfectivo, col2: ventasEfectivo },
@@ -184,7 +184,8 @@ export function construirInforme({ auto = {}, reglas = [], datos = {} } = {}) {
     l.total = l.col1 + l.col2
     l.editado = a.col1 != null || a.col2 != null
     l.oculto = !!a.oculto
-    l.rubros = [...l.rubros]
+    // De qué rubro/categoría de gestión sale la línea (para moverla de sección).
+    l.rubros = [...l.rubros.values()]
   }
 
   // 3) Líneas agregadas a mano.
