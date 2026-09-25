@@ -5,9 +5,10 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { api } from '../lib/api.js'
-import { fmtMoney, fmtNum } from '../lib/format.js'
+import { fmtMoney, fmtNum, fmtMesLargo } from '../lib/format.js'
 import { buildPyl, waterfallSteps } from '../lib/pyl.js'
 import { useGroup } from '../context/GroupContext.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -87,15 +88,12 @@ export default function PyLPage() {
 
   return (
     <div className="pyl">
-      <div className="page-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h2>Estado de Resultados (P&amp;L) <small style={{ color: 'var(--beige)', fontWeight: 400, fontSize: 13 }}>· {grupo}{local ? ` · ${local}` : ' · consolidado'}</small></h2>
-          <p>Período {mes} · Ingresos de caja vs. egresos por rubro, con apertura fiscal / efectivo.</p>
-        </div>
-        <div className="pyl-actions pyl-noprint">
-          <button className="btn-pdf" type="button" onClick={() => window.print()}>Exportar / Imprimir PDF</button>
-        </div>
-      </div>
+      <PageHeader
+        title="Estado de Resultados (P&L)"
+        chips={[grupo, local || 'Consolidado', fmtMesLargo(mes)]}
+        sub="Ingresos de caja vs. egresos por rubro, con apertura fiscal / efectivo."
+        actions={<div className="pyl-actions pyl-noprint"><button className="btn-pdf" type="button" onClick={() => window.print()}>Exportar / Imprimir PDF</button></div>}
+      />
 
       <section className="filters pyl-noprint">
         <div className="fg" style={{ maxWidth: 160 }}>

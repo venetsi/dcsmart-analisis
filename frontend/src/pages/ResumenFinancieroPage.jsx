@@ -5,8 +5,9 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { api } from '../lib/api.js'
-import { fmtMoney } from '../lib/format.js'
+import { fmtMoney, fmtMesLargo } from '../lib/format.js'
 import { useGroup } from '../context/GroupContext.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -61,12 +62,11 @@ export default function ResumenFinancieroPage() {
 
   return (
     <div>
-      <div className="page-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h2>Resumen Financiero <small style={{ color: 'var(--beige)', fontWeight: 400, fontSize: 13 }}>· {grupo}{local ? ` · ${local}` : ' · consolidado'}</small></h2>
-          <p>Flujo de caja, rentabilidad e indicadores clave para decidir · período {mes}</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Resumen Financiero"
+        chips={[grupo, local || 'Consolidado', fmtMesLargo(mes)]}
+        sub="Flujo de caja, rentabilidad e indicadores clave para decidir."
+      />
 
       <section className="filters">
         <div className="fg" style={{ maxWidth: 160 }}>

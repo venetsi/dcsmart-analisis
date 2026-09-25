@@ -1,7 +1,8 @@
-import { Link, NavLink } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useGroup } from '../context/GroupContext.jsx'
-import Logo from './Logo.jsx'
+import AppLogo from './AppLogo.jsx'
 import EtlStatusBadge from './EtlStatusBadge.jsx'
 
 /* ── SVG icons (estilo Feather, igual criterio que la app de gestión) ── */
@@ -93,71 +94,95 @@ function IcoLogout() {
   )
 }
 
-function navClass({ isActive }) {
-  return 'nav-item' + (isActive ? ' on' : '')
+function IcoInicio() {
+  return (
+    <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>
+    </svg>
+  )
 }
 
-export default function Sidebar() {
+// Las mismas secciones de siempre; el orden sigue el recorrido del dinero:
+// resumen, lo que entra y sale, y los reportes que se arman con eso.
+export const TABLEROS = [
+  { to: '/dashboard',       label: 'Dashboard',          sub: 'Ventas, pagos y CMV del período', Icon: IcoDashboard },
+  { to: '/pagos',           label: 'Pagos',              sub: 'Egresos por rubro y proveedor', Icon: IcoPagos },
+  { to: '/ventas',          label: 'Ventas',             sub: 'Venta por local, canal y turno', Icon: IcoVentas },
+  { to: '/cashflow',        label: 'Cashflow',           sub: 'Entradas y salidas de dinero', Icon: IcoCashflow },
+  { to: '/pyl',             label: 'P&L',                sub: 'Resultado mensual por rubro', Icon: IcoPyl },
+  { to: '/reporte-mensual', label: 'Reporte Mensual',    sub: 'Ventas mensuales con carga manual', Icon: IcoReporteMensual },
+  { to: '/financiero',      label: 'Resumen Financiero', sub: 'Flujo, márgenes y rentabilidad', Icon: IcoResumenFin },
+]
+
+function iniciales(nombre, email) {
+  const base = (nombre || email || '?').trim()
+  const partes = base.split(/\s+/).filter(Boolean)
+  return ((partes[0]?.[0] || '') + (partes[1]?.[0] || '')).toUpperCase() || base.slice(0, 2).toUpperCase()
+}
+
+export default function Sidebar({ collapsed, mobileOpen, onNavigate }) {
   const { user, logout } = useAuth()
   const { grupo } = useGroup()
+  const navigate = useNavigate()
+  const [fotoRota, setFotoRota] = useState(false)
+
+  const item = ({ to, label, Icon, end }) => (
+    <NavLink
+      key={to}
+      to={to}
+      end={end}
+      className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+      onClick={onNavigate}
+      title={collapsed ? label : undefined}
+    >
+      <Icon />
+      <span className="nav-item-label">{label}</span>
+    </NavLink>
+  )
 
   return (
-    <aside className="side">
-      <div className="brand">
-        <Logo size={34} />
-        <h1>
-          DCSMART <span>Analytics</span>
-          <small>analisis.dcsmart.app</small>
-        </h1>
+    <aside className={'sidebar' + (mobileOpen ? ' mobile-open' : '') + (collapsed ? ' collapsed' : '')}>
+      <div className="sidebar-brand">
+        <AppLogo variant="horizontal" />
       </div>
 
-      <div className="grupo-box">
-        <span>Grupo<br /><b>{grupo}</b></span>
-        <Link to="/grupo">Cambiar</Link>
-      </div>
-
-      <div className="sec">Tableros</div>
-      <NavLink to="/dashboard" className={navClass}>
-        <span className="ic"><IcoDashboard /></span> Dashboard
-      </NavLink>
-      <NavLink to="/pagos" className={navClass}>
-        <span className="ic"><IcoPagos /></span> Pagos
-      </NavLink>
-      <NavLink to="/ventas" className={navClass}>
-        <span className="ic"><IcoVentas /></span> Ventas
-      </NavLink>
-      <NavLink to="/cashflow" className={navClass}>
-        <span className="ic"><IcoCashflow /></span> Cashflow
-      </NavLink>
-      <NavLink to="/pyl" className={navClass}>
-        <span className="ic"><IcoPyl /></span> P&amp;L
-      </NavLink>
-      <NavLink to="/reporte-mensual" className={navClass}>
-        <span className="ic"><IcoReporteMensual /></span> Reporte Mensual
-      </NavLink>
-      <NavLink to="/financiero" className={navClass}>
-        <span className="ic"><IcoResumenFin /></span> Resumen Financiero
-      </NavLink>
-
-      {user?.admin && (
-        <>
-          <div className="sec">Administración</div>
-          <NavLink to="/admin/usuarios" className={navClass}>
-            <span className="ic"><IcoUsers /></span> Usuarios
-          </NavLink>
-        </>
+      {!collapsed && (
+        <div className="sidebar-context">
+          <div className="sidebar-context-label">Grupo</div>
+          <div className="sidebar-app-name">{grupo}</div>
+          <button className="sidebar-change-link" onClick={() => { onNavigate?.(); navigate('/grupo') }}>
+            Cambiar grupo
+          </button>
+        </div>
       )}
 
-      <div className="foot">
-        <EtlStatusBadge />
-        <div className="userbox">
-          <div className="av">{user?.nombre?.[0]?.toUpperCase() || '?'}</div>
-          <div>
-            <div className="nm">{user?.nombre}</div>
-            <div className="rl">{user?.admin ? 'DCADMIN' : 'Analista'}</div>
-          </div>
+      <nav className="sidebar-nav">
+        {item({ to: '/', label: 'Inicio', Icon: IcoInicio, end: true })}
+        <div className="nav-section-label">Tableros</div>
+        {TABLEROS.map(item)}
+        {user?.admin && (
+          <>
+            <div className="nav-section-label">Administración</div>
+            {item({ to: '/admin/usuarios', label: 'Usuarios', Icon: IcoUsers })}
+          </>
+        )}
+      </nav>
+
+      {!collapsed && <EtlStatusBadge />}
+
+      <div className="sidebar-user">
+        <div className="sidebar-user-avatar" title={collapsed ? user?.nombre : undefined}>
+          {user?.avatar_url && !fotoRota
+            ? <img src={user.avatar_url} alt="" referrerPolicy="no-referrer" onError={() => setFotoRota(true)} />
+            : iniciales(user?.nombre, user?.email)}
         </div>
-        <button className="btn-out" onClick={logout}><IcoLogout /> Cerrar sesión</button>
+        <div className="sidebar-user-info">
+          <div className="sidebar-user-name">{user?.nombre || user?.email}</div>
+          <div className="sidebar-version">{user?.admin ? 'Administrador' : 'Analista'}</div>
+        </div>
+        <button className="sidebar-logout" onClick={logout} title="Cerrar sesión" aria-label="Cerrar sesión">
+          <IcoLogout />
+        </button>
       </div>
     </aside>
   )

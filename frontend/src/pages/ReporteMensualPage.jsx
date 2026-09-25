@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
-import { fmtMoney, fmtNum } from '../lib/format.js'
+import { fmtMoney, fmtNum, fmtMesLargo } from '../lib/format.js'
 import { buildReporte } from '../lib/reporteMensual.js'
 import { useGroup } from '../context/GroupContext.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 
 function prevMonth() {
   const d = new Date()
@@ -87,15 +88,12 @@ export default function ReporteMensualPage() {
 
   return (
     <div className="pyl">
-      <div className="page-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h2>Reporte de Ventas Mensuales <small style={{ color: 'var(--beige)', fontWeight: 400, fontSize: 13 }}>· {grupo}{local ? ` · ${local}` : ' · consolidado'}</small></h2>
-          <p>Período {mes} · P&amp;L mensual por tipo de comprobante, con apertura bancarizado / efectivo.</p>
-        </div>
-        <div className="pyl-actions pyl-noprint">
-          <button className="btn-pdf" type="button" onClick={() => window.print()}>Exportar / Imprimir PDF</button>
-        </div>
-      </div>
+      <PageHeader
+        title="Reporte de Ventas Mensuales"
+        chips={[grupo, local || 'Consolidado', fmtMesLargo(mes)]}
+        sub="P&L mensual por tipo de comprobante, con apertura bancarizado / efectivo."
+        actions={<div className="pyl-actions pyl-noprint"><button className="btn-pdf" type="button" onClick={() => window.print()}>Exportar / Imprimir PDF</button></div>}
+      />
 
       <section className="filters pyl-noprint">
         <div className="fg" style={{ maxWidth: 160 }}>
