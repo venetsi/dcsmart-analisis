@@ -3,7 +3,16 @@
    app de gestión DCSMART (dcsmart/frontend/src/styles/app.css) reusando
    los mismos nombres de clase ya presentes en este proyecto. */
 
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap');
+/* Montserrat servida desde la app: la política de seguridad del sitio
+   (firebase.json, style-src/font-src 'self') bloquea Google Fonts, y con el
+   @import de antes la app caía en la fuente de reemplazo sin avisar. */
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root{
   /* fondos */
