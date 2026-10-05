@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Red de seguridad a nivel navegador: recarga la página cada hora sin
+     depender de que el JS siga vivo (setInterval puede quedar suspendido
+     en TVs/kiosks cuando el navegador entra en modo background/ahorro de
+     energía) — esto lo maneja el motor del navegador, no nuestro script. -->
+<meta http-equiv="refresh" content="3600">
+<meta name="robots" content="noindex">
+<title>DCSmart · Rendimiento General</title>
+<link rel="icon" href="dc-smart-icon.svg">
+<!-- Montserrat y Chart.js se sirven desde la app: la CSP de Analytics no deja
+     cargar Google Fonts ni CDNs. Chart.js es el mismo 4.5.1 (mismo hash SRI). -->
+<script src="vendor/chart.umd.min.js"></script>
+<style>
+  @font-face{
+    font-family:'Montserrat';
+    src:url('/fonts/Montserrat-VariableFont_wght.ttf') format('truetype');
+    font-weight:100 900; font-style:normal; font-display:swap;
+  }
+  :root{
+    --bg-0:#10161f; --bg-1:#161f2a; --bg-2:#1b2531;
+    --card:rgba(255,255,255,.045); --card-hi:rgba(255,255,255,.075);
+    --border:rgba(255,255,255,.09); --border-hi:rgba(201,176,134,.34);
+
+    --gold:#C9B086; --gold-bright:#E8D2A6; --gold-dim:rgba(201,176,134,.16);
+    --teal:#3FB6BD; --teal-bright:#7FD8DD; --teal-dim:rgba(63,182,189,.16);
+
+    --ok:#4CAF7D; --ok-bg:rgba(76,175,125,.14);
+    --warn:#D4952A; --warn-bg:rgba(212,149,42,.14);
+    --bad:#E0615C; --bad-bg:rgba(224,97,92,.14);
+
+    --t1:#F3F0EA; --t2:rgba(243,240,234,.64); --t3:rgba(243,240,234,.40); --t4:rgba(243,240,234,.24);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; overflow:hidden; background:var(--bg-0); }
+  body{
+    font-family:'Montserrat',system-ui,sans-serif;
+    color:var(--t1);
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(201,176,134,.09), transparent 60%),
+      radial-gradient(900px 560px at 100% 8%, rgba(63,182,189,.08), transparent 55%),
+      linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  }
+  .tv{
+    height:100vh; width:100vw; aspect-ratio:16/9;
+    max-height:100vw; max-width:177.78vh; margin:0 auto;
+    display:flex; flex-direction:column;
+    padding:clamp(14px,1.7vw,30px);
+    gap:clamp(10px,1.3vh,16px);
+  }
+
+  /* ── header ───────────────────────────────────────────────── */
+  .hd{ flex:0 0 auto; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:16px; }
+  .hd-left{ display:flex; align-items:center; gap:clamp(12px,1vw,18px); min-width:0; }
+  .hd-logo{ flex:0 0 auto; height:clamp(38px,3.6vw,58px); width:auto; display:block; }
+  .hd-titles{ min-width:0; }
+  .hd-word{
+    font-size:clamp(17px,1.5vw,27px); font-weight:800; letter-spacing:.02em;
+    color:var(--gold-bright); white-space:nowrap; line-height:1.15;
+  }
+  .hd-sub{
+    margin-top:2px; font-size:clamp(11px,.82vw,14px); color:var(--t3);
+    font-weight:500; letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .hd-birthday{
+    flex:0 1 auto; display:flex; align-items:center; gap:8px;
+    padding:7px 16px; border-radius:999px; max-width:min(40vw,420px);
+    background:linear-gradient(120deg, var(--teal), var(--gold));
+    color:#0C1116; font-weight:700; font-size:clamp(12px,1vw,15px);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    box-shadow:0 4px 14px -4px rgba(201,176,134,.55);
+  }
+  .hd-birthday-ico{ font-size:1.25em; line-height:1; flex:0 0 auto; }
+  .hd-center{ text-align:center; min-width:0; overflow:hidden; }
+  .hd-tagline{
+    font-size:clamp(13px,1.5vw,26px); color:var(--gold-bright);
+    font-weight:700; font-style:italic; letter-spacing:-.01em; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  /* Pantalla angosta (ventana de navegador chica, no la TV real): con todo
+     el resto del header ya ocupando el ancho, no queda lugar digno para el
+     tagline — se oculta entero en vez de mostrar 1-2 letras cortadas. */
+  @media (max-width:900px){ .hd-tagline{ display:none; } }
+  .hd-right{ flex:0 0 auto; display:flex; align-items:center; gap:clamp(10px,1vw,16px); }
+  .hd-right-dates{ text-align:right; }
+  .hd-date{ font-size:clamp(11px,.82vw,14px); color:var(--t3); text-transform:capitalize; }
+  .hd-badge{ font-size:clamp(12px,.95vw,16px); }
+  .hd-badge .dot{ width:9px; height:9px; }
+  .hd-weather{ display:flex; align-items:center; gap:clamp(8px,.9vw,14px); }
+  .wx-hour{ display:flex; flex-direction:column; align-items:center; gap:1px; }
+  .wx-hour img{ width:clamp(20px,1.7vw,30px); height:clamp(20px,1.7vw,30px); display:block; }
+  .wx-hour .wx-h{ font-size:clamp(9px,.62vw,11px); color:var(--t3); font-weight:500; }
+  .wx-hour .wx-t{ font-size:clamp(11px,.85vw,14px); color:var(--t1); font-weight:700; font-variant-numeric:tabular-nums; }
+  .hd-clock{
+    font-size:clamp(20px,1.7vw,30px); font-weight:700; font-variant-numeric:tabular-nums;
+    color:var(--gold-bright); letter-spacing:.02em; line-height:1.2;
+  }
+  .hd-clock .sec{ color:var(--t3); font-weight:500; }
+
+  /* ── kpi row (5: 2 gauges + 3 stats) ─────────────────────── */
+  .kpis{
+    flex:0 0 auto; display:grid;
+    grid-template-columns:0.85fr 1fr 0.95fr 1.1fr 1.1fr 1.05fr 1.05fr; gap:clamp(10px,1vw,16px);
+  }
+  .kpi{
+    position:relative; overflow:hidden;
+    background:var(--card); border:1px solid var(--border); border-radius:18px;
+    padding:clamp(12px,1.1vw,18px) clamp(14px,1.3vw,22px);
+    display:flex; flex-direction:column; justify-content:center;
+  }
+  .kpi-label{
+    font-size:clamp(9px,.68vw,11.5px); font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--t3); margin-bottom:6px;
+  }
+  .kpi-value{
+    font-size:clamp(28px,2.6vw,46px); font-weight:800; line-height:1; letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums; color:var(--t1);
+  }
+  .kpi-sub{ margin-top:6px; font-size:clamp(10px,.74vw,12.5px); color:var(--t3); }
+  .kpi-center{ align-items:center; text-align:center; }
+  .kpi-combo{ display:flex; flex-direction:column; align-items:center; gap:4px; margin-top:2px; }
+  .kpi-combo-item{ display:flex; flex-direction:row; align-items:baseline; gap:6px; }
+  .kpi-combo-item .kpi-value{ font-size:clamp(18px,1.7vw,28px); }
+  .kpi-combo-sub{ font-size:clamp(9px,.68vw,11.5px); color:var(--t3); margin-top:2px; }
+
+  .kpi-hero{
+    background:linear-gradient(120deg, rgba(201,176,134,.10), transparent 60%), var(--card);
+    border-color:var(--border-hi);
+    flex-direction:row; align-items:center; gap:clamp(12px,1.2vw,18px);
+  }
+  .gauge-wrap{ position:relative; flex:0 0 auto; width:clamp(50px,4.2vw,72px); height:clamp(50px,4.2vw,72px); }
+  .gauge{ width:100%; height:100%; transform:rotate(-90deg); }
+  .gauge-track{ fill:none; stroke:rgba(255,255,255,.08); stroke-width:11; }
+  .gauge-fill{
+    fill:none; stroke:var(--warn); stroke-width:11; stroke-linecap:round;
+    transition:stroke-dashoffset 1.3s cubic-bezier(.16,1,.3,1), stroke .4s ease;
+  }
+  .gauge-center{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .gauge-value{
+    font-size:clamp(12px,1.1vw,19px); font-weight:800; font-variant-numeric:tabular-nums; line-height:1;
+  }
+  .gauge-caption{ font-size:clamp(9px,.6vw,10.5px); color:var(--t3); margin-top:2px; white-space:nowrap; }
+  @media (prefers-reduced-motion:reduce){ .gauge-fill{ transition:none; } }
+
+  /* ── scatter: ops y cajas por local (volumen vs % auditado) ─ */
+  .scatter-section{
+    flex:1 1 42%; min-height:0; display:grid;
+    grid-template-columns:1fr .8fr 1fr; gap:clamp(10px,1vw,16px);
+  }
+  .scatter-card{
+    background:var(--card); border:1px solid var(--border); border-radius:18px;
+    padding:clamp(12px,1.1vw,18px) clamp(14px,1.3vw,22px);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .scatter-head{ flex:0 0 auto; margin-bottom:4px; }
+  .scatter-title{ font-size:clamp(13px,.95vw,16px); font-weight:700; color:var(--t1); }
+  .scatter-sub{ font-size:clamp(10px,.72vw,12px); color:var(--t3); }
+  .scatter-body{ position:relative; flex:1; min-height:0; }
+  .scatter-empty{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--t4); font-size:clamp(11px,.85vw,13px); text-align:center;
+  }
+
+  /* ── rankings (2 paneles top 5) ───────────────────────────── */
+  .rankings{
+    flex:1 1 32%; min-height:0; display:grid;
+    grid-template-columns:1fr 1fr 1fr 1fr; gap:clamp(10px,1vw,16px);
+  }
+  .rank-card{
+    background:var(--card); border:1px solid var(--border); border-radius:18px;
+    padding:clamp(12px,1.1vw,18px) clamp(14px,1.3vw,22px);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .rank-title{ flex:0 0 auto; font-size:clamp(13px,.95vw,16px); font-weight:700; margin-bottom:2px; }
+  .rank-title .dim{ font-weight:500; color:var(--t3); }
+  .rank-rows{ flex:1; min-height:0; margin-top:8px; display:flex; flex-direction:column; }
+  .rank-row{
+    flex:1; display:grid; align-items:center; min-height:0;
+    grid-template-columns:clamp(18px,1.4vw,24px) minmax(0,1fr) clamp(90px,9vw,130px);
+    gap:clamp(8px,.9vw,14px);
+    border-top:1px solid var(--border);
+  }
+  .rank-rows .rank-row:first-child{ border-top:none; }
+  .rank-num{ font-size:clamp(11px,.85vw,14px); font-weight:700; color:var(--t4); font-variant-numeric:tabular-nums; }
+  .rank-info{ min-width:0; }
+  .rank-name{ font-size:clamp(12px,.9vw,14.5px); font-weight:600; color:var(--t1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rank-sub{ font-size:clamp(9px,.66vw,11.5px); color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rank-bar-col{ display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
+  .rank-value{ font-size:clamp(12px,.9vw,15px); font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .rank-trend{ font-size:.85em; }
+  .rank-bar{ width:100%; height:5px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; }
+  .rank-bar-fill{ height:100%; border-radius:3px; }
+  .rank-bar-tall{
+    position:relative; width:100%; height:clamp(14px,1.5vh,20px); border-radius:999px;
+    background:rgba(255,255,255,.15); overflow:hidden;
+  }
+  .rank-bar-tall .rank-bar-fill{ border-radius:999px; }
+  .rank-bar-label-left{
+    position:absolute; top:50%; left:7px; transform:translateY(-50%);
+    font-size:clamp(9px,.68vw,11.5px); font-weight:700; color:#fff; line-height:1;
+    text-shadow:0 1px 2px rgba(0,0,0,.55); pointer-events:none; white-space:nowrap;
+  }
+  .rank-bar-pct-label{
+    position:absolute; top:50%; right:7px; transform:translateY(-50%);
+    font-size:clamp(9px,.68vw,11.5px); font-weight:700; color:#fff; line-height:1;
+    text-shadow:0 1px 2px rgba(0,0,0,.55); pointer-events:none;
+  }
+  .rank-bar-pct-label-center{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-size:clamp(9px,.68vw,11.5px); font-weight:700; color:#fff; line-height:1;
+    text-shadow:0 1px 2px rgba(0,0,0,.55); pointer-events:none;
+  }
+  .rank-empty{ flex:1; display:flex; align-items:center; justify-content:center; color:var(--t4); font-size:clamp(11px,.85vw,13px); text-align:center; }
+
+  /* ── footer ───────────────────────────────────────────────── */
+  .ft{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:14px;
+    font-size:clamp(10px,.72vw,12px); color:var(--t4);
+  }
+  .ft-badge{ display:inline-flex; align-items:center; gap:6px; }
+  .ft-badge .dot{ width:7px; height:7px; border-radius:50%; background:var(--ok); }
+  .ft-badge.live .dot{ box-shadow:0 0 0 0 rgba(76,175,125,.6); animation:pulse 2.4s infinite; }
+  .ft-badge.stale .dot{ background:var(--warn); }
+  .ft-badge.error .dot{ background:var(--bad); }
+  @keyframes pulse{
+    0%{ box-shadow:0 0 0 0 rgba(76,175,125,.55); }
+    70%{ box-shadow:0 0 0 7px rgba(76,175,125,0); }
+    100%{ box-shadow:0 0 0 0 rgba(76,175,125,0); }
+  }
+  @media (prefers-reduced-motion:reduce){ .ft-badge .dot{ animation:none; } }
+
+  /* ── estado inicial sin datos ─────────────────────────────── */
+  .boot{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; color:var(--t3); font-size:clamp(14px,1.1vw,18px); text-align:center;
+  }
+  .boot .spinner{
+    width:34px; height:34px; border-radius:50%; border:3px solid rgba(255,255,255,.12);
+    border-top-color:var(--gold); animation:spin 1s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* ── Login (2026-10): la página dejó de ser pública ─────────────────── */
+  .tv-login{
+    position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+    background:var(--bg-0); padding:24px;
+  }
+  .tv-login[hidden]{ display:none; }
+  .tv-login-box{ display:flex; flex-direction:column; align-items:center; gap:18px; max-width:440px; text-align:center; }
+  .tv-login-box img{ width:72px; height:72px; }
+  .tv-login-box h1{ margin:0; font-size:28px; font-weight:800; letter-spacing:.04em; color:var(--t1); }
+  .tv-login-box p{ margin:0; color:var(--t2); font-size:15px; line-height:1.5; }
+  .tv-login-box .tv-login-error{ color:var(--bad); font-weight:600; }
+  .tv-login-error:empty{ display:none; }
+  #tvGoogleBtn{ min-height:44px; }
+</style>
+</head>
+<body>
+<div class="tv-login" id="tvLogin" hidden>
+  <div class="tv-login-box">
+    <img src="dc-smart-icon.svg" alt="DC Smart">
+    <h1>Rendimiento General</h1>
+    <p>Entrá con tu cuenta de Google para ver el dashboard. La sesión queda abierta en esta pantalla por 30 días.</p>
+    <div id="tvGoogleBtn"></div>
+    <p class="tv-login-error" id="tvLoginError" role="alert"></p>
+    <p>Pueden entrar los super admins de DCSMART y los mails habilitados.</p>
+  </div>
+</div>
+<div class="tv">
+
+  <header class="hd">
+    <div class="hd-left">
+      <img class="hd-logo" src="dc-smart-icon.svg" alt="DC Smart">
+      <div class="hd-titles">
+        <div class="hd-word">DC-SMART</div>
+      </div>
+      <div class="hd-birthday" id="hdBirthday" style="display:none">
+        <span class="hd-birthday-ico">🎂</span>
+        <span>Feliz Cumple &ldquo;<span id="hdBirthdayNames"></span>&rdquo;</span>
+      </div>
+    </div>
+    <div class="hd-center">
+      <div class="hd-tagline">&ldquo;Tu rentabilidad, nuestra gestión&rdquo;</div>
+    </div>
+    <div class="hd-right">
+      <span class="ft-badge hd-badge live" id="ftBadge"><span class="dot"></span><span id="ftBadgeText">Conectando…</span></span>
+      <div class="hd-weather" id="hdWeather"></div>
+      <div class="hd-right-dates">
+        <div class="hd-date" id="hdDate">—</div>
+        <div class="hd-clock" id="hdClock">--:--<span class="sec">:--</span></div>
+      </div>
+    </div>
+  </header>
+
+  <div id="boot" class="boot">
+    <div class="spinner"></div>
+    <div>Cargando datos…</div>
+  </div>
+
+  <div id="app" style="display:none; flex:1; min-height:0; flex-direction:column; gap:inherit;">
+    <section class="kpis">
+      <div class="kpi kpi-center">
+        <div class="kpi-label">Locales activos</div>
+        <div class="kpi-value" id="kpiLocales">—</div>
+        <div class="kpi-sub">Con ops o cajas alguna vez</div>
+      </div>
+      <div class="kpi kpi-center">
+        <div class="kpi-label">Ops y cajas totales</div>
+        <div class="kpi-combo">
+          <div class="kpi-combo-item"><span class="kpi-value" id="kpiOps">—</span><span class="kpi-combo-sub">ops</span></div>
+          <div class="kpi-combo-item"><span class="kpi-value" id="kpiCajas">—</span><span class="kpi-combo-sub">cajas</span></div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Tiempo hasta auditar</div>
+        <div class="kpi-value" id="kpiDiasAuditoria">—</div>
+        <div class="kpi-sub" id="kpiDiasAuditoriaTrend"></div>
+      </div>
+      <div class="kpi kpi-hero">
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 140 140" class="gauge">
+            <circle cx="70" cy="70" r="60" class="gauge-track"/>
+            <circle cx="70" cy="70" r="60" class="gauge-fill" id="gaugeFillOps"/>
+          </svg>
+          <div class="gauge-center"><div class="gauge-value" id="gaugeValueOps">—</div></div>
+        </div>
+        <div>
+          <div class="kpi-label">Ops auditadas</div>
+          <div class="gauge-caption" id="gaugeCaptionOps">— / — auditadas</div>
+        </div>
+      </div>
+      <div class="kpi kpi-hero">
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 140 140" class="gauge">
+            <circle cx="70" cy="70" r="60" class="gauge-track"/>
+            <circle cx="70" cy="70" r="60" class="gauge-fill" id="gaugeFillCajas"/>
+          </svg>
+          <div class="gauge-center"><div class="gauge-value" id="gaugeValueCajas">—</div></div>
+        </div>
+        <div>
+          <div class="kpi-label">Cajas auditadas</div>
+          <div class="gauge-caption" id="gaugeCaptionCajas">— / — auditadas</div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Pagos realizados</div>
+        <div class="kpi-value" id="kpiPagos7d">—</div>
+        <div class="kpi-sub">Transf. / MP · 7d hábiles</div>
+        <div class="kpi-sub" id="kpiPagos7dProm">— /día prom.</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Optimización con IA <span class="dim">· 30 días</span></div>
+        <div class="kpi-value" id="kpiHorasIa">—</div>
+        <div class="kpi-sub" id="kpiIaAdopcion">— % adopción · — fact.</div>
+        <div class="kpi-sub" id="kpiIaTrend"></div>
+      </div>
+    </section>
+
+    <section class="scatter-section">
+      <div class="scatter-card">
+        <div class="scatter-head">
+          <div class="scatter-title">Ops por local</div>
+          <div class="scatter-sub">Locales con ≥5% auditado · peor % auditado primero</div>
+        </div>
+        <div class="scatter-body"><canvas id="scatterOps"></canvas><div class="scatter-empty" id="scatterOpsEmpty" style="display:none">Sin datos.</div></div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-title">Mejor CMV <span class="dim">· últimos 30 días</span></div>
+        <div class="rank-rows" id="rankCmvLocales"></div>
+      </div>
+      <div class="scatter-card">
+        <div class="scatter-head">
+          <div class="scatter-title">Cajas por local</div>
+          <div class="scatter-sub">Locales con ≥5% auditado · peor % auditado primero</div>
+        </div>
+        <div class="scatter-body"><canvas id="scatterCajas"></canvas><div class="scatter-empty" id="scatterCajasEmpty" style="display:none">Sin datos.</div></div>
+      </div>
+    </section>
+
+    <section class="rankings">
+      <div class="rank-card">
+        <div class="rank-title">Más activos <span class="dim">ops/día</span></div>
+        <div class="rank-rows" id="rankLocalesActivos"></div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-title">Ajustar Auditoria <span class="dim">ops</span></div>
+        <div class="rank-rows" id="rankOpsPeorAuditados"></div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-title">Auditadas <span class="dim">cajas</span></div>
+        <div class="rank-rows" id="rankCajasLocal"></div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-title">Ajustar Auditoria <span class="dim">cajas</span></div>
+        <div class="rank-rows" id="rankCajasPeorAuditadas"></div>
+      </div>
+    </section>
+
+    <footer class="ft">
+      <span id="ftUpdated">Última actualización: —</span>
+    </footer>
+  </div>
+
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script src="tv-login.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
