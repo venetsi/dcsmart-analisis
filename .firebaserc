@@ -8,6 +8,9 @@
         ],
         "analytics-dev": [
           "dcsmart-analytics-dev"
+        ],
+        "rendimiento": [
+          "dcsmart-rendimiento"
         ]
       }
     }

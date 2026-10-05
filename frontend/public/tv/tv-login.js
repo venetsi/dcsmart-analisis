@@ -36,7 +36,7 @@ window.tvSesion = (function () {
   async function alResponderGoogle (resp) {
     mostrarError('')
     try {
-      const res = await fetch('/api/tv/login', {
+      const res = await fetch(window.TV_API_BASE + '/api/tv/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential: resp.credential })
@@ -59,7 +59,7 @@ window.tvSesion = (function () {
     if (botonListo) return
     if (!window.google?.accounts?.id) { setTimeout(prepararBoton, 300); return }
     try {
-      const { google_client_id: clientId } = await (await fetch('/api/tv/config')).json()
+      const { google_client_id: clientId } = await (await fetch(window.TV_API_BASE + '/api/tv/config')).json()
       if (!clientId) { mostrarError('El login con Google no está configurado en el servidor.'); return }
       google.accounts.id.initialize({ client_id: clientId, callback: alResponderGoogle })
       google.accounts.id.renderButton(document.getElementById('tvGoogleBtn'), {

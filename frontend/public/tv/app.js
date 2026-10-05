@@ -7,8 +7,8 @@
    Config — único lugar a editar para apuntar al backend real.
    ═══════════════════════════════════════════════════════════════════════ */
 const CONFIG = {
-  // Mismo origen: Firebase Hosting reescribe /api/** al backend de Analytics.
-  API_URL: '/api/tv/resumen',
+  // Ver tv-config.js: mismo origen en Analytics, directo al servicio en el sitio de la TV.
+  API_URL: window.TV_API_BASE + '/api/tv/resumen',
   REFRESH_MS: 60 * 60 * 1000,  // 1h en condiciones normales
   RETRY_MS: 5 * 60 * 1000,     // 5min de backoff si falló el fetch
   CACHE_KEY: 'dcsmart_rendimiento_general_cache',

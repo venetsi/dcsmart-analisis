@@ -1,6 +1,18 @@
 {
   "hosting": [
     {
+      "target": "rendimiento",
+      "public": "frontend/public",
+      "ignore": ["**/.*"],
+      "rewrites": [{ "source": "/", "destination": "/tv/index.html" }],
+      "headers": [
+        { "source": "**", "headers": [
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+        ] }
+      ]
+    },
+    {
       "target": "analytics",
       "public": "frontend/dist",
       "ignore": ["**/.*"],
