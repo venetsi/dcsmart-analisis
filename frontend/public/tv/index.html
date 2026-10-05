@@ -10,10 +10,10 @@
 <meta http-equiv="refresh" content="3600">
 <meta name="robots" content="noindex">
 <title>DCSmart · Rendimiento General</title>
-<link rel="icon" href="dc-smart-icon.svg">
+<link rel="icon" href="/tv/dc-smart-icon.svg">
 <!-- Montserrat y Chart.js se sirven desde la app: la CSP de Analytics no deja
      cargar Google Fonts ni CDNs. Chart.js es el mismo 4.5.1 (mismo hash SRI). -->
-<script src="vendor/chart.umd.min.js"></script>
+<script src="/tv/vendor/chart.umd.min.js"></script>
 <style>
   @font-face{
     font-family:'Montserrat';
@@ -263,7 +263,7 @@
 <body>
 <div class="tv-login" id="tvLogin" hidden>
   <div class="tv-login-box">
-    <img src="dc-smart-icon.svg" alt="DC Smart">
+    <img src="/tv/dc-smart-icon.svg" alt="DC Smart">
     <h1>Rendimiento General</h1>
     <p>Entrá con tu cuenta de Google para ver el dashboard. La sesión queda abierta en esta pantalla por 30 días.</p>
     <div id="tvGoogleBtn"></div>
@@ -275,7 +275,7 @@
 
   <header class="hd">
     <div class="hd-left">
-      <img class="hd-logo" src="dc-smart-icon.svg" alt="DC Smart">
+      <img class="hd-logo" src="/tv/dc-smart-icon.svg" alt="DC Smart">
       <div class="hd-titles">
         <div class="hd-word">DC-SMART</div>
       </div>
@@ -409,7 +409,8 @@
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="tv-login.js"></script>
-<script src="app.js"></script>
+<script src="/tv/tv-config.js"></script>
+<script src="/tv/tv-login.js"></script>
+<script src="/tv/app.js"></script>
 </body>
 </html>
