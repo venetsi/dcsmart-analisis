@@ -47,6 +47,7 @@ function slugCorto (slug) {
   return slug ? String(slug).replace(/^grupo-/, '') : null
 }
 
+import crypto from 'node:crypto'
 import { OAuth2Client } from 'google-auth-library'
 import { listaDeMails, puedeVerTv } from '../lib/tvAcceso.js'
 
@@ -72,7 +73,19 @@ export default async function (fastify) {
     return rows[0] ?? null
   }
 
+  // La página publicada en dcsmart-rendimiento.web.app manda la clave de
+  // servicio en X-Tv-Service-Key: se sigue aceptando para que esa página ande
+  // tal cual está. Cuando la página pase a usar el login, se borra el secret
+  // TV_DASHBOARD_SERVICE_KEY del servicio y esta vía queda cerrada sola.
+  function claveDeServicioValida (req) {
+    const key = req.headers['x-tv-service-key']
+    const expected = process.env.TV_DASHBOARD_SERVICE_KEY
+    return Boolean(key && expected && key.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(key), Buffer.from(expected)))
+  }
+
   async function autenticarTv (req, reply) {
+    if (claveDeServicioValida(req)) return
     try { await req.jwtVerify() } catch { return reply.code(401).send({ error: 'Sesión vencida o inexistente' }) }
     if (!req.user?.tv) return reply.code(401).send({ error: 'Sesión vencida o inexistente' })
     const email = req.user.email
