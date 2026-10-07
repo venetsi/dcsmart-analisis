@@ -5,6 +5,9 @@
 const DATASETS = {
   pagos: {
     view: 'vw_pagos', dateCol: 'fecha_dia', amount: 'importe',
+    // Filtrando por rubro se lee la vista por rubro: una factura repartida entra
+    // con la parte de ese rubro, no con el total (ver vw_pagos_rubro).
+    viewPorRubro: 'vw_pagos_rubro',
     // Selector de tipo de fecha (pantalla Pagos): qué columna maneja el rango del período.
     dateCols: {
       factura: 'fecha_dia',
@@ -103,9 +106,11 @@ export default async function (fastify) {
         params: base
       }),
       fastify.bq.query({
-        query: `SELECT COUNT(*) AS n, COALESCE(SUM(importe),0) AS total,
+        // vw_pagos_rubro: una factura repartida entre rubros suma en CMV solo su
+        // parte. Una fila por pago y rubro, por eso el conteo es DISTINCT.
+        query: `SELECT COUNT(DISTINCT id) AS n, COALESCE(SUM(importe),0) AS total,
                        COALESCE(SUM(IF(STARTS_WITH(UPPER(rubro),'CMV'), importe, 0)),0) AS cmv
-                FROM ${DS}.vw_pagos
+                FROM ${DS}.vw_pagos_rubro
                 WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desde AND @hasta${gCond}`,
         params: base
       }),
@@ -118,7 +123,7 @@ export default async function (fastify) {
       fastify.bq.query({
         query: `SELECT DATE_TRUNC(fecha_dia, WEEK(MONDAY)) AS semana, SUM(importe) AS pagos,
                        SUM(IF(STARTS_WITH(UPPER(rubro),'CMV'), importe, 0)) AS cmv
-                FROM ${DS}.vw_pagos
+                FROM ${DS}.vw_pagos_rubro
                 WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desdeLb AND @hasta${gCond}
                 GROUP BY 1 ORDER BY 1`,
         params: base
@@ -239,7 +244,7 @@ export default async function (fastify) {
                        CAST(ROUND(SUM(importe)) AS INT64) total,
                        CAST(ROUND(SUM(IF(metodo != 'Efectivo' OR metodo IS NULL, importe, 0))) AS INT64) fiscal,
                        CAST(ROUND(SUM(IF(metodo = 'Efectivo', importe, 0))) AS INT64) efectivo
-                FROM ${DS}.vw_pagos
+                FROM ${DS}.vw_pagos_rubro
                 WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desde AND @hasta${scopeCond}
                 GROUP BY 1, 2 ORDER BY total DESC`,
         params
@@ -297,7 +302,7 @@ export default async function (fastify) {
       fastify.bq.query({
         query: `SELECT rubro, categoria, tipo,
                        CAST(ROUND(SUM(importe)) AS INT64) total
-                FROM ${DS}.vw_pagos
+                FROM ${DS}.vw_pagos_rubro
                 WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desde AND @hasta${scopeCond}
                 GROUP BY 1, 2, 3 ORDER BY total DESC`,
         params
@@ -353,7 +358,7 @@ export default async function (fastify) {
                        WHEN rubro IN ${NO_OP} THEN 'no_op' ELSE 'op' END AS clase,
                   ingresa_egreso, pagado,
                   CAST(ROUND(SUM(importe)) AS INT64) AS total
-                FROM ${DS}.vw_pagos
+                FROM ${DS}.vw_pagos_rubro
                 WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}
                 GROUP BY 1, 2, 3`,
         params
@@ -435,21 +440,26 @@ export default async function (fastify) {
     const limit = Math.min(parseInt(req.query.limit) || 500, 2000)
 
     const groupDim = def.dims[0] // local
+    const porRubro = def.viewPorRubro && req.query.rubro
+    const view = porRubro ? def.viewPorRubro : def.view
+    // En la vista por rubro un pago puede tener dos filas del mismo rubro (dos
+    // categorías): se cuentan pagos, no filas.
+    const contar = porRubro ? 'COUNT(DISTINCT id)' : 'COUNT(*)'
     // Las 3 consultas en paralelo (en serie sumaban ~3x la latencia de BigQuery)
     const [[rows], [aggMes], [aggDim]] = await Promise.all([
       fastify.bq.query({
-        query: `SELECT * FROM ${DS}.${def.view} WHERE ${where} ORDER BY ${dateCol} DESC LIMIT ${limit}`,
+        query: `SELECT * FROM ${DS}.${view} WHERE ${where} ORDER BY ${dateCol} DESC LIMIT ${limit}`,
         params
       }),
       fastify.bq.query({
         query: `SELECT FORMAT_DATE('%Y-%m', ${dateCol}) AS mes,
-                       COUNT(*) AS n, SUM(${def.amount}) AS total
-                FROM ${DS}.${def.view} WHERE ${where} GROUP BY 1 ORDER BY 1`,
+                       ${contar} AS n, SUM(${def.amount}) AS total
+                FROM ${DS}.${view} WHERE ${where} GROUP BY 1 ORDER BY 1`,
         params
       }),
       fastify.bq.query({
-        query: `SELECT ${groupDim} AS dim, COUNT(*) AS n, SUM(${def.amount}) AS total
-                FROM ${DS}.${def.view} WHERE ${where} GROUP BY 1 ORDER BY total DESC LIMIT 20`,
+        query: `SELECT ${groupDim} AS dim, ${contar} AS n, SUM(${def.amount}) AS total
+                FROM ${DS}.${view} WHERE ${where} GROUP BY 1 ORDER BY total DESC LIMIT 20`,
         params
       })
     ])

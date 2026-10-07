@@ -35,6 +35,38 @@ LEFT JOIN dcsmart_analytics_cdc.dim_proveedores  pr ON pr.id = p.id_proveedor
 LEFT JOIN dcsmart_analytics_cdc.dim_rubcat       rc ON rc.id = p.id_rubcat
 LEFT JOIN dcsmart_analytics_cdc.dim_metodos_pago mp ON mp.id = p.id_metodo;
 
+-- Reparto de una factura entre rubros (gestión, 2026-10-07). Una factura (un
+-- pago) se puede repartir entre hasta 3 rubro/categoría con su porcentaje; el
+-- id_rubcat del pago queda como el de mayor %. Esta vista da UNA FILA POR PAGO Y
+-- RUBRO con importe e importe_neto prorrateados (factor = porcentaje/100, o 1 si
+-- no está repartida). Todo lo que SUMA POR RUBRO lee de acá; vw_pagos sigue con
+-- una fila por pago para los conteos y el flujo de caja (que no miran el rubro).
+-- La suma de importe por pago da igual en las dos vistas.
+--
+-- Requiere que el Datastream replique la tabla `pago_rubcats` de gestión
+-- (public_pago_rubcats en dcsmart_analytics_cdc).
+CREATE OR REPLACE VIEW dcsmart_analytics.vw_pagos_rubro AS
+WITH reparto AS (
+  SELECT id_pago, id_rubcat, CAST(porcentaje AS NUMERIC) / 100 AS factor
+  FROM dcsmart_analytics_cdc.public_pago_rubcats
+),
+partes AS (
+  SELECT p.id AS id_pago,
+         COALESCE(r.id_rubcat, p.id_rubcat) AS id_rubcat,
+         COALESCE(r.factor, CAST(1 AS NUMERIC)) AS factor
+  FROM dcsmart_analytics_cdc.raw_pagos p
+  LEFT JOIN reparto r ON r.id_pago = p.id
+)
+SELECT
+  v.* EXCEPT (rubro, categoria, importe, importe_neto),
+  v.importe * pt.factor      AS importe,
+  v.importe_neto * pt.factor AS importe_neto,
+  rc.rubro, rc.categoria,
+  pt.factor
+FROM dcsmart_analytics.vw_pagos v
+JOIN partes pt ON pt.id_pago = v.id
+LEFT JOIN dcsmart_analytics_cdc.dim_rubcat rc ON rc.id = pt.id_rubcat;
+
 CREATE OR REPLACE VIEW dcsmart_analytics.vw_cajas AS
 SELECT
   c.id, c.nro_turno, c.fecha_inicio, c.fecha_dia, c.fecha_cierre,
