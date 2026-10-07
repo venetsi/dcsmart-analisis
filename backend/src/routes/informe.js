@@ -64,7 +64,8 @@ export default async function (fastify) {
         query: `SELECT rubro, categoria, tipo,
                        CAST(ROUND(SUM(CASE WHEN ingresa_egreso = 'EGRESO' THEN importe
                                            WHEN STARTS_WITH(tipo, 'NC') THEN -importe ELSE 0 END)) AS INT64) total
-                  FROM ${DS}.vw_pagos
+                  -- Por rubro: una factura repartida suma en cada uno su parte.
+                  FROM ${DS}.vw_pagos_rubro
                  WHERE grupo = @grupo AND local = @local
                    AND COALESCE(periodo_dia, fecha_dia) BETWEEN @desde AND @hasta
                  GROUP BY 1, 2, 3
