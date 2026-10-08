@@ -5,7 +5,9 @@
 // clave. Ahora se entra con Google y pasa si:
 //   - el mail está en TV_EMAILS (variable de entorno, separados por coma o ;),
 //     aunque no sea usuario de gestión; o
-//   - es un usuario ACTIVO de gestión con rol super_admin.
+//   - es un usuario ACTIVO de gestión con rol DC: super_admin o dcsmart (los
+//     mismos que ROLES_DC en gestión, frontend/src/lib/roles.js). Hasta el
+//     2026-10-08 entraba solo super_admin.
 //
 // La regla se vuelve a evaluar en cada pedido de datos, no solo al entrar: sacar
 // un mail de la lista o el rol a alguien corta el acceso en el próximo refresco
@@ -21,9 +23,11 @@ export function listaDeMails (texto) {
 }
 
 // `usuario`: { activo, roles: string[] } de gestión, o null si el mail no existe ahí.
+const ROLES_DC = ['super_admin', 'dcsmart']
+
 export function puedeVerTv (email, lista, usuario) {
   const mail = String(email ?? '').trim().toLowerCase()
   if (!mail) return false
   if (lista.has(mail)) return true
-  return Boolean(usuario?.activo) && (usuario.roles ?? []).includes('super_admin')
+  return Boolean(usuario?.activo) && (usuario.roles ?? []).some(r => ROLES_DC.includes(r))
 }

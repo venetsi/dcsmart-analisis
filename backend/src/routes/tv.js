@@ -56,7 +56,7 @@ const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : nul
 // La TV no tiene a nadie al lado: una sesión corta la dejaría pidiendo login
 // cada mañana. 30 días, y el acceso se re-chequea en cada pedido de datos.
 const SESION_TV = '30d'
-const NO_PUEDE = 'Este mail no tiene acceso al dashboard. Pedile a un super admin de DCSMART que te agregue.'
+const NO_PUEDE = 'Este mail no tiene acceso al dashboard. Pueden entrar los usuarios de DCSMART (super admin o DC); pedile a un super admin que te agregue.'
 
 export default async function (fastify) {
   const lista = () => listaDeMails(process.env.TV_EMAILS)
