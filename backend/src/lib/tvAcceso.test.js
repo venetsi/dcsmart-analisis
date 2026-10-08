@@ -22,8 +22,17 @@ test('un super_admin dado de baja no entra', () => {
   assert.equal(puedeVerTv('alguien@x.com', lista, { activo: false, roles: ['super_admin'] }), false)
 })
 
-test('otros roles de gestión no entran, ni siquiera admin o dcsmart', () => {
-  assert.equal(puedeVerTv('a@x.com', lista, { activo: true, roles: ['admin', 'dcsmart', 'cajero'] }), false)
+test('un usuario activo con rol dcsmart entra (rol DC, igual que super_admin)', () => {
+  assert.equal(puedeVerTv('a@x.com', lista, { activo: true, roles: ['dcsmart'] }), true)
+  assert.equal(puedeVerTv('a@x.com', lista, { activo: true, roles: ['cajero', 'dcsmart'] }), true)
+})
+
+test('un dcsmart dado de baja no entra', () => {
+  assert.equal(puedeVerTv('a@x.com', lista, { activo: false, roles: ['dcsmart'] }), false)
+})
+
+test('otros roles de gestión no entran, ni siquiera admin', () => {
+  assert.equal(puedeVerTv('a@x.com', lista, { activo: true, roles: ['admin', 'externo', 'cajero', 'data_entry'] }), false)
 })
 
 test('sin mail no entra nadie', () => {
