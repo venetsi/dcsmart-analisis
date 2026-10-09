@@ -6,10 +6,17 @@
 #   frontend         sitio dcsmart-analytics       sitio dcsmart-analytics-dev
 #                    (analisis.dcsmart.app)        (https://dcsmart-analytics-dev.web.app)
 #   API              dcsmart-analytics-api         dcsmart-analytics-api-dev
+#   instancia SQL    dcsmart-mvp-insta             dev-gestion-dcsmart (propia de dev)
 #   usuarios/cajas   base postgres                 base dcsmart_dev (copia de prod de gestión)
 #   base propia      dcsmart_analytics             dcsmart_analytics_dev (copia)
 #   usuario de base  analytics_ro / analytics_app  dcsmart_dev_app (SIN acceso a las bases de prod)
 #   BigQuery         dcsmart_analytics             el MISMO dataset: la API solo hace SELECT
+#
+# Desde el 2026-10-09 lo de dev (dcsmart_dev y dcsmart_analytics_dev) vive en
+# la instancia de Cloud SQL propia dev-gestion-dcsmart, separada de la de prod
+# para dejar esa instancia solo con prod. Las bases y dcsmart_dev_app (dueño de
+# las dos) conservan nombre y clave. El admin de esa instancia es dev_admin (su
+# clave no se versiona).
 #
 # Lo que se prueba en dev (accesos, reporte manual, presets) queda en
 # dcsmart_analytics_dev. BigQuery se comparte porque la API no escribe ahí y
@@ -19,10 +26,24 @@
 # analytics-dev-jwt-secret (un token de dev no sirve en prod). El SSO desde
 # gestión usa internal-shared-secret, igual que prod.
 #
-# Para refrescar la base propia desde prod (borra lo cargado en dev):
-#   pg_dump -Fc --no-owner --no-privileges -d dcsmart_analytics > a.dump
-#   dropdb dcsmart_analytics_dev && createdb -O dcsmart_dev_app dcsmart_analytics_dev
-#   pg_restore --no-owner --role=dcsmart_dev_app -d dcsmart_analytics_dev a.dump
+# Para refrescar la base propia desde prod (borra lo cargado en dev). El dump
+# sale de la instancia de prod (solo lectura) y todo lo demás se hace en la de
+# dev con dev_admin. Con un solo proxy para las dos (puertos de ejemplo):
+#   cloud-sql-proxy --address 127.0.0.1 \
+#     "dc-smart-mvp:us-central1:dcsmart-mvp-insta?port=5436" \
+#     "dc-smart-mvp:us-central1:dev-gestion-dcsmart?port=5437"
+#   pg_dump -h 127.0.0.1 -p 5436 -Fc --no-owner --no-privileges -d dcsmart_analytics > a.dump
+#   dropdb   -h 127.0.0.1 -p 5437 -U dev_admin dcsmart_analytics_dev
+#   createdb -h 127.0.0.1 -p 5437 -U dev_admin -O dcsmart_dev_app dcsmart_analytics_dev
+#   pg_restore -h 127.0.0.1 -p 5437 -U dev_admin --no-owner --role=dcsmart_dev_app -d dcsmart_analytics_dev a.dump
+# createdb -O y pg_restore --role exigen (PG16+) que dev_admin pueda hacer
+# SET ROLE dcsmart_dev_app; si da "must be able to SET ROLE": GRANT dcsmart_dev_app TO dev_admin.
+#
+# GRANT en los SQL de la base propia (infra/00*.sql): en dev el dueño de las
+# tablas es dcsmart_dev_app y los roles de prod no se usan. Todo GRANT nuevo a
+# un rol de prod (analytics_app, analytics_ro) va con guarda IF EXISTS, como en
+# 00d_informe_mensual.sql. En dev-gestion-dcsmart existe analytics_app NOLOGIN
+# solo para que no fallen los SQL viejos que lo tienen sin guarda (00c).
 set -euo pipefail
 PROJECT=${PROJECT:-dc-smart-mvp}
 REGION=${REGION:-us-central1}
