@@ -32,10 +32,13 @@
 #   cloud-sql-proxy --address 127.0.0.1 \
 #     "dc-smart-mvp:us-central1:dcsmart-mvp-insta?port=5436" \
 #     "dc-smart-mvp:us-central1:dev-gestion-dcsmart?port=5437"
-#   pg_dump -h 127.0.0.1 -p 5436 -Fc --no-owner --no-privileges -d dcsmart_analytics > a.dump
-#   dropdb   -h 127.0.0.1 -p 5437 -U dev_admin dcsmart_analytics_dev
-#   createdb -h 127.0.0.1 -p 5437 -U dev_admin -O dcsmart_dev_app dcsmart_analytics_dev
+#   pg_dump -h 127.0.0.1 -p 5436 -U postgres -Fc --no-owner --no-privileges -d dcsmart_analytics -f a.dump &&
+#   dropdb   -h 127.0.0.1 -p 5437 -U dev_admin --if-exists dcsmart_analytics_dev &&
+#   createdb -h 127.0.0.1 -p 5437 -U dev_admin -O dcsmart_dev_app dcsmart_analytics_dev &&
 #   pg_restore -h 127.0.0.1 -p 5437 -U dev_admin --no-owner --role=dcsmart_dev_app -d dcsmart_analytics_dev a.dump
+# Van encadenados con && para que, si el dump falla (usuario, clave, proxy), no
+# se borre la base de dev. Las dos instancias son PG18: usar pg_dump/pg_restore
+# 18 (un pg_dump 17 se niega a leer un servidor 18).
 # createdb -O y pg_restore --role exigen (PG16+) que dev_admin pueda hacer
 # SET ROLE dcsmart_dev_app; si da "must be able to SET ROLE": GRANT dcsmart_dev_app TO dev_admin.
 #
