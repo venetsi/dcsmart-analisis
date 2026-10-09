@@ -41,13 +41,30 @@ esac
 TAG=${TAG:-dev}
 IMAGE=$REGION-docker.pkg.dev/$PROJECT/cloud-run-source-deploy/dcsmart-analytics-api:$TAG
 
+# TV_EMAILS: mails que entran al dashboard de la TV sin ser usuarios DC (ver
+# backend/src/lib/tvAcceso.js). No se versiona: se toma del entorno y, si no
+# está, se conserva la que tiene hoy el servicio. --set-env-vars reemplaza TODAS
+# las variables, así que sin esto re-correr el script la borraría.
+if [ -z "${TV_EMAILS:-}" ]; then
+  TV_EMAILS=$(gcloud run services describe dcsmart-analytics-api-dev --project=$PROJECT --region=$REGION \
+      --flatten='spec.template.spec.containers[0].env' \
+      --format='value(spec.template.spec.containers[0].env.name,spec.template.spec.containers[0].env.value)' 2>/dev/null \
+    | awk -F'\t' '$1 == "TV_EMAILS" { print $2 }') || TV_EMAILS=
+  if [ -n "$TV_EMAILS" ]; then
+    echo "· TV_EMAILS no está en el entorno: se conserva la lista que tiene hoy dcsmart-analytics-api-dev"
+  else
+    echo "⚠ TV_EMAILS vacía: el dashboard de la TV en dev queda solo para usuarios DC (super_admin/dcsmart)." >&2
+    echo "  Para sumar mails: export TV_EMAILS='a@dominio.com,b@dominio.com' y volvé a correr." >&2
+  fi
+fi
+
 # ── API ──────────────────────────────────────────────────────────────────────
 gcloud builds submit ../backend --project=$PROJECT --tag "$IMAGE"
 gcloud run deploy dcsmart-analytics-api-dev --project=$PROJECT --region=$REGION \
   --image "$IMAGE" \
   --service-account dcsmart-analytics-api@$PROJECT.iam.gserviceaccount.com \
   --set-cloudsql-instances "$DEV_INSTANCE" \
-  --set-env-vars "^|^PGHOST=/cloudsql/$DEV_INSTANCE|DCSMART_DB=dcsmart_dev|ANALYTICS_DB=dcsmart_analytics_dev|PGUSER_RO=dcsmart_dev_app|PGUSER_APP=dcsmart_dev_app|BQ_PROJECT=$PROJECT|BQ_DATASET=dcsmart_analytics|ANALYTICS_ALLOWED_ROLES=super_admin;dcsmart|FRONTEND_ORIGIN=https://dcsmart-analytics-dev.web.app|VERTEX_LOCATION=$REGION|AI_MODEL=gemini-2.5-flash|GOOGLE_CLIENT_ID=288069746644-9m0lq9tkh3lgcr2c7tkdb1ncltegbido.apps.googleusercontent.com|AMBIENTE=dev" \
+  --set-env-vars "^|^PGHOST=/cloudsql/$DEV_INSTANCE|DCSMART_DB=dcsmart_dev|ANALYTICS_DB=dcsmart_analytics_dev|PGUSER_RO=dcsmart_dev_app|PGUSER_APP=dcsmart_dev_app|BQ_PROJECT=$PROJECT|BQ_DATASET=dcsmart_analytics|ANALYTICS_ALLOWED_ROLES=super_admin;dcsmart|FRONTEND_ORIGIN=https://dcsmart-analytics-dev.web.app|VERTEX_LOCATION=$REGION|AI_MODEL=gemini-2.5-flash|GOOGLE_CLIENT_ID=288069746644-9m0lq9tkh3lgcr2c7tkdb1ncltegbido.apps.googleusercontent.com|AMBIENTE=dev|TV_EMAILS=$TV_EMAILS" \
   --set-secrets "PGPASSWORD_RO=analytics-dev-db-password:latest,PGPASSWORD_APP=analytics-dev-db-password:latest,ANALYTICS_JWT_SECRET=analytics-dev-jwt-secret:latest,INTERNAL_SHARED_SECRET=internal-shared-secret:latest" \
   --allow-unauthenticated --min-instances 0 --max-instances 2
 gcloud run services update-traffic dcsmart-analytics-api-dev --project=$PROJECT --region=$REGION --to-latest
