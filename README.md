@@ -123,7 +123,7 @@ export INSTANCE=dc-smart-mvp:us-central1:dcsmart-mvp-insta   # PROD: solo pasos 
 Dev (API `dcsmart-analytics-api-dev`, sitio `dcsmart-analytics-dev.web.app`) vive en su **propia instancia de Cloud SQL**, `dc-smart-mvp:us-central1:dev-gestion-dcsmart`, separada de la de prod desde el 2026-10-09. Ahí están `dcsmart_dev` (copia de gestión) y `dcsmart_analytics_dev` (copia de la base propia), con dueño `dcsmart_dev_app`. Detalle en la cabecera de `infra/06_ambiente_dev.sh`.
 
 - **Instancia:** el script usa `DEV_INSTANCE`, no `INSTANCE` (que es la de prod), y se niega a correr si `DEV_INSTANCE` apunta a `dcsmart-mvp-insta`.
-- **TV_EMAILS:** si no está en el entorno, el script conserva la que tiene hoy el servicio.
+- **TV_EMAILS:** si no está en el entorno, el script conserva la que tiene hoy el servicio; si no puede leerla, corta sin desplegar (para dejarla vacía a propósito: `export TV_EMAILS=`).
 - **Refrescar `dcsmart_analytics_dev` desde prod:** `pg_dump` de prod (solo lectura) y, en la instancia de dev con el usuario `dev_admin`, `dropdb` + `createdb -O dcsmart_dev_app` + `pg_restore --role=dcsmart_dev_app`. Los comandos completos están en la cabecera del script.
 - **GRANT en SQL nuevos (`infra/00*.sql`):** todo GRANT a un rol de prod (`analytics_app`, `analytics_ro`) va con guarda `IF EXISTS`, como en `00d_informe_mensual.sql`, para que el mismo SQL corra en dev. En la instancia de dev existe `analytics_app` como NOLOGIN solo para que no fallen los SQL viejos que lo tienen sin guarda.
 

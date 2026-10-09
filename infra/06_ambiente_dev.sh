@@ -66,17 +66,27 @@ IMAGE=$REGION-docker.pkg.dev/$PROJECT/cloud-run-source-deploy/dcsmart-analytics-
 # backend/src/lib/tvAcceso.js). No se versiona: se toma del entorno y, si no
 # está, se conserva la que tiene hoy el servicio. --set-env-vars reemplaza TODAS
 # las variables, así que sin esto re-correr el script la borraría.
-if [ -z "${TV_EMAILS:-}" ]; then
-  TV_EMAILS=$(gcloud run services describe dcsmart-analytics-api-dev --project=$PROJECT --region=$REGION \
+# Si el servicio no se puede leer (token vencido, permisos, un corte, o que
+# todavía no exista) el script corta en vez de seguir con la lista vacía, que
+# la borraría sin aviso. Para dejarla vacía a propósito: export TV_EMAILS=
+# (definida aunque vacía, no se lee del servicio).
+if [ -z "${TV_EMAILS+x}" ]; then
+  if ! ENV_ACTUAL=$(gcloud run services describe dcsmart-analytics-api-dev --project=$PROJECT --region=$REGION \
       --flatten='spec.template.spec.containers[0].env' \
-      --format='value(spec.template.spec.containers[0].env.name,spec.template.spec.containers[0].env.value)' 2>/dev/null \
-    | awk -F'\t' '$1 == "TV_EMAILS" { print $2 }') || TV_EMAILS=
+      --format='value(spec.template.spec.containers[0].env.name,spec.template.spec.containers[0].env.value)'); then
+    echo "✗ No se pudo leer TV_EMAILS de dcsmart-analytics-api-dev (el error de gcloud está arriba)." >&2
+    echo "  No se despliega: seguir con la lista vacía la borraría. Pasala a mano y volvé a correr:" >&2
+    echo "  export TV_EMAILS='a@dominio.com,b@dominio.com'   (o export TV_EMAILS= para dejarla vacía)" >&2
+    exit 1
+  fi
+  TV_EMAILS=$(printf '%s\n' "$ENV_ACTUAL" | awk -F'\t' '$1 == "TV_EMAILS" { print $2 }')
   if [ -n "$TV_EMAILS" ]; then
     echo "· TV_EMAILS no está en el entorno: se conserva la lista que tiene hoy dcsmart-analytics-api-dev"
-  else
-    echo "⚠ TV_EMAILS vacía: el dashboard de la TV en dev queda solo para usuarios DC (super_admin/dcsmart)." >&2
-    echo "  Para sumar mails: export TV_EMAILS='a@dominio.com,b@dominio.com' y volvé a correr." >&2
   fi
+fi
+if [ -z "$TV_EMAILS" ]; then
+  echo "⚠ TV_EMAILS vacía: el dashboard de la TV en dev queda solo para usuarios DC (super_admin/dcsmart)." >&2
+  echo "  Para sumar mails: export TV_EMAILS='a@dominio.com,b@dominio.com' y volvé a correr." >&2
 fi
 
 # ── API ──────────────────────────────────────────────────────────────────────
