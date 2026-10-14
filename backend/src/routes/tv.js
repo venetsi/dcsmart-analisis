@@ -3,7 +3,7 @@
 //
 //   GET  /api/tv/config   el client id de Google para el botón (dato público)
 //   POST /api/tv/login    { credential } de Google -> sesión de la TV (30 días)
-//   GET  /api/tv/resumen  los datos; exige la sesión de la TV
+//   GET  /api/tv/resumen  los datos; exige la sesión de la TV (salvo TV_SIN_LOGIN)
 //
 // Acceso: ver lib/tvAcceso.js. Hasta el 2026-10 la ruta aceptaba una clave de
 // servicio escrita en el HTML público de dcsmart-rendimiento.web.app; esa clave
@@ -56,6 +56,13 @@ const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : nul
 // La TV no tiene a nadie al lado: una sesión corta la dejaría pidiendo login
 // cada mañana. 30 días, y el acceso se re-chequea en cada pedido de datos.
 const SESION_TV = '30d'
+// HOTFIX 2026-10-14: el login de la TV anda mal y el usuario pidió sacarlo
+// por ahora ("otro día lo agregamos"). Con esto en true /resumen responde sin
+// sesión; la página ya no pide entrar si los datos llegan. Para volver a
+// exigir el login alcanza con ponerlo en false y redeployar: la página vuelve
+// a mostrar el botón sola al recibir el 401. Mientras tanto la ruta queda
+// protegida solo por su rate limit (20 por hora por IP).
+const TV_SIN_LOGIN = true
 const NO_PUEDE = 'Este mail no tiene acceso al dashboard. Pueden entrar los usuarios de DCSMART (super admin o DC); pedile a un super admin que te agregue.'
 
 export default async function (fastify) {
@@ -85,6 +92,7 @@ export default async function (fastify) {
   }
 
   async function autenticarTv (req, reply) {
+    if (TV_SIN_LOGIN) return
     if (claveDeServicioValida(req)) return
     try { await req.jwtVerify() } catch { return reply.code(401).send({ error: 'Sesión vencida o inexistente' }) }
     if (!req.user?.tv) return reply.code(401).send({ error: 'Sesión vencida o inexistente' })
