@@ -342,7 +342,9 @@ async function ciclo() {
   let ok = false;
   try {
     const r = await fetch(CONFIG.FUENTE, {
-      headers: { Authorization: 'Bearer ' + (tvSesion.token() || '') },
+      // Sin sesión se pide igual: mientras el backend tenga TV_SIN_LOGIN
+      // (hotfix 2026-10-14) los datos llegan sin login.
+      headers: tvSesion.token() ? { Authorization: 'Bearer ' + tvSesion.token() } : {},
       cache: 'no-store',
     });
     // Sin sesión, vencida o sin permiso: se pide entrar de nuevo, y los datos
@@ -369,10 +371,10 @@ async function ciclo() {
   timer = setTimeout(ciclo, ok ? CONFIG.REFRESCO_MS : CONFIG.REINTENTO_MS);
 }
 leyendaEstado();
-// Arranca solo con sesión; si no hay, tv-login.js muestra el botón y llama a
-// ciclo() cuando la persona entra.
+// Arranca siempre: si el backend pide sesión responde 401 y recién ahí
+// tv-login.js muestra el botón y llama a ciclo() cuando la persona entra.
 tvSesion.alEntrar(ciclo);
-if (tvSesion.token()) ciclo(); else tvSesion.pedirLogin();
+ciclo();
 // Recarga completa cada hora, por si algo se colgó sin que nadie lo note.
 setInterval(() => location.reload(), 60 * 60 * 1000);
 
