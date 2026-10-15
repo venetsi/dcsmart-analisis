@@ -73,7 +73,7 @@ function EstadoGuardado({ estado, at, cerrado, cerradoPor, cerradoAt }) {
 export default function InformePage() {
   const { grupo } = useGroup()
   const { user } = useAuth()
-  const [locales, setLocales] = useState([])
+  const [locales, setLocales] = useState(null) // null: todavía no llegaron
   const [local, setLocal] = useState(() => { try { return localStorage.getItem(CLAVE_LOCAL) || '' } catch { return '' } })
   const [mes, setMes] = useState(mesAnterior)
   const [data, setData] = useState(null)
@@ -90,17 +90,20 @@ export default function InformePage() {
   // Locales del grupo.
   useEffect(() => {
     if (!grupo) return
+    setLocales(null)
     api.getDatasetOptions('pagos', { grupo }).then((o) => {
       const ls = o?.local || []
       setLocales(ls)
       setLocal((act) => (ls.includes(act) ? act : ls[0] || ''))
-    }).catch((e) => setError(e.message))
+    }).catch((e) => { setLocales([]); setError(e.message) })
   }, [grupo])
 
   useEffect(() => { try { if (local) localStorage.setItem(CLAVE_LOCAL, local) } catch { /* privado */ } }, [local])
 
   const cargar = useCallback(() => {
-    if (!grupo || !local || !mes) return
+    // Solo con un local del grupo: el recordado puede ser de otro grupo (se
+    // pedía, por ejemplo, 878COOP dentro de GRUPO 3MONOS y volvía todo en cero).
+    if (!grupo || !local || !mes || !locales?.includes(local)) return
     // Se limpia antes de pedir: si quedara el mes anterior en pantalla, una
     // edición hecha mientras carga se guardaría en el mes nuevo.
     setData(null); setCargando(true); setError('')
@@ -111,7 +114,7 @@ export default function InformePage() {
       setGuardadoAt(d.guardado?.actualizado_at || null)
       setEstado('ok')
     }).catch((e) => setError(e.message)).finally(() => setCargando(false))
-  }, [grupo, local, mes])
+  }, [grupo, local, mes, locales])
   useEffect(() => { cargar() }, [cargar])
 
   const cerrado = !!data?.guardado?.cerrado
@@ -235,9 +238,10 @@ export default function InformePage() {
       <section className="filters inf-filtros">
         <div className="fg">
           <label htmlFor="inf-local">Local</label>
-          <select id="inf-local" value={local} onChange={(e) => setLocal(e.target.value)} disabled={!locales.length}>
-            {!locales.length && <option>Cargando…</option>}
-            {locales.map((l) => <option key={l} value={l}>{l}</option>)}
+          <select id="inf-local" value={local} onChange={(e) => setLocal(e.target.value)} disabled={!locales?.length}>
+            {locales === null && <option>Cargando…</option>}
+            {locales?.length === 0 && <option>Sin locales</option>}
+            {(locales || []).map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
         <div className="fg">
@@ -264,6 +268,9 @@ export default function InformePage() {
 
       {error && <div className="inf-error" role="alert">{error} <button onClick={() => setError('')} aria-label="Cerrar">×</button></div>}
       {cargando && !data && <div className="inf-cargando">Trayendo los números de {local}…</div>}
+      {locales?.length === 0 && !error && (
+        <div className="inf-aviso">{grupo} no tiene pagos cargados en el último año, así que no hay locales para armar el informe. Si es un error, avisale a sistemas.</div>
+      )}
 
       {informe && rMes && (
         <>

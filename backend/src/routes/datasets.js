@@ -76,9 +76,17 @@ export default async function (fastify) {
   const DS = fastify.bqDataset
 
   // GET /api/data/grupos — lista de grupos (apps) para la pantalla de selección
+  //
+  // Sale de la réplica en vivo (Datastream), la MISMA de la que las vistas
+  // vw_* sacan la columna grupo. ${DS}.dim_apps la llenaba el ETL casero, que
+  // dejó de correr el 2026-08-07: cuando gestión renombró "GRUPO 3MONOS" a
+  // "GRUPO MONOS", el selector siguió ofreciendo el nombre viejo, todas las
+  // consultas filtraban por un grupo que ya no existía y el Informe Mensual
+  // quedaba en "Cargando…" sin locales (Trello #273). Los grupos creados
+  // después de esa fecha directamente no aparecían.
   fastify.get('/grupos', { preHandler: [fastify.authenticate] }, async () => {
     const [rows] = await fastify.bq.query({
-      query: `SELECT nombre FROM ${DS}.dim_apps WHERE activo IS NOT FALSE ORDER BY nombre`
+      query: `SELECT nombre FROM dcsmart_analytics_cdc.dim_apps WHERE activo IS NOT FALSE ORDER BY nombre`
     })
     return rows.map(r => r.nombre)
   })
