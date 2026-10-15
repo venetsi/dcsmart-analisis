@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { api } from './lib/api.js'
 import { useAuth } from './context/AuthContext.jsx'
 import { useGroup } from './context/GroupContext.jsx'
 import AppShell from './components/AppShell.jsx'
@@ -26,8 +28,26 @@ function RequireAdmin({ children }) {
   return children
 }
 
+// Grupos ya confirmados en esta sesión (no se vuelve a preguntar).
+const gruposValidados = new Set()
+
 function RequireGroup({ children }) {
-  const { grupo } = useGroup()
+  const { grupo, setGrupo } = useGroup()
+  // El grupo elegido queda guardado en el navegador. Si en gestión lo
+  // renombran o lo dan de baja, ese nombre ya no trae datos y todas las
+  // pantallas quedan vacías (Trello #273: "GRUPO 3MONOS" pasó a "GRUPO
+  // MONOS"). Se confirma contra la lista actual y, si no está, se vuelve al
+  // selector. Si la consulta falla no se toca nada.
+  useEffect(() => {
+    if (!grupo || gruposValidados.has(grupo)) return
+    let vigente = true
+    api.getGrupos().then((lista) => {
+      if (!vigente || !Array.isArray(lista)) return
+      if (lista.includes(grupo)) gruposValidados.add(grupo)
+      else setGrupo('')
+    }).catch(() => {})
+    return () => { vigente = false }
+  }, [grupo, setGrupo])
   if (!grupo) return <Navigate to="/grupo" replace />
   return children
 }
