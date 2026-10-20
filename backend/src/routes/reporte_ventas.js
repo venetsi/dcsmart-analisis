@@ -5,7 +5,7 @@
 // base de gestión. El armado de los números vive en el frontend
 // (lib/reporteVentas.js); acá solo se juntan las piezas.
 
-import { okMes, rangoReporte, esInterno, normalizarDato, mesCerrable } from '../lib/reporteVentas.js'
+import { okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk } from '../lib/reporteVentas.js'
 
 const txt = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
@@ -41,7 +41,7 @@ export default async function (fastify) {
   fastify.get('/clientes', { preHandler: [fastify.authenticate] }, async (req) => {
     const grupo = txt(req.query.grupo)
     const { rows } = await db.query(
-      `SELECT id, grupo, nombre, locales FROM rv_cliente
+      `SELECT id, grupo, nombre, locales, nombres FROM rv_cliente
         WHERE ($1 = '' OR grupo = $1) ORDER BY grupo, nombre`, [grupo])
     return rows
   })
@@ -53,7 +53,7 @@ export default async function (fastify) {
     const mes = req.query.mes
     if (!Number.isInteger(id) || id <= 0 || !okMes(mes)) return reply.code(400).send({ error: 'id y mes (YYYY-MM) requeridos' })
 
-    const cli = (await db.query('SELECT id, grupo, nombre, locales FROM rv_cliente WHERE id = $1', [id])).rows[0]
+    const cli = (await db.query('SELECT id, grupo, nombre, locales, nombres FROM rv_cliente WHERE id = $1', [id])).rows[0]
     if (!cli) return reply.code(404).send({ error: 'Cliente no encontrado' })
 
     const { desde, hasta } = rangoReporte(mes)
@@ -124,7 +124,7 @@ export default async function (fastify) {
   const pre = { preHandler: [fastify.authenticate, interno] }
   const quien = (req) => req.user.email || req.user.nombre || String(req.user.id)
   const idDe = (req) => { const n = Number(req.params.id); return Number.isInteger(n) && n > 0 ? n : null }
-  const getCli = async (id) => (await db.query('SELECT id, grupo, nombre, locales FROM rv_cliente WHERE id = $1', [id])).rows[0]
+  const getCli = async (id) => (await db.query('SELECT id, grupo, nombre, locales, nombres FROM rv_cliente WHERE id = $1', [id])).rows[0]
   const mesCerrado = async (c, id, mes) =>
     (await c.query('SELECT 1 FROM rv_cierre WHERE cliente_id = $1 AND mes = $2 AND cerrado', [id, mes])).rowCount > 0
 
@@ -232,10 +232,12 @@ export default async function (fastify) {
     const nombre = nombreOk(req.body?.nombre)
     const locales = localesOk(req.body?.locales)
     if (!grupo || !nombre || !locales) return reply.code(400).send({ error: 'Faltan el grupo, el nombre (hasta 80 caracteres) o los locales.' })
+    const nombres = nombresOk(req.body?.nombres, locales)
+    if (nombres === null) return reply.code(400).send({ error: 'Los nombres de los locales deben ser texto de hasta 60 caracteres.' })
     try {
       const { rows } = await db.query(
-        `INSERT INTO rv_cliente (grupo, nombre, locales, creado_por) VALUES ($1,$2,$3,$4)
-         RETURNING id, grupo, nombre, locales`, [grupo, nombre, locales, quien(req)])
+        `INSERT INTO rv_cliente (grupo, nombre, locales, nombres, creado_por) VALUES ($1,$2,$3,$4,$5)
+         RETURNING id, grupo, nombre, locales, nombres`, [grupo, nombre, locales, JSON.stringify(nombres ?? {}), quien(req)])
       return rows[0]
     } catch (e) {
       if (e.code === '23505') return reply.code(409).send({ error: 'Ya existe un cliente con ese nombre en el grupo.' })
@@ -248,10 +250,16 @@ export default async function (fastify) {
     const nombre = nombreOk(req.body?.nombre)
     const locales = localesOk(req.body?.locales)
     if (!id || !nombre || !locales) return reply.code(400).send({ error: 'Faltan el nombre (hasta 80 caracteres) o los locales.' })
+    const nombres = nombresOk(req.body?.nombres, locales)
+    if (nombres === null) return reply.code(400).send({ error: 'Los nombres de los locales deben ser texto de hasta 60 caracteres.' })
     try {
+      // Sin `nombres` en el pedido se conservan los que había (solo de los locales que siguen).
       const { rows } = await db.query(
-        `UPDATE rv_cliente SET nombre = $2, locales = $3 WHERE id = $1
-         RETURNING id, grupo, nombre, locales`, [id, nombre, locales])
+        `UPDATE rv_cliente SET nombre = $2, locales = $3,
+                nombres = COALESCE($4::jsonb, (SELECT COALESCE(jsonb_object_agg(k, v), '{}'::jsonb)
+                                                 FROM jsonb_each(nombres) AS e(k, v) WHERE k = ANY($3)))
+          WHERE id = $1
+         RETURNING id, grupo, nombre, locales, nombres`, [id, nombre, locales, nombres === undefined ? null : JSON.stringify(nombres)])
       if (!rows[0]) return reply.code(404).send({ error: 'Cliente no encontrado' })
       return rows[0]
     } catch (e) {

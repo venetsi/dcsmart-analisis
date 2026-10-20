@@ -29,3 +29,20 @@ export function rangoReporte (mes) {
   const [y, m] = mes.split('-').map(Number)
   return { desde: `${y - 1}-01-01`, hasta: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) }
 }
+
+// Nombres para mostrar: { local: texto 1-60 }, solo de los locales del cliente.
+// undefined si no vino (no se toca); null si es inválido.
+export function nombresOk (v, locales) {
+  if (v === undefined) return undefined
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  const out = {}
+  for (const [k, t] of Object.entries(v)) {
+    if (!locales.includes(k)) continue
+    if (typeof t !== 'string') return null
+    const n = t.trim()
+    if (!n) continue
+    if (n.length > 60) return null
+    out[k] = n
+  }
+  return out
+}

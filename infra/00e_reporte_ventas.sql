@@ -76,3 +76,6 @@ BEGIN
     GRANT USAGE, SELECT ON SEQUENCE rv_cliente_id_seq, rv_valor_historial_id_seq TO analytics_app;
   END IF;
 END $$;
+
+-- Nombre para mostrar de cada local en el reporte del cliente (local -> texto).
+ALTER TABLE rv_cliente ADD COLUMN IF NOT EXISTS nombres jsonb NOT NULL DEFAULT '{}'::jsonb;

@@ -10,6 +10,7 @@ import PageHeader from '../components/PageHeader.jsx'
 import { Hoja, Mazo, mesEnPalabras } from '../components/reporteVentas/Paginas.jsx'
 import { msgError } from '../components/reporteVentas/errores.js'
 import PanelDatos from '../components/reporteVentas/PanelDatos.jsx'
+import ConfigCliente from '../components/reporteVentas/ConfigCliente.jsx'
 import { armarLocal, armarReporte, canalesAuto, snapshotDe } from '../lib/reporteVentas.js'
 import '../styles/reporte-editor.css'
 
@@ -103,6 +104,7 @@ export default function ReporteVentasPage() {
   const [paginaId, setPaginaId] = useState(null)
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
+  const [config, setConfig] = useState(false)
   const [confirmar, setConfirmar] = useState(null) // 'restaurar' | 'previo'
   const [motivos, setMotivos] = useState([])
   const [imprimir, setImprimir] = useState(null) // { borrador }
@@ -232,17 +234,27 @@ export default function ReporteVentasPage() {
         title="Reporte de Ventas"
         chips={[grupo, data ? mesEnPalabras(mes) : null]}
         sub="El reporte mensual del cliente: cada número dice de dónde sale, se puede corregir y se baja en PDF."
+        actions={interno && clienteId && (
+          <button type="button" className="btn-sec" onClick={() => setConfig((v) => !v)}>{config ? 'Volver al reporte' : 'Configurar'}</button>
+        )}
       />
 
       {error && <div className="rve-error" role="alert">{error}</div>}
 
-      {sinClientes && (
+      {(config || sinClientes) && interno && (
+        <ConfigCliente
+          grupo={grupo} cliente={data?.cliente || clientes?.find((c) => c.id === clienteId) || null} data={data}
+          onGuardado={async (id) => { await cargarClientes(id); await recargar() }}
+          onCerrar={() => setConfig(false)}
+        />
+      )}
+      {sinClientes && !interno && (
         <div className="rve-aviso">Este grupo todavía no tiene un reporte armado. Pedile al equipo DC que lo configure.</div>
       )}
 
       {clientes === null && <div className="rve-aviso">Cargando…</div>}
 
-      {clienteId && (
+      {clienteId && !(config && interno) && (
         <>
           <section className="filters rve-barra">
             <div className="fg">

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte } from './reporteVentas.js'
+import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk } from './reporteVentas.js'
 
 test('esInterno: el is_admin externo no alcanza', () => {
   assert.equal(esInterno({ roles: ['dcsmart'] }), true)
@@ -36,4 +36,15 @@ test('rangoReporte', () => {
   assert.deepEqual(rangoReporte('2026-01'), { desde: '2025-01-01', hasta: '2026-01-31' })
   assert.equal(rangoReporte('2026-12').hasta, '2026-12-31')
   assert.equal(rangoReporte('2024-02').hasta, '2024-02-29')
+})
+
+test('nombresOk: recorta, descarta locales ajenos y valida el largo', () => {
+  const locales = ['A', 'B']
+  assert.equal(nombresOk(undefined, locales), undefined)
+  assert.deepEqual(nombresOk({ A: '  Togni\'s  ', B: '   ', C: 'x' }, locales), { A: "Togni's" })
+  assert.equal(nombresOk({ A: 'x'.repeat(61) }, locales), null)
+  assert.equal(nombresOk({ A: 5 }, locales), null)
+  assert.equal(nombresOk(['A'], locales), null)
+  assert.equal(nombresOk(null, locales), null)
+  assert.deepEqual(nombresOk({ A: 'x'.repeat(60) }, locales), { A: 'x'.repeat(60) })
 })
