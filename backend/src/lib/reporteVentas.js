@@ -9,14 +9,17 @@ export const esInterno = (user) => {
 }
 
 // Datos que se pueden cargar a mano. "canal:Local" es calculado (venta - resto).
-export const okDato = (d) => {
-  if (typeof d !== 'string') return false
-  if (d === 'venta' || d === 'cubiertos' || d === 'ordenes') return true
-  const m = /^(canal|tickets):(.+)$/.exec(d)
-  if (!m || m[2].length > 40) return false
-  if (m[1] === 'canal' && m[2] === 'Local') return false
-  return true
+export function normalizarDato (d) {
+  if (typeof d !== 'string') return null
+  if (d === 'venta' || d === 'cubiertos' || d === 'ordenes') return d
+  const m = /^(canal|tickets):(.+)$/s.exec(d)
+  if (!m) return null
+  const nombre = m[2].trim()
+  if (!nombre || nombre.length > 40) return null
+  if (m[1] === 'canal' && nombre === 'Local') return null
+  return `${m[1]}:${nombre}`
 }
+export const okDato = (d) => normalizarDato(d) !== null
 
 // Solo se cierra un mes ya terminado (en hora UTC, como el resto del sistema).
 export const mesCerrable = (mes, hoy = new Date()) => okMes(mes) && mes < hoy.toISOString().slice(0, 7)
