@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk } from './reporteVentas.js'
+import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla } from './reporteVentas.js'
 
 test('esInterno: el is_admin externo no alcanza', () => {
   assert.equal(esInterno({ roles: ['dcsmart'] }), true)
@@ -47,4 +47,26 @@ test('nombresOk: recorta, descarta locales ajenos y valida el largo', () => {
   assert.equal(nombresOk(['A'], locales), null)
   assert.equal(nombresOk(null, locales), null)
   assert.deepEqual(nombresOk({ A: 'x'.repeat(60) }, locales), { A: 'x'.repeat(60) })
+})
+
+test('snapshotOk: locales tiene que ser un objeto', () => {
+  assert.equal(snapshotOk({ locales: { A: { venta: 1 } } }), true)
+  assert.equal(snapshotOk({ locales: {} }), true)
+  for (const s of [null, [], {}, { locales: null }, { locales: [] }, { locales: 'x' }]) assert.equal(snapshotOk(s), false)
+})
+test('datoEnSnapshot: solo lo que la foto trae con valor', () => {
+  const s = { locales: { A: { venta: 100, cubiertos: null, canales: { Rappi: 10, Local: 90 }, tickets: { Rappi: 5 } } } }
+  assert.equal(datoEnSnapshot(s, 'A', 'venta'), true)
+  assert.equal(datoEnSnapshot(s, 'A', 'cubiertos'), false)
+  assert.equal(datoEnSnapshot(s, 'A', 'ordenes'), false)
+  assert.equal(datoEnSnapshot(s, 'A', 'canal:Rappi'), true)
+  assert.equal(datoEnSnapshot(s, 'A', 'canal:Eventos'), false)
+  assert.equal(datoEnSnapshot(s, 'A', 'tickets:Rappi'), true)
+  assert.equal(datoEnSnapshot(s, 'A', 'tickets:Cheaf'), false)
+  assert.equal(datoEnSnapshot(s, 'B', 'venta'), false)
+})
+test('okOrigenRegla: solo DCSMART', () => {
+  assert.equal(okOrigenRegla('DCSMART'), true)
+  assert.equal(okOrigenRegla(' dcsmart '), true)
+  for (const v of ['TAPTAP', 'FFUDO', 'FUDO', '', null]) assert.equal(okOrigenRegla(v), false)
 })

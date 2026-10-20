@@ -1,6 +1,10 @@
 -- Reporte de Ventas mensual. Base propia de Analytics: nunca se escribe en la
 -- de gestión. Aplicar primero en dcsmart_analytics_dev.
 --
+-- IMPORTANTE: en prod este archivo se corre ANTES de desplegar el backend. El
+-- backend ya lee y escribe las columnas agregadas al final (rv_cliente.nombres,
+-- rv_cierre.snapshot_anterior): sin ellas el GET y el cierre fallan. Es idempotente.
+--
 -- En prod el dueño de las tablas es postgres y la app entra como analytics_app:
 -- por eso los GRANT del final (en dev el dueño ya es dcsmart_dev_app).
 
@@ -79,3 +83,7 @@ END $$;
 
 -- Nombre para mostrar de cada local en el reporte del cliente (local -> texto).
 ALTER TABLE rv_cliente ADD COLUMN IF NOT EXISTS nombres jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+-- Foto que se reemplazó al volver a cerrar un mes reabierto (la última; null si
+-- nunca se re-cerró).
+ALTER TABLE rv_cierre ADD COLUMN IF NOT EXISTS snapshot_anterior jsonb;

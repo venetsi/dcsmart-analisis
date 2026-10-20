@@ -5,7 +5,9 @@
 // base de gestión. El armado de los números vive en el frontend
 // (lib/reporteVentas.js); acá solo se juntan las piezas.
 
-import { okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk } from '../lib/reporteVentas.js'
+import {
+  okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla,
+} from '../lib/reporteVentas.js'
 
 const txt = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
@@ -23,6 +25,7 @@ const numOk = (v) => typeof v === 'number' && Number.isFinite(v)
 const numONull = (v) => v === null || numOk(v)
 const MSG_INTERNO = 'Solo el equipo DC puede editar el reporte.'
 const MSG_CERRADO = 'El mes está cerrado. Reabrilo para hacer cambios.'
+const MSG_EN_CIERRE = 'Ese dato quedó guardado en el cierre del mes. Reabrilo para cambiarlo.'
 
 // Nombre de 1 a 80 caracteres, recortado (null si no sirve).
 const nombreOk = (v) => { const t = txt(v, 81); return t && t.length <= 80 ? t : null }
@@ -64,9 +67,14 @@ export default async function (fastify) {
     const bq = cli.locales.length ? (q) => fastify.bq.query(q) : async () => [[]]
     const [[ventasRows], [detRows], [origRows], valores, cierres, reglas, historial] = await Promise.all([
       // SUM sin COALESCE: si todo es NULL el dato no existe (null, no 0).
+      // cajas / sinCubiertos / sinOrdenes: cuántas cajas hubo y cuántas no informaron
+      // (NULL o 0). Con alguna sin informar, el motor no toma la suma como dato.
       bq({
         query: `SELECT local, FORMAT_DATE('%Y-%m', fecha_dia) mes,
-                       CAST(ROUND(SUM(total)) AS INT64) venta, SUM(comensales) cubiertos, SUM(tickets) ordenes
+                       CAST(ROUND(SUM(total)) AS INT64) venta, SUM(comensales) cubiertos, SUM(tickets) ordenes,
+                       COUNT(*) cajas,
+                       COUNTIF(comensales IS NULL OR comensales = 0) sinCubiertos,
+                       COUNTIF(tickets IS NULL OR tickets = 0) sinOrdenes
                   FROM ${DS}.vw_cajas WHERE ${where} GROUP BY 1, 2`,
         params
       }),
@@ -97,7 +105,10 @@ export default async function (fastify) {
     const auto = Object.fromEntries(cli.locales.map((l) => [l, { meses: {}, detalles: {}, cajasOrigen: {} }]))
     for (const r of plainRows(ventasRows)) {
       if (!auto[r.local]) continue
-      auto[r.local].meses[r.mes] = { venta: numOrNull(r.venta), cubiertos: numOrNull(r.cubiertos), ordenes: numOrNull(r.ordenes) }
+      auto[r.local].meses[r.mes] = {
+        venta: numOrNull(r.venta), cubiertos: numOrNull(r.cubiertos), ordenes: numOrNull(r.ordenes),
+        cajas: numOrNull(r.cajas), sinCubiertos: numOrNull(r.sinCubiertos), sinOrdenes: numOrNull(r.sinOrdenes),
+      }
     }
     for (const r of plainRows(detRows)) {
       if (!auto[r.local]) continue
@@ -127,8 +138,12 @@ export default async function (fastify) {
   const getCli = async (id) => (await db.query('SELECT id, grupo, nombre, locales, nombres FROM rv_cliente WHERE id = $1', [id])).rows[0]
   const mesCerrado = async (c, id, mes) =>
     (await c.query('SELECT 1 FROM rv_cierre WHERE cliente_id = $1 AND mes = $2 AND cerrado', [id, mes])).rowCount > 0
+  // Foto del mes si está cerrado (null si está abierto), bloqueada hasta el fin de la transacción.
+  const cierreDe = async (c, id, mes) =>
+    (await c.query('SELECT snapshot FROM rv_cierre WHERE cliente_id = $1 AND mes = $2 AND cerrado FOR UPDATE', [id, mes])).rows[0] || null
 
   // Corrige (o borra la corrección de) un dato. valor null = restaurar.
+  // En un mes cerrado solo se completa lo que la foto no trae (Ruling 24).
   fastify.put('/:id/valor', pre, async (req, reply) => {
     const id = idDe(req)
     const b = req.body || {}
@@ -145,7 +160,8 @@ export default async function (fastify) {
     const c = await db.connect()
     try {
       await c.query('BEGIN')
-      if (await mesCerrado(c, id, b.mes)) { await c.query('ROLLBACK'); return reply.code(409).send({ error: MSG_CERRADO }) }
+      const cierre = await cierreDe(c, id, b.mes)
+      if (cierre && datoEnSnapshot(cierre.snapshot, local, dato)) { await c.query('ROLLBACK'); return reply.code(409).send({ error: MSG_EN_CIERRE }) }
       const prev = (await c.query(
         'SELECT valor FROM rv_valor WHERE cliente_id = $1 AND local = $2 AND mes = $3 AND dato = $4 FOR UPDATE',
         [id, local, b.mes, dato])).rows[0]
@@ -201,14 +217,15 @@ export default async function (fastify) {
     const { mes, snapshot } = req.body || {}
     if (!id || !okMes(mes)) return reply.code(400).send({ error: 'mes (YYYY-MM) requerido' })
     if (!mesCerrable(mes)) return reply.code(400).send({ error: 'Solo se cierran meses terminados.' })
-    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return reply.code(400).send({ error: 'snapshot requerido' })
+    if (!snapshotOk(snapshot)) return reply.code(400).send({ error: 'Falta la foto del mes (snapshot con sus locales).' })
     if (!(await getCli(id))) return reply.code(404).send({ error: 'Cliente no encontrado' })
-    // Inserta, o vuelve a cerrar si había quedado abierto; si ya estaba cerrado no toca nada.
+    // Inserta, o vuelve a cerrar si había quedado abierto (la foto que se reemplaza
+    // queda en snapshot_anterior); si ya estaba cerrado no toca nada.
     const { rowCount } = await db.query(
       `INSERT INTO rv_cierre (cliente_id, mes, origen, snapshot, cerrado, cerrado_por)
        VALUES ($1,$2,'reporte',$3,true,$4)
        ON CONFLICT (cliente_id, mes) DO UPDATE
-         SET origen = 'reporte', snapshot = EXCLUDED.snapshot, cerrado = true,
+         SET origen = 'reporte', snapshot_anterior = rv_cierre.snapshot, snapshot = EXCLUDED.snapshot, cerrado = true,
              cerrado_por = EXCLUDED.cerrado_por, cerrado_at = now()
        WHERE NOT rv_cierre.cerrado`, [id, mes, JSON.stringify(snapshot), quien(req)])
     if (!rowCount) return reply.code(409).send({ error: 'El mes ya estaba cerrado.' })
@@ -279,6 +296,9 @@ export default async function (fastify) {
       return reply.code(400).send({ error: 'Faltan datos o son inválidos (local, match, valor, canal, delivery).' })
     }
     if (canal === 'Local') return reply.code(400).send({ error: '"Local" es un canal calculado: no se le asignan reglas.' })
+    if (b.match === 'origen' && !okOrigenRegla(valor)) {
+      return reply.code(400).send({ error: 'Por origen de caja solo se asignan las cajas cargadas a mano (DCSMART). Las de TapTap o Fudo se asignan por método de cobro.' })
+    }
     const cli = await getCli(id)
     if (!cli) return reply.code(404).send({ error: 'Cliente no encontrado' })
     if (!cli.locales.includes(local)) return reply.code(400).send({ error: 'El local no pertenece al cliente.' })

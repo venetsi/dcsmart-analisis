@@ -46,3 +46,25 @@ export function nombresOk (v, locales) {
   }
   return out
 }
+
+// Foto de un cierre: { locales: { L: {...} } }, con locales objeto (no arreglo).
+export function snapshotOk (s) {
+  const plano = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+  return plano(s) && plano(s.locales)
+}
+
+// ¿La foto del mes cerrado ya trae ese dato del local? Lo que trae no se edita
+// sin reabrir; lo que no trae se puede completar a mano. `dato` normalizado.
+export function datoEnSnapshot (snapshot, local, dato) {
+  const l = snapshot?.locales?.[local]
+  if (!l || typeof l !== 'object') return false
+  const m = /^(canal|tickets):(.+)$/s.exec(dato)
+  if (!m) return l[dato] != null
+  const grupo = m[1] === 'canal' ? l.canales : l.tickets
+  return grupo != null && typeof grupo === 'object' && grupo[m[2]] != null
+}
+
+// Las reglas por origen de caja son solo para la carga manual (DCSMART): las
+// cajas de TapTap o Fudo ya traen sus cobros por método y se contarían dos veces.
+export const ORIGEN_MANUAL = 'DCSMART'
+export const okOrigenRegla = (valor) => typeof valor === 'string' && valor.trim().toUpperCase() === ORIGEN_MANUAL
