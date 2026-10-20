@@ -65,6 +65,27 @@ test('canalesAuto: nombres normalizados, efectivo suma a la app, la regla manda'
     { nombre: 'BigBox', valor: 40, delivery: false },
   ])
 })
+test('canalesAuto: \'Pedido Ya\' de Fudo (singular) es Pedidos Ya y no queda en Local', () => {
+  const c = canalesAuto({ detalles: [{ metodo: 'Pedido Ya', monto: 100 }, { metodo: 'Pedido Ya Efectivo', monto: 20 }, { metodo: 'PedidosYa', monto: 5 }], cajasOrigen: [], reglas: [] })
+  assert.deepEqual(c, [{ nombre: 'Pedidos Ya', valor: 125, delivery: true }])
+  const l = armarLocal({ local: 'F', mes: '2026-09', auto: { meses: { '2026-09': { venta: 1000 } }, canales: { '2026-09': c } }, valores: [], cierres: [] })
+  assert.equal(l.canales.find((x) => x.nombre === 'Local').valor, 875)
+})
+test('mes cerrado con un canal a mano: Local se recalcula', () => {
+  const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: {}, canales: {} },
+    valores: [{ local: 'P', mes: '2026-09', dato: 'canal:Eventos', valor: 20 }],
+    cierres: [{ mes: '2026-09', origen: 'reporte', snapshot: { locales: { P: { venta: 100, canales: { Rappi: 30, Local: 70 } } } } }] })
+  const c = Object.fromEntries(l.canales.map((x) => [x.nombre, x]))
+  assert.deepEqual([c['Local'].valor, c['Local'].fuente], [50, 'calc'])
+  assert.equal(l.canales.reduce((t, x) => t + x.inc, 0), 100)
+})
+test('un canal sin valor deja Local en falta, no lo cuenta como 0', () => {
+  const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: { '2026-09': { venta: 100 } }, canales: {} },
+    valores: [{ local: 'P', mes: '2026-09', dato: 'canal:Eventos', valor: null }], cierres: [] })
+  const c = Object.fromEntries(l.canales.map((x) => [x.nombre, x]))
+  assert.deepEqual([c['Eventos'].valor, c['Eventos'].fuente], [null, 'mano'])
+  assert.deepEqual([c['Local'].valor, c['Local'].fuente, c['Local'].inc], [null, 'falta', null])
+})
 test('Danzon: Eventos a mano baja Local, el total no se mueve', () => {
   const l = armarLocal({ local: 'GRAN-DANZON', mes: '2026-09', auto: { meses: { '2026-09': { venta: 144913430 } }, canales: { '2026-09': [] } },
     valores: [{ local: 'GRAN-DANZON', mes: '2026-09', dato: 'canal:Eventos', valor: 22358161 }, { local: 'GRAN-DANZON', mes: '2026-09', dato: 'canal:Rappi/PY', valor: 232608 }], cierres: [] })

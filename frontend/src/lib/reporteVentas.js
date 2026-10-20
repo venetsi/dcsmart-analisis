@@ -39,6 +39,14 @@ export const ES_APP_RE = /^(rappi|pedidos\s*ya|peya|mp\s*delivery|uber\s*eats)(\
 
 const LOCAL = 'Local'
 
+// Fudo escribe 'Pedido Ya' (singular), que ES_APP_RE (igual a gestión) no toma.
+const ALIAS_APP_RE = /^pedido\s*ya(\s+efectivo)?$/i
+
+// ¿El método de cobro es una app de delivery?
+function esApp(metodo) {
+  return ES_APP_RE.test(metodo) || ALIAS_APP_RE.test(metodo)
+}
+
 // Número que viene de la base o de BigQuery (number o string '123.45').
 // Los textos con formato AR van por parseNumeroAR; acá no.
 function num(v) {
@@ -74,7 +82,7 @@ function dividir(a, b) {
 function nombreApp(metodo) {
   const base = metodo.trim().replace(/\s+efectivo$/i, '').toLowerCase().replace(/\s+/g, '')
   if (base === 'rappi') return 'Rappi'
-  if (base === 'pedidosya' || base === 'peya') return 'Pedidos Ya'
+  if (base === 'pedidosya' || base === 'pedidoya' || base === 'peya') return 'Pedidos Ya'
   if (base === 'mpdelivery') return 'MP Delivery'
   if (base === 'ubereats') return 'Uber Eats'
   return metodo.trim()
@@ -99,7 +107,7 @@ export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [] }) {
     const metodo = String(d.metodo ?? '').trim()
     const regla = reglas.find((r) => r.match === 'metodo' && mismoTexto(r.valor, metodo))
     if (regla) sumar(regla.canal, d.monto, regla.delivery)
-    else if (ES_APP_RE.test(metodo)) sumar(nombreApp(metodo), d.monto, true)
+    else if (esApp(metodo)) sumar(nombreApp(metodo), d.monto, true)
   }
   for (const c of cajasOrigen) {
     const regla = reglas.find((r) => r.match === 'origen' && mismoTexto(r.valor, c.origin))
@@ -120,6 +128,11 @@ function mesAnioAnterior(mes) {
 
 // Arma un local para el mes: venta, cubiertos, órdenes, canales con incidencia,
 // histórico del año y delivery por app. Ver la forma de LocalMes en el plan.
+//   auto: { meses: { 'YYYY-MM': { venta, cubiertos, ordenes, tickets? } }, canales: { 'YYYY-MM': [{ nombre, valor, delivery }] } }
+//   `tickets` (opcional) es { [app]: n }: tickets de delivery por app, para el
+//   ticket promedio de cada app. NO es un alias de `ordenes` (órdenes del local).
+//   Hoy no hay fuente automática (caja_detalles.cantidad no se expone): se
+//   cargan a mano como dato `tickets:<app>`; el campo queda para cuando exista.
 export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }) {
   const autoMeses = auto.meses || {}
   const autoCanales = auto.canales || {}
@@ -157,7 +170,7 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
       const c = (lista || []).find((x) => x.nombre === nombre)
       if (c) return !!c.delivery
     }
-    return ES_APP_RE.test(nombre)
+    return esApp(nombre)
   }
 
   // Canales del mes, con "Local" último.
@@ -177,10 +190,14 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
       return { nombre, ...d, delivery: a ? !!a.delivery : deliveryDe(nombre) }
     })
 
+    // "Local" de la foto vale solo si nada se cargó a mano después del cierre;
+    // si hay un canal a mano, Local lo absorbe y se recalcula. Un canal sin
+    // valor no cuenta como 0: Local queda en falta.
     let localDato
     const localCerrado = num(s?.canales?.[LOCAL])
-    if (localCerrado != null) localDato = { valor: localCerrado, fuente: 'cerrado' }
-    else if (venta.valor == null) localDato = { valor: null, fuente: 'falta' }
+    const hayMano = lista.some((c) => c.fuente === 'mano')
+    if (localCerrado != null && !hayMano) localDato = { valor: localCerrado, fuente: 'cerrado' }
+    else if (venta.valor == null || lista.some((c) => c.valor == null)) localDato = { valor: null, fuente: 'falta' }
     else {
       const otros = lista.reduce((t, c) => t + (c.valor ?? 0), 0)
       localDato = { valor: r2(venta.valor - otros), fuente: 'calc' }
@@ -258,7 +275,9 @@ function sumaEstricta(vals) {
 
 // Arma el reporte del cliente: locales, consolidado (si hay más de uno),
 // páginas y si se puede cerrar el mes. `hoy` decide si el mes terminó.
-export function armarReporte({ cliente, mes, porLocal, cierres = [], hoy = new Date() }) { // eslint-disable-line no-unused-vars
+// También acepta `cierres` (parte de la interfaz), pero no lo usa: los cierres
+// ya entran en cada LocalMes por armarLocal.
+export function armarReporte({ cliente, mes, porLocal, hoy = new Date() }) {
   const nombres = (cliente?.locales?.length ? cliente.locales : Object.keys(porLocal)).filter((l) => porLocal[l])
   const locales = nombres.map((l) => porLocal[l])
 
