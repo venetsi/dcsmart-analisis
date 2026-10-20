@@ -19,5 +19,8 @@
     "google-auth-library": "^9.15.1",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "jszip": "^3.10.2"
   }
 }
