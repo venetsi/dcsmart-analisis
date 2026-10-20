@@ -39,9 +39,10 @@
 .rve-neg { color: var(--bad); }
 .rve-campo { width: 100%; text-align: right; padding: 5px 8px; border-radius: 7px; background: var(--bg-input); border: 1px solid var(--border-input); color: var(--txt); font-variant-numeric: tabular-nums; font-size: 12px; }
 .rve-campo:focus { outline: none; border-color: var(--teal); }
-.rve-campo:disabled { opacity: .55; }
+.rve-campo:disabled, .rve-campo[readonly] { opacity: .55; }
 .rve-fuente { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .rve-fuente small { font-size: 10.5px; color: var(--txt3); line-height: 1.3; }
+.rve-fuente small.rve-parcial { color: var(--bad); font-variant-numeric: tabular-nums; }
 .rve-b { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 800; padding: 1px 7px; border-radius: 99px; letter-spacing: .03em; }
 .rve-b-auto { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-border); }
 .rve-b-calc { background: rgba(255,255,255,.08); color: var(--txt2); border: 1px solid var(--border); }

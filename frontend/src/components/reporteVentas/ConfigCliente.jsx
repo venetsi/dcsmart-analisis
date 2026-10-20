@@ -7,6 +7,11 @@ import { canalesAuto, fmtAR } from '../../lib/reporteVentas.js'
 import { mesEnPalabras } from './Paginas.jsx'
 import { msgError } from './errores.js'
 
+// Por origen de caja solo se asigna la carga manual: las cajas de un POS (TapTap,
+// Fudo…) ya traen sus cobros por método, y una regla por origen las contaría dos veces.
+const ORIGEN_MANUAL = 'DCSMART'
+const esOrigenManual = (o) => String(o ?? '').trim().toUpperCase() === ORIGEN_MANUAL
+
 const verMonto = (v) => (v == null || !Number.isFinite(v) ? '—' : fmtAR(v, Number.isInteger(v) ? 0 : 2))
 
 // Una fila de regla: lo que cobró/entró, a qué canal va y si es delivery.
@@ -15,6 +20,8 @@ function FilaRegla({ item, regla, canalDefecto, sugerencias, listaId, onGuardar,
   const [delivery, setDelivery] = useState(!!regla?.delivery)
   useEffect(() => { setCanal(regla?.canal ?? ''); setDelivery(!!regla?.delivery) }, [regla?.canal, regla?.delivery])
   const cambio = canal.trim() !== (regla?.canal ?? '') || delivery !== !!regla?.delivery
+  // Regla vieja por origen de un POS: ya no se puede guardar, solo quitar.
+  const soloQuitar = item.match === 'origen' && !esOrigenManual(item.valor)
   const guardar = (e) => { e.preventDefault(); if (canal.trim()) onGuardar(canal.trim(), delivery) }
   return (
     <form className="rve-regla" onSubmit={guardar}>
@@ -24,15 +31,15 @@ function FilaRegla({ item, regla, canalDefecto, sugerencias, listaId, onGuardar,
       </div>
       <div className="rve-regla-monto">{verMonto(item.monto)}</div>
       <div className="rve-regla-canal">
-        <input type="text" list={listaId} maxLength={40} value={canal} placeholder={canalDefecto} autoComplete="off"
+        <input type="text" list={listaId} maxLength={40} value={canal} placeholder={canalDefecto} autoComplete="off" readOnly={soloQuitar}
           aria-label={`Canal de ${item.valor}`} onChange={(e) => setCanal(e.target.value)} />
-        <small>{canal.length}/40</small>
+        <small>{soloQuitar ? 'Las cajas de este origen se asignan por método de cobro: quitá esta regla.' : `${canal.length}/40`}</small>
       </div>
       <label className="rve-regla-del">
         <input type="checkbox" checked={delivery} onChange={(e) => setDelivery(e.target.checked)} /> delivery
       </label>
       <div className="rve-regla-btn">
-        <button type="submit" className="btn-sec" disabled={ocupado || !cambio || !canal.trim()}>Guardar</button>
+        <button type="submit" className="btn-sec" disabled={ocupado || soloQuitar || !cambio || !canal.trim()}>Guardar</button>
         {regla && <button type="button" className="btn-sec" disabled={ocupado} onClick={onQuitar}>Quitar regla</button>}
       </div>
       <datalist id={listaId}>{sugerencias.map((s) => <option key={s} value={s} />)}</datalist>
@@ -116,7 +123,8 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
     const a = data.auto[local] || {}
     const items = [
       ...(a.detalles?.[data.mes] || []).map((d) => ({ match: 'metodo', valor: d.metodo, monto: d.monto })),
-      ...(a.cajasOrigen?.[data.mes] || []).map((c) => ({ match: 'origen', valor: c.origin, monto: c.total })),
+      ...(a.cajasOrigen?.[data.mes] || []).filter((c) => esOrigenManual(c.origin))
+        .map((c) => ({ match: 'origen', valor: c.origin, monto: c.total })),
     ].filter((i) => i.valor)
       // Mayor monto primero: el orden de BigQuery no es estable entre consultas.
       .sort((x, y) => (x.match === y.match ? 0 : x.match === 'metodo' ? -1 : 1) || (y.monto ?? 0) - (x.monto ?? 0))
@@ -179,8 +187,8 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
         <section className="rve-config-sec">
           <h3>Canales por local · {mesEnPalabras(data.mes)}</h3>
           <p className="rve-chico">
-            Los métodos de cobro y orígenes de caja del mes, con su monto. Lo que no tiene regla va a "Local" salvo que sea una app de delivery
-            (Rappi, Pedidos Ya…), que se detecta sola.
+            Los métodos de cobro del mes y las cajas cargadas a mano (DCSMART), con su monto. Lo que no tiene regla va a "Local" salvo que
+            sea una app de delivery (Rappi, Pedidos Ya…), que se detecta sola. Las cajas de TapTap o Fudo se asignan por método de cobro.
           </p>
           {data.cliente.locales.map((local) => {
             const items = itemsDe(local)

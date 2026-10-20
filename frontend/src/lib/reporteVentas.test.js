@@ -162,13 +162,16 @@ test('delivery por app con tickets a mano, y snapshotDe', () => {
   const l = armarLocal({ local: 'TOGNIS-PIZZA', mes: '2026-09', auto: pizzaAuto,
     valores: [{ local: 'TOGNIS-PIZZA', mes: '2026-09', dato: 'tickets:Rappi', valor: 1000 }, { local: 'TOGNIS-PIZZA', mes: '2026-09', dato: 'ordenes', valor: '2000' }], cierres: [] })
   const sep = l.delivery.find((d) => d.mes === '2026-09')
-  assert.deepEqual(sep.apps['Rappi'], { venta: 55114440, tickets: 1000, prom: 55114.44 })
-  assert.deepEqual(sep.apps['Pedidos Ya'], { venta: 39544560, tickets: null, prom: null })
+  const sinDato = ({ ticketsDato, ...x }) => x
+  assert.deepEqual(sinDato(sep.apps['Rappi']), { venta: 55114440, tickets: 1000, prom: 55114.44 })
+  assert.deepEqual(sinDato(sep.apps['Pedidos Ya']), { venta: 39544560, tickets: null, prom: null })
+  assert.deepEqual([sep.apps['Rappi'].ticketsDato.valor, sep.apps['Rappi'].ticketsDato.fuente], [1000, 'mano'])
+  assert.deepEqual(sep.apps['Pedidos Ya'].ticketsDato, { valor: null, fuente: 'falta' })
   assert.equal(sep.total, 94659000)
   assert.equal(l.ordenes.valor, 2000)
   const r = armarReporte({ cliente: { nombre: 'P', locales: ['TOGNIS-PIZZA'] }, mes: '2026-09', porLocal: { 'TOGNIS-PIZZA': l }, cierres: [], hoy: HOY })
   assert.deepEqual(snapshotDe(r), { locales: { 'TOGNIS-PIZZA': { venta: 316106840, cubiertos: null, ordenes: 2000,
-    canales: { Rappi: 55114440, 'Pedidos Ya': 39544560, Local: 221447840 }, tickets: { Rappi: 1000 } } } })
+    canales: { Rappi: 55114440, 'Pedidos Ya': 39544560, Local: 221447840 }, tickets: { Rappi: 1000 }, delivery: ['Rappi', 'Pedidos Ya'] } } })
 })
 test('un cierre armado con snapshotDe se relee igual', () => {
   const l = armarLocal({ local: 'TOGNIS-PIZZA', mes: '2026-09', auto: pizzaAuto, valores: [], cierres: [] })
@@ -178,4 +181,65 @@ test('un cierre armado con snapshotDe se relee igual', () => {
   assert.deepEqual(l2.canales.map((c) => [c.nombre, c.valor, c.fuente, c.inc, c.delivery]), [
     ['Rappi', 55114440, 'cerrado', 17.44, true], ['Pedidos Ya', 39544560, 'cerrado', 12.51, true], ['Local', 221447840, 'cerrado', 70.05, false]])
   assert.deepEqual([l2.venta.valor, l2.venta.fuente], [316106840, 'cerrado'])
+})
+
+// ---- cubiertos / órdenes parciales (Ruling 21) ----
+test('Pizza: cubiertos que suman 0 con venta son falta, no 0', () => {
+  const l = armarLocal({ local: 'TOGNIS-PIZZA', mes: '2026-09', valores: [], cierres: [],
+    auto: { meses: { '2026-09': { venta: 316106840, cubiertos: 0, ordenes: 0, cajas: 60, sinCubiertos: 60, sinOrdenes: 60 } }, canales: {} } })
+  assert.deepEqual([l.cubiertos.valor, l.cubiertos.fuente], [null, 'falta'])
+  assert.deepEqual(l.cubiertos.parcial, { valor: 0, cajas: 60, sin: 60 })
+  assert.deepEqual([l.ordenes.valor, l.ordenes.fuente], [null, 'falta'])
+  assert.equal(l.promCubierto, null)
+  // Sin el conteo de cajas, la regla de suma 0 con venta alcanza.
+  const l2 = armarLocal({ local: 'P', mes: '2026-09', valores: [], cierres: [], auto: { meses: { '2026-09': { venta: 100, cubiertos: 0 } }, canales: {} } })
+  assert.deepEqual([l2.cubiertos.valor, l2.cubiertos.fuente], [null, 'falta'])
+})
+test('Café: 3 cubiertos con 59 de 66 cajas sin dato es falta, con el parcial como pista', () => {
+  const l = armarLocal({ local: 'TOGNIS-CAFE', mes: '2026-09', valores: [], cierres: [],
+    auto: { meses: { '2026-09': { venta: 80003001, cubiertos: 3, ordenes: 1500, cajas: 66, sinCubiertos: 59, sinOrdenes: 0 } }, canales: {} } })
+  assert.deepEqual(l.cubiertos, { valor: null, fuente: 'falta', parcial: { valor: 3, cajas: 66, sin: 59 } })
+  assert.equal(l.promCubierto, null)
+  assert.deepEqual(l.ordenes, { valor: 1500, fuente: 'auto' })
+  // Cargado a mano, manda la mano y no queda pista.
+  const l2 = armarLocal({ local: 'TOGNIS-CAFE', mes: '2026-09', cierres: [],
+    valores: [{ local: 'TOGNIS-CAFE', mes: '2026-09', dato: 'cubiertos', valor: 2900, original: null }],
+    auto: { meses: { '2026-09': { venta: 80003001, cubiertos: 3, cajas: 66, sinCubiertos: 59 } }, canales: {} } })
+  assert.deepEqual([l2.cubiertos.valor, l2.cubiertos.fuente, l2.cubiertos.parcial], [2900, 'mano', undefined])
+})
+test('datos completos de todas las cajas son automáticos', () => {
+  const l = armarLocal({ local: 'EVELIA', mes: '2026-09', valores: [], cierres: [],
+    auto: { meses: { '2026-09': { venta: 396160370, cubiertos: 6274, ordenes: 100, cajas: 60, sinCubiertos: 0, sinOrdenes: 0 } }, canales: {} } })
+  assert.deepEqual(l.cubiertos, { valor: 6274, fuente: 'auto' })
+  assert.deepEqual(l.ordenes, { valor: 100, fuente: 'auto' })
+})
+test('venta automática en 0 con cajas es falta', () => {
+  const l = armarLocal({ local: 'X', mes: '2026-09', valores: [], cierres: [], auto: { meses: { '2026-09': { venta: 0, cajas: 3 } }, canales: {} } })
+  assert.deepEqual([l.venta.valor, l.venta.fuente], [null, 'falta'])
+})
+test('un parcial no toca un mes cerrado: el valor del deck queda', () => {
+  const l = armarLocal({ local: 'P', mes: '2026-09', valores: [],
+    cierres: [{ mes: '2026-09', origen: 'deck', snapshot: { locales: { P: { venta: 100, cubiertos: 7 } } } }],
+    auto: { meses: { '2026-09': { venta: 100, cubiertos: 3, cajas: 5, sinCubiertos: 2 } }, canales: {} } })
+  assert.deepEqual(l.cubiertos, { valor: 7, fuente: 'cerrado' })
+})
+
+// ---- delivery de un mes cerrado (Ruling 23) ----
+test('mes cerrado: la foto dice qué canales son delivery (Ecommerce incluido)', () => {
+  const cierres = [{ mes: '2026-08', origen: 'deck', snapshot: { locales: { 'TOGNIS-CAFE': {
+    venta: 80000000, canales: { Rappi: 6000000, Cheaf: 1500000, Ecommerce: 500000 }, tickets: { Rappi: 300 },
+    delivery: ['Rappi', 'Cheaf', 'Ecommerce'] } } } }]
+  const l = armarLocal({ local: 'TOGNIS-CAFE', mes: '2026-08', auto: { meses: {}, canales: {} }, valores: [], cierres })
+  const ago = l.delivery.find((d) => d.mes === '2026-08')
+  assert.deepEqual(Object.keys(ago.apps).sort(), ['Cheaf', 'Ecommerce', 'Rappi'])
+  assert.equal(ago.total, 8000000)
+  assert.deepEqual([ago.apps.Rappi.ticketsDato.valor, ago.apps.Rappi.ticketsDato.fuente], [300, 'cerrado'])
+  // Una foto vieja sin lista: solo las apps conocidas.
+  const viejo = [{ ...cierres[0], snapshot: { locales: { 'TOGNIS-CAFE': { ...cierres[0].snapshot.locales['TOGNIS-CAFE'], delivery: undefined } } } }]
+  const l2 = armarLocal({ local: 'TOGNIS-CAFE', mes: '2026-08', auto: { meses: {}, canales: {} }, valores: [], cierres: viejo })
+  assert.deepEqual(Object.keys(l2.delivery.find((d) => d.mes === '2026-08').apps), ['Rappi'])
+  // Un canal de la foto que no está en la lista no es delivery aunque sea app.
+  const noDel = [{ ...cierres[0], snapshot: { locales: { 'TOGNIS-CAFE': { ...cierres[0].snapshot.locales['TOGNIS-CAFE'], delivery: ['Cheaf'] } } } }]
+  const l3 = armarLocal({ local: 'TOGNIS-CAFE', mes: '2026-08', auto: { meses: {}, canales: {} }, valores: [], cierres: noDel })
+  assert.deepEqual(Object.keys(l3.delivery.find((d) => d.mes === '2026-08').apps), ['Cheaf'])
 })

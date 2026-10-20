@@ -43,7 +43,7 @@ const LOCAL = 'Local'
 const ALIAS_APP_RE = /^pedido\s*ya(\s+efectivo)?$/i
 
 // ¿El método de cobro es una app de delivery?
-function esApp(metodo) {
+export function esApp(metodo) {
   return ES_APP_RE.test(metodo) || ALIAS_APP_RE.test(metodo)
 }
 
@@ -153,16 +153,42 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
 
   // Resuelve un dato: cerrado > mano > auto > falta. En un mes cerrado, lo que
   // la foto no trae se puede cargar a mano; si no, falta (no se toma lo de hoy).
-  const resolver = (m, dato, valorCerrado, autoValor) => {
+  // `parcial` (opcional): suma automática incompleta, solo como pista en el panel.
+  const resolver = (m, dato, valorCerrado, autoValor, parcial) => {
     const s = snap(m)
     if (s !== undefined && num(valorCerrado) != null) return { valor: num(valorCerrado), fuente: 'cerrado' }
     const row = mano(m, dato)
     if (row) return datoMano(row, s !== undefined ? null : autoValor)
     if (s === undefined && autoValor != null) return { valor: autoValor, fuente: 'auto' }
+    if (s === undefined && parcial) return { valor: null, fuente: 'falta', parcial }
     return { valor: null, fuente: 'falta' }
   }
 
-  const datoBase = (m, campo) => resolver(m, campo, snap(m)?.[campo], num(autoMeses[m]?.[campo]))
+  // Lo automático de venta, cubiertos u órdenes. Un total que no informaron
+  // todas las cajas no es un dato: queda falta, con la suma parcial como pista.
+  //   venta 0 con cajas → falta (una caja abierta no vende 0).
+  //   cubiertos/órdenes: falta si alguna caja no informó (null o 0) o si la
+  //   suma es 0 con venta > 0 (TapTap manda 0 cuando no informa).
+  const SIN = { cubiertos: 'sinCubiertos', ordenes: 'sinOrdenes' }
+  const autoDe = (m, campo) => {
+    const a = autoMeses[m]
+    const v = num(a?.[campo])
+    if (!a || v == null) return { valor: null }
+    const cajas = num(a.cajas)
+    if (campo === 'venta') return { valor: v === 0 && cajas > 0 ? null : v }
+    if (!SIN[campo]) return { valor: v }
+    const sin = num(a[SIN[campo]])
+    const venta = num(a.venta)
+    if ((sin != null && sin > 0) || (v === 0 && venta != null && venta > 0)) {
+      return { valor: null, parcial: { valor: v, cajas, sin } }
+    }
+    return { valor: v }
+  }
+
+  const datoBase = (m, campo) => {
+    const a = autoDe(m, campo)
+    return resolver(m, campo, snap(m)?.[campo], a.valor, a.parcial)
+  }
 
   // Delivery de un canal sin bandera propia: el de algún mes automático, o si es app.
   const deliveryDe = (nombre) => {
@@ -184,10 +210,16 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     valores.filter((v) => v.local === local && v.mes === m && String(v.dato).startsWith('canal:'))
       .forEach((v) => agregar(v.dato.slice('canal:'.length)))
 
+    // En un mes cerrado, la foto dice qué canales eran delivery (si lo guardó).
+    const deliveryCerrado = (nombre) => {
+      if (!s || !Array.isArray(s.delivery)) return null
+      if (s.delivery.includes(nombre)) return true
+      return s.canales && nombre in s.canales ? false : null
+    }
     const lista = nombres.map((nombre) => {
       const a = auto.find((c) => c.nombre === nombre)
       const d = resolver(m, `canal:${nombre}`, s?.canales?.[nombre], a ? num(a.valor) : null)
-      return { nombre, ...d, delivery: a ? !!a.delivery : deliveryDe(nombre) }
+      return { nombre, ...d, delivery: a ? !!a.delivery : (deliveryCerrado(nombre) ?? deliveryDe(nombre)) }
     })
 
     // "Local" de la foto vale solo si nada se cargó a mano después del cierre;
@@ -236,8 +268,9 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     let total = null
     for (const c of canalesDe(m, venta)) {
       if (!c.delivery || c.valor == null) continue
-      const tickets = ticketsDe(m, c.nombre).valor
-      apps[c.nombre] = { venta: c.valor, tickets, prom: dividir(c.valor, tickets) }
+      const ticketsDato = ticketsDe(m, c.nombre)
+      const tickets = ticketsDato.valor
+      apps[c.nombre] = { venta: c.valor, tickets, prom: dividir(c.valor, tickets), ticketsDato }
       total = r2((total ?? 0) + c.valor)
     }
     return { mes: m, apps, total }
@@ -327,10 +360,13 @@ export function snapshotDe(reporte) {
     const del = l.delivery.find((d) => d.mes === reporte.mes)
     const tickets = {}
     for (const [app, a] of Object.entries(del?.apps || {})) if (a.tickets != null) tickets[app] = a.tickets
+    const conValor = l.canales.filter((c) => c.valor != null)
     locales[l.local] = {
       venta: l.venta.valor, cubiertos: l.cubiertos.valor, ordenes: l.ordenes.valor,
-      canales: Object.fromEntries(l.canales.filter((c) => c.valor != null).map((c) => [c.nombre, c.valor])),
+      canales: Object.fromEntries(conValor.map((c) => [c.nombre, c.valor])),
       tickets,
+      // Qué canales eran delivery al cerrar (la hoja de delivery de un mes cerrado sale de acá).
+      delivery: conValor.filter((c) => c.delivery && c.nombre !== LOCAL).map((c) => c.nombre),
     }
   }
   return { locales }

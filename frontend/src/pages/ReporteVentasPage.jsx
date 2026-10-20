@@ -105,7 +105,7 @@ export default function ReporteVentasPage() {
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [config, setConfig] = useState(false)
-  const [confirmar, setConfirmar] = useState(null) // 'restaurar' | 'previo'
+  const [confirmar, setConfirmar] = useState(null) // 'restaurar' | 'sinVenta' | 'previo'
   const [motivos, setMotivos] = useState([])
   const [imprimir, setImprimir] = useState(null) // { borrador }
   const pedido = useRef(0)
@@ -121,14 +121,15 @@ export default function ReporteVentasPage() {
   }, [grupo])
   useEffect(() => { setClientes(null); setData(null); setClienteId(null); cargarClientes() }, [cargarClientes])
 
-  // ── datos del cliente y mes ──
+  // ── datos del cliente y mes ── (devuelve si se pudieron traer)
   const recargar = useCallback(async () => {
-    if (!clienteId) return
+    if (!clienteId) return false
     const mio = ++pedido.current
     try {
       const d = await api.rvGet(clienteId, mes)
       if (mio === pedido.current) setData(d)
-    } catch (e) { if (mio === pedido.current) setError(msgError(e)) }
+      return mio === pedido.current
+    } catch (e) { if (mio === pedido.current) setError(msgError(e)); return false }
   }, [clienteId, mes])
   useEffect(() => { setData(null); setError(''); setMotivos([]); setConfirmar(null); recargar() }, [recargar])
 
@@ -149,6 +150,9 @@ export default function ReporteVentasPage() {
   const cerrado = !!cierre
   const previoCerrado = !!data?.cierres.some((c) => c.mes === moverMes(mes, -1))
   const puedeEditar = interno && !cerrado
+  // Locales sin venta en el mes (alerta de armarLocal): cerrar así pide confirmación.
+  const localesSinVenta = (reporte?.locales || [])
+    .filter((l) => l.alertas.some((a) => a.endsWith('falta la venta del mes'))).map((l) => nombreLocal(l.local))
 
   const etiquetaHoja = (p) => {
     const n = p.local ? nombreLocal(p.local) : ''
@@ -204,17 +208,20 @@ export default function ReporteVentasPage() {
   const descargarBorrador = () => setImprimir({ borrador: true })
   const descargarFinal = () => setImprimir({ borrador: false })
 
-  const cerrarMes = async (sinPreguntar = false) => {
+  // Pregunta en orden: locales sin venta, mes anterior abierto. Cada "sí" pasa al siguiente.
+  const cerrarMes = async ({ sinVentaOk = false, previoOk = false } = {}) => {
     setConfirmar(null)
     setError('')
     if (!reporte.puedeCerrar) { setMotivos(reporte.motivos); return }
     setMotivos([])
-    if (!previoCerrado && !sinPreguntar) { setConfirmar('previo'); return }
+    if (localesSinVenta.length && !sinVentaOk) { setConfirmar('sinVenta'); return }
+    if (!previoCerrado && !previoOk) { setConfirmar(sinVentaOk ? 'previo+sinVenta' : 'previo'); return }
     setOcupado(true)
     try {
       await api.rvCerrar(clienteId, mes, snapshotDe(reporte))
-      await recargar()
-      setImprimir({ borrador: false })
+      // Si no se pudo releer, no se imprime: el PDF saldría con los datos de antes del cierre.
+      if (await recargar()) setImprimir({ borrador: false })
+      else setError((e) => e || 'El mes quedó cerrado, pero no se pudo volver a cargar. Recargá la página para descargar el final.')
     } catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
   }
 
@@ -294,10 +301,18 @@ export default function ReporteVentasPage() {
               <button type="button" className="btn-sec" onClick={() => setConfirmar(null)}>No</button>
             </div>
           )}
-          {confirmar === 'previo' && (
+          {confirmar === 'sinVenta' && (
+            <div className="rve-aviso rve-confirmar" role="alert">
+              {localesSinVenta.length === 1 ? 'Este local no tiene' : 'Estos locales no tienen'} venta en {mesEnPalabras(mes)}: <strong>{localesSinVenta.join(', ')}</strong>.
+              {' '}En el reporte final {localesSinVenta.length === 1 ? 'su venta sale' : 'sus ventas salen'} como "—". ¿Cerrar igual?
+              <button type="button" className="btn-pri" onClick={() => cerrarMes({ sinVentaOk: true })}>Sí, cerrar sin esa venta</button>
+              <button type="button" className="btn-sec" onClick={() => setConfirmar(null)}>Cancelar</button>
+            </div>
+          )}
+          {(confirmar === 'previo' || confirmar === 'previo+sinVenta') && (
             <div className="rve-aviso rve-confirmar">
               El mes anterior no está cerrado. ¿Cerrar {mesEnPalabras(mes)} igual?
-              <button type="button" className="btn-pri" onClick={() => cerrarMes(true)}>Sí, cerrar</button>
+              <button type="button" className="btn-pri" onClick={() => cerrarMes({ sinVentaOk: confirmar === 'previo+sinVenta', previoOk: true })}>Sí, cerrar</button>
               <button type="button" className="btn-sec" onClick={() => setConfirmar(null)}>Cancelar</button>
             </div>
           )}
@@ -309,7 +324,8 @@ export default function ReporteVentasPage() {
           )}
           {cerrado && (
             <div className="rve-cerrado">
-              Mes cerrado por {cierre.cerrado_por || '—'}{cierre.cerrado_at ? ` el ${fecha(cierre.cerrado_at)}` : ''}. No se puede editar.
+              Mes cerrado por {cierre.cerrado_por || '—'}{cierre.cerrado_at ? ` el ${fecha(cierre.cerrado_at)}` : ''}.
+              {interno ? ' Lo que quedó en el cierre no se edita; los datos que faltan se pueden completar.' : ' No se puede editar.'}
             </div>
           )}
 
@@ -327,7 +343,7 @@ export default function ReporteVentasPage() {
                 <HojaGrande pagina={pagina} reporte={reporte} />
               </div>
               <aside className="rve-panel">
-                <PanelDatos reporte={reporte} pagina={pagina} data={data} puedeEditar={puedeEditar} cerradoMes={cerrado}
+                <PanelDatos reporte={reporte} pagina={pagina} data={data} interno={interno} cerradoMes={cerrado}
                   ocupado={ocupado} onGuardar={guardar} onError={setError} nombreLocal={nombreLocal} />
               </aside>
             </div>

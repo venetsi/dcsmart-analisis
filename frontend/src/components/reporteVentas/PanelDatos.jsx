@@ -55,6 +55,7 @@ export function CampoNum({ valor, tieneCorreccion = false, disabled = false, eti
   }
   const confirmar = () => {
     foco.current = false
+    if (disabled) { saltar.current = false; setTexto(inicial); return } // guardando: no se manda otra vez
     if (saltar.current) { saltar.current = false; setTexto(inicial); return }
     const t = texto.trim()
     if (t === '') {
@@ -79,9 +80,12 @@ export function CampoNum({ valor, tieneCorreccion = false, disabled = false, eti
       e.currentTarget.blur()
     }
   }
+  // readOnly y no disabled mientras se guarda: un campo deshabilitado pierde el
+  // foco sin blur y quedaba marcado como "en edición", sin refrescarse nunca más.
   return (
     <input ref={ref} className="rve-campo" type="text" inputMode="decimal" autoComplete="off" maxLength={20}
-      aria-label={etiqueta} placeholder={placeholder} value={texto} disabled={disabled}
+      aria-label={etiqueta} placeholder={placeholder} value={texto}
+      readOnly={disabled} aria-disabled={disabled || undefined}
       onFocus={() => { foco.current = true }} onChange={cambiar} onBlur={confirmar} onKeyDown={tecla} />
   )
 }
@@ -106,28 +110,25 @@ function Fuente({ d, nota }) {
       {d.fuente === 'mano' && (d.por || d.at) && (
         <small>{d.por ? `por ${d.por}` : ''}{d.at ? ` el ${fechaCorta(d.at)}` : ''}</small>
       )}
+      {d.fuente === 'falta' && d.parcial && <small className="rve-parcial">{textoParcial(d.parcial)}</small>}
       {nota && <small>{nota}</small>}
     </div>
   )
 }
 
-// Ticket de una app: el motor solo da el número, la fuente se deduce de lo mismo que usa él.
-function datoTickets(data, local, mes, app, valor, cerrado) {
-  const row = data.valores.find((v) => v.local === local && v.mes === mes && v.dato === `tickets:${app}`)
-  if (row) {
-    const d = { valor: row.valor, fuente: 'mano' }
-    if (row.original != null) d.original = row.original
-    if (row.actualizado_por) d.por = row.actualizado_por
-    if (row.actualizado_at) d.at = row.actualizado_at
-    return d
-  }
-  if (cerrado) return esNum(valor) ? { valor, fuente: 'cerrado' } : { valor: null, fuente: 'falta' }
-  return esNum(valor) ? { valor, fuente: 'auto' } : { valor: null, fuente: 'falta' }
+// Pista de una suma automática incompleta: no es un dato, se carga a mano si sirve.
+function textoParcial({ valor, cajas, sin }) {
+  const suma = `parcial: ${verNum(valor)}`
+  if (esNum(cajas) && esNum(sin) && sin > 0) return `${suma} (${fmtAR(sin)} de ${fmtAR(cajas)} cajas sin dato)`
+  return `${suma} (las cajas no lo informaron)`
 }
 
 const NOTA_CALC = { 'Local': 'Venta del mes menos los demás canales' }
 
-export default function PanelDatos({ reporte, pagina, data, puedeEditar, cerradoMes, ocupado, onGuardar, onError, nombreLocal }) {
+// `interno`: equipo DC. En un mes abierto edita lo automático, lo cargado a mano
+// y lo que falta; en uno cerrado solo completa lo que la foto no trae (FALTA) y
+// corrige o quita lo que se completó después (A MANO). El servidor lo valida igual.
+export default function PanelDatos({ reporte, pagina, data, interno, cerradoMes, ocupado, onGuardar, onError, nombreLocal }) {
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [nuevoImporte, setNuevoImporte] = useState(null)
   const [claveImporte, setClaveImporte] = useState(0)
@@ -135,6 +136,9 @@ export default function PanelDatos({ reporte, pagina, data, puedeEditar, cerrado
 
   const l = pagina?.local ? reporte.locales.find((x) => x.local === pagina.local) : null
   const mesesCerrados = new Set(data.cierres.map((c) => c.mes))
+  const abierto = (mes) => !mesesCerrados.has(mes)
+  // Fuentes que se pueden tocar según el mes.
+  const tocable = (mes, d) => (abierto(mes) ? ['auto', 'mano', 'falta'] : ['mano', 'falta']).includes(d.fuente)
 
   if (!pagina || pagina.tipo === 'portada' || pagina.tipo === 'contraportada') {
     return <PanelVacio texto="Esta hoja no tiene datos para editar." />
@@ -146,7 +150,7 @@ export default function PanelDatos({ reporte, pagina, data, puedeEditar, cerrado
 
   // Fila editable: etiqueta, dato, fuente. `mes` es el mes del dato.
   const fila = ({ clave, etiqueta, mes, dato, d, nota }) => {
-    const editable = puedeEditar && !mesesCerrados.has(mes) && ['auto', 'mano', 'falta'].includes(d.fuente) && !ocupado
+    const editable = interno && tocable(mes, d) && !ocupado
     const original = d.fuente === 'mano' ? (d.original ?? null) : d.fuente === 'auto' ? d.valor : null
     const quitar = !esNum(original) && d.fuente === 'mano' && dato.startsWith('canal:')
     const guardar = (valor) => onGuardar({ local: l.local, mes, dato, valor, original })
@@ -154,7 +158,7 @@ export default function PanelDatos({ reporte, pagina, data, puedeEditar, cerrado
       <tr key={clave}>
         <td className="rve-dato">{etiqueta}</td>
         <td className="rve-valor">
-          {editable || (puedeEditar && !mesesCerrados.has(mes) && d.fuente !== 'calc' && d.fuente !== 'cerrado')
+          {interno && tocable(mes, d)
             ? <CampoNum valor={d.valor} tieneCorreccion={d.fuente === 'mano'} disabled={!editable} etiqueta={`${etiqueta}, ${mesEnPalabras(mes)}`}
                 onGuardar={guardar} onRestaurar={() => guardar(null)} onError={onError} />
             : <span className={esNum(d.valor) && d.valor < 0 ? 'rve-neg' : undefined}>{verNum(d.valor)}</span>}
@@ -186,7 +190,7 @@ export default function PanelDatos({ reporte, pagina, data, puedeEditar, cerrado
         nota: c.fuente === 'calc' ? NOTA_CALC[c.nombre] : undefined,
       })),
     ]
-    if (puedeEditar && !mesesCerrados.has(mes)) {
+    if (interno && abierto(mes)) {
       const agregarCanal = (e, importeEnter) => {
         e?.preventDefault()
         const importe = importeEnter ?? nuevoImporte
@@ -230,7 +234,7 @@ export default function PanelDatos({ reporte, pagina, data, puedeEditar, cerrado
       <tr key={`h-${d.mes}`} className="rve-sub"><td colSpan={3}>{mesEnPalabras(d.mes)}</td></tr>,
       ...Object.entries(d.apps).map(([app, a]) => fila({
         clave: `${d.mes}:${app}`, etiqueta: `${app} · Tickets`, mes: d.mes, dato: `tickets:${app}`,
-        d: datoTickets(data, l.local, d.mes, app, a.tickets, mesesCerrados.has(d.mes)),
+        d: a.ticketsDato,
       })),
     ])
   }
@@ -239,8 +243,9 @@ export default function PanelDatos({ reporte, pagina, data, puedeEditar, cerrado
     <div className="rve-panel-int">
       <div className="rve-k">Datos de esta hoja</div>
       <div className="rve-titulo-panel">{nombreLocal(l.local)}</div>
-      {!puedeEditar && (
-        <div className="rve-solo-lectura">{cerradoMes ? 'Mes cerrado: los datos no se pueden editar.' : 'Solo el equipo DC puede corregir los datos.'}</div>
+      {!interno && <div className="rve-solo-lectura">Solo el equipo DC puede corregir los datos.</div>}
+      {interno && cerradoMes && (
+        <div className="rve-solo-lectura">Mes cerrado: lo que quedó en el cierre no se edita. Solo se completan los datos que faltan.</div>
       )}
       <table className="rve-tabla">{encabezado}<tbody>{cuerpo}</tbody></table>
       {agregar}
