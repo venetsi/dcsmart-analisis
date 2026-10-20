@@ -53,7 +53,7 @@ function issueSession (fastify, user, access) {
   const token = fastify.jwt.sign(
     { id: user.id, email: user.email, nombre: user.nombre, admin: access.admin, roles: access.roles },
     { expiresIn: '12h' })
-  return { token, user: { id: user.id, email: user.email, nombre: user.nombre, avatar_url: user.avatar_url, admin: access.admin } }
+  return { token, user: { id: user.id, email: user.email, nombre: user.nombre, avatar_url: user.avatar_url, admin: access.admin, roles: access.roles } }
 }
 
 export default async function (fastify) {

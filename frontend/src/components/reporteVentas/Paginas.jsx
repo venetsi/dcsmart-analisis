@@ -26,6 +26,9 @@ function mesCorto(mes) {
   return `${MESES[m - 1].slice(0, 3).toLowerCase()} ${String(a).slice(2)}`
 }
 
+// Nombre para mostrar de un local (el cliente puede definir uno; si no, el código).
+const nom = (reporte, l) => reporte.cliente?.nombres?.[l] || l
+
 const esNum = (v) => v != null && Number.isFinite(v)
 const neg = (v) => esNum(v) && v < 0
 
@@ -185,7 +188,7 @@ function Portada({ reporte, ...m }) {
       <div className="rv-portada-txt">
         <div className="rv-portada-tit">Reporte de Ventas</div>
         <div className="rv-portada-sub">{reporte.cliente?.nombre} · {mesEnPalabras(reporte.mes)}</div>
-        <div className="rv-portada-locales">{reporte.locales.map((l) => l.local).join(' · ')}</div>
+        <div className="rv-portada-locales">{reporte.locales.map((l) => nom(reporte, l.local)).join(' · ')}</div>
       </div>
       <div className="rv-portada-lema">Tu Rentabilidad, Nuestra Gestión</div>
     </Marco>
@@ -209,7 +212,7 @@ function Consolidado({ reporte, ...m }) {
   const anio = Number(reporte.mes.slice(0, 4))
   const locales = c.filas.map((f) => f.local)
   const barras = [...c.filas].sort((a, b) => (b.valor ?? -Infinity) - (a.valor ?? -Infinity))
-    .map((f) => ({ nombre: f.local, valor: f.valor, pct: f.inc }))
+    .map((f) => ({ nombre: nom(reporte, f.local), valor: f.valor, pct: f.inc }))
   const muchos = locales.length > 4 || c.historico.length > 9
   const hayAnt = c.historico.some((h) => esNum(h.anterior))
   return (
@@ -222,7 +225,7 @@ function Consolidado({ reporte, ...m }) {
               <thead><tr><th>Local</th><th>Importe</th><th>INC</th></tr></thead>
               <tbody>
                 {c.filas.map((f) => (
-                  <tr key={f.local}><td>{f.local}</td><td><Num v={f.valor} /></td><td><Num v={f.inc} pct /></td></tr>
+                  <tr key={f.local}><td>{nom(reporte, f.local)}</td><td><Num v={f.valor} /></td><td><Num v={f.inc} pct /></td></tr>
                 ))}
                 <tr className="rv-tot"><td>Total</td><td><Num v={c.total} /></td><td>{esNum(c.total) ? '100,00%' : '—'}</td></tr>
               </tbody>
@@ -238,7 +241,7 @@ function Consolidado({ reporte, ...m }) {
           <thead>
             <tr>
               <th>Período</th>
-              {locales.map((l) => <th key={l}>{l}</th>)}
+              {locales.map((l) => <th key={l}>{nom(reporte, l)}</th>)}
               <th>Total</th><th>Var % VMA</th>{hayAnt && <><th>{anio - 1}</th><th>vs {anio - 1}</th></>}
             </tr>
           </thead>
@@ -272,7 +275,7 @@ function Mes({ reporte, local: l, ...m }) {
   const hayCub = esNum(l.cubiertos.valor)
   const hayOrd = esNum(l.ordenes.valor)
   return (
-    <Marco {...m} titulo={l.local} sub="ventas por canal" derecha={mesEnPalabras(reporte.mes)}>
+    <Marco {...m} titulo={nom(reporte, l.local)} sub="ventas por canal" derecha={mesEnPalabras(reporte.mes)}>
       <div className="rv-cuerpo">
         <div className="rv-kpis">
           <Kpi k="Venta del mes"><Pesos v={l.venta.valor} /></Kpi>
@@ -322,7 +325,7 @@ function Historico({ reporte, local: l, ...m }) {
   const tOrd = suma(hist.map((h) => h.ordenes.valor))
   const rango = hist.length > 1 ? `${MESES[0]} – ${mesEnPalabras(reporte.mes)}` : mesEnPalabras(reporte.mes)
   return (
-    <Marco {...m} titulo={l.local} sub={`histórico ${anio}`} derecha={rango}>
+    <Marco {...m} titulo={nom(reporte, l.local)} sub={`histórico ${anio}`} derecha={rango}>
       <div className={`rv-cuerpo rv-hist rv-hist-${extra}`}>
         <table className={`rv-tabla rv-tabla-chica${extra === 2 ? ' rv-tabla-mini' : ''}`}>
           <thead>
@@ -371,11 +374,13 @@ function Historico({ reporte, local: l, ...m }) {
 
 function Delivery({ reporte, local: l, ...m }) {
   const anio = Number(reporte.mes.slice(0, 4))
+  // Solo los meses con algún dato de app: nada de filas enteras en "—".
+  const filas = l.delivery.filter((d) => Object.values(d.apps).some((a) => esNum(a.venta)))
   const apps = []
-  for (const d of l.delivery) for (const a of Object.keys(d.apps)) if (!apps.includes(a)) apps.push(a)
-  const muchas = apps.length > 3 || l.delivery.length > 9
+  for (const d of filas) for (const a of Object.keys(d.apps)) if (!apps.includes(a)) apps.push(a)
+  const muchas = apps.length > 3 || filas.length > 9
   return (
-    <Marco {...m} titulo={l.local} sub="delivery por aplicación" derecha={String(anio)}>
+    <Marco {...m} titulo={nom(reporte, l.local)} sub="delivery por aplicación" derecha={String(anio)}>
       <div className="rv-cuerpo">
         <table className={`rv-tabla rv-tabla-chica${muchas ? ' rv-tabla-mini' : ''}`}
           style={{ width: Math.min(1360, 520 + apps.length * 380) }}>
@@ -390,8 +395,8 @@ function Delivery({ reporte, local: l, ...m }) {
             </tr>
           </thead>
           <tbody>
-            {l.delivery.map((d, i) => (
-              <tr key={d.mes} className={i === l.delivery.length - 1 ? 'rv-cur' : undefined}>
+            {filas.map((d) => (
+              <tr key={d.mes} className={d.mes === reporte.mes ? 'rv-cur' : undefined}>
                 <td>{mesCorto(d.mes)}</td>
                 <td className="rv-fuerte"><Num v={d.total} /></td>
                 <td><Num v={d.varPct} pct /></td>
@@ -406,10 +411,10 @@ function Delivery({ reporte, local: l, ...m }) {
               </tr>
             ))}
             <tr className="rv-tot">
-              <td>Total</td><td><Num v={suma(l.delivery.map((d) => d.total).filter(esNum))} /></td><td />
+              <td>Total</td><td><Num v={suma(filas.map((d) => d.total).filter(esNum))} /></td><td />
               {apps.map((a) => {
                 // Meses en que la app vendió: la venta se suma; los tickets solo si están todos.
-                const conVenta = l.delivery.map((d) => d.apps[a]).filter((x) => esNum(x?.venta))
+                const conVenta = filas.map((d) => d.apps[a]).filter((x) => esNum(x?.venta))
                 return (
                   <Fragment key={a}>
                     <td className="rv-sep"><Num v={suma(conVenta.map((x) => x.venta))} /></td>
@@ -424,8 +429,8 @@ function Delivery({ reporte, local: l, ...m }) {
           {apps.slice(0, 4).map((a) => (
             <div key={a} className="rv-mini">
               <div className="rv-k">{a} · venta por mes</div>
-              <MiniTendencia serie={l.delivery.map((d) => ({ mes: d.mes, valor: d.apps[a]?.venta ?? null }))}
-                ancho={Math.floor(1360 / Math.min(apps.length, 4)) - 24} alto={l.delivery.length > 9 ? 90 : 110} />
+              <MiniTendencia serie={filas.map((d) => ({ mes: d.mes, valor: d.apps[a]?.venta ?? null }))}
+                ancho={Math.floor(1360 / Math.min(apps.length, 4)) - 24} alto={filas.length > 9 ? 90 : 110} />
             </div>
           ))}
         </div>

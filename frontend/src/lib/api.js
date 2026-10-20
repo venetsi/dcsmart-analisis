@@ -89,6 +89,18 @@ export const api = {
   guardarRegla: (body) => request('/informe/regla', { method: 'PUT', body }),
   guardarLocalInforme: (body) => request('/informe/local', { method: 'PUT', body }),
 
+  // Reporte de Ventas mensual por cliente (ver routes/reporte_ventas.js)
+  rvClientes: (grupo) => request(`/reporte-ventas/clientes${toQueryString({ grupo })}`),
+  rvGet: (id, mes) => request(`/reporte-ventas/${id}${toQueryString({ mes })}`),
+  rvPutValor: (id, body) => request(`/reporte-ventas/${id}/valor`, { method: 'PUT', body }),
+  rvRestaurar: (id, mes) => request(`/reporte-ventas/${id}/restaurar`, { method: 'POST', body: { mes } }),
+  rvCerrar: (id, mes, snapshot) => request(`/reporte-ventas/${id}/cerrar`, { method: 'POST', body: { mes, snapshot } }),
+  rvReabrir: (id, mes) => request(`/reporte-ventas/${id}/reabrir`, { method: 'POST', body: { mes } }),
+  rvCrearCliente: (body) => request('/reporte-ventas/clientes', { method: 'POST', body }),
+  rvGuardarCliente: (id, body) => request(`/reporte-ventas/clientes/${id}`, { method: 'PUT', body }),
+  rvPutRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'PUT', body }),
+  rvDelRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'DELETE', body }),
+
   askAi: (payload) => request('/ai', { method: 'POST', body: payload }),
 
   getUsers: (search) => request(`/access/users${toQueryString({ search })}`),
