@@ -7,9 +7,12 @@
 //   node scripts/importar-decks.mjs <carpeta> --aplicar [--pisar]
 //
 // La conexión sale de PGHOST / PGPORT / ANALYTICS_DB / PGUSER_APP / PGPASSWORD_APP
-// (no se lee ningún .env). Con ANALYTICS_DB = dcsmart_analytics (prod) se niega a
-// escribir salvo que se pase --prod. El mapa deck → cliente está en decks-mapa.json
-// (o --mapa <archivo>).
+// (no se lee ningún .env). Sin --prod se niega a escribir en prod: si ANALYTICS_DB
+// es dcsmart_analytics, si PGPORT es 5433 (el proxy de prod) o si, ya conectado,
+// current_database() no es ANALYTICS_DB o es dcsmart_analytics.
+// --pisar solo reemplaza meses cargados desde un deck (origen 'deck'); un mes
+// cerrado desde el reporte nunca se pisa. El mapa deck → cliente está en
+// decks-mapa.json (o --mapa <archivo>).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,7 +20,7 @@ import {
   leerTablas, interpretarHistorico, interpretarCanales, interpretarCanalesHorizontal,
   interpretarDelivery, interpretarMulti, norm,
 } from './decks.js'
-import { fmtAR } from '../../frontend/src/lib/reporteVentas.js'
+import { fmtAR, esApp } from '../../frontend/src/lib/reporteVentas.js'
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const args = process.argv.slice(2)
@@ -26,6 +29,7 @@ const valorDe = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] 
 const carpeta = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--mapa')
 const POR = 'importador-decks'
 const PROD_DB = 'dcsmart_analytics'
+const PROD_PORT = '5433'
 
 if (!carpeta) {
   console.error('Uso: node scripts/importar-decks.mjs [--listar] <carpeta> [--aplicar] [--pisar] [--mapa archivo]')
@@ -58,6 +62,7 @@ async function leerDeck(d) {
   const anio = Number(d.mes.slice(0, 4))
   const datos = {} // mes → local → { venta, cubiertos, ordenes, canales, tickets }
   const origen = {} // `${mes}|${local}|${campo}` → slide
+  const deliveryApps = {} // `${mes}|${local}` → apps de la tabla de delivery
   const sinMapear = [], diferencias = []
 
   // El mes del deck tiene que estar en algún título como 'SEPTIEMBRE 2026'.
@@ -68,19 +73,22 @@ async function leerDeck(d) {
   }
 
   const poner = (n, verificar, mes, local, campo, valor, sub) => {
-    if (valor == null) return
-    if (!d.locales.includes(local)) { sinMapear.push(`s${n}: local ${local} no está en el cliente`); return }
+    if (valor == null) return false
+    // Un deck no trae meses posteriores al suyo: si aparece uno, es un error de lectura.
+    if (mes > d.mes) { diferencias.push(`s${n}: ${local} ${mes} ${sub ? `${campo} ${sub}` : campo} ${fmt(valor)} es posterior al mes del deck (${d.mes}), no se carga`); return false }
+    if (!d.locales.includes(local)) { sinMapear.push(`s${n}: local ${local} no está en el cliente`); return false }
     const clave = `${mes}|${local}|${campo}${sub ? ':' + sub : ''}`
     const loc = ((datos[mes] ||= {})[local] ||= {})
     const actual = sub ? loc[campo]?.[sub] : loc[campo]
     if (actual != null) {
       if (Math.abs(actual - valor) > 1) diferencias.push(`${local} ${mes} ${sub ? `${campo} ${sub}` : campo}: s${origen[clave]} dice ${fmt(actual)}, s${n} dice ${fmt(valor)} (queda ${fmt(actual)})`)
-      return
+      return true // el dato ya está (de otra slide)
     }
-    if (verificar) { sinMapear.push(`s${n}: ${local} ${mes} ${sub ? `${campo} ${sub}` : campo} ${fmt(valor)} solo está en una slide de verificación, no se carga`); return }
+    if (verificar) { sinMapear.push(`s${n}: ${local} ${mes} ${sub ? `${campo} ${sub}` : campo} ${fmt(valor)} solo está en una slide de verificación, no se carga`); return false }
     if (sub) (loc[campo] ||= {})[sub] = valor
     else loc[campo] = valor
     origen[clave] = n
+    return true
   }
 
   const slides = [...d.slides.filter((s) => !s.verificar), ...d.slides.filter((s) => s.verificar)]
@@ -115,13 +123,23 @@ async function leerDeck(d) {
       r = interpretarDelivery(t.filas, { anio })
       for (const [m, apps] of Object.entries(r.meses)) {
         for (const [app, x] of Object.entries(apps)) {
-          poner(s.n, v, m, s.local, 'canales', x.venta, app)
+          if (poner(s.n, v, m, s.local, 'canales', x.venta, app)) (deliveryApps[`${m}|${s.local}`] ||= new Set()).add(app)
           poner(s.n, v, m, s.local, 'tickets', x.tickets, app)
         }
       }
     } else { diferencias.push(`s${s.n}: tipo desconocido ${s.tipo}`); continue }
     r.sinMapear.forEach((x) => sinMapear.push(`s${s.n}: ${x}`))
     r.diferencias.forEach((x) => diferencias.push(`s${s.n}: ${x}`))
+  }
+
+  // Qué canales son delivery en cada mes (la hoja de delivery del mes cerrado sale
+  // de acá): las apps de la tabla de delivery y los canales que son apps conocidas.
+  for (const [mes, locs] of Object.entries(datos)) {
+    for (const [local, loc] of Object.entries(locs)) {
+      if (!loc.canales) continue
+      const deTabla = deliveryApps[`${mes}|${local}`] || new Set()
+      loc.delivery = Object.keys(loc.canales).filter((c) => c !== 'Local' && (deTabla.has(c) || esApp(c)))
+    }
   }
 
   // Slides con tablas que el mapa no usa: se avisan.
@@ -151,6 +169,7 @@ for (const { d, datos, sinMapear, diferencias } of resultados) {
       const x = datos[m][l]
       if (x?.canales) console.log(`           canales ${l}: ${Object.entries(x.canales).map(([k, v]) => `${k} ${fmt(v)}`).join(', ')}`)
       if (x?.tickets) console.log(`           tickets ${l}: ${Object.entries(x.tickets).map(([k, v]) => `${k} ${fmt(v)}`).join(', ')}`)
+      if (x?.delivery?.length) console.log(`           delivery ${l}: ${x.delivery.join(', ')}`)
     }
   }
   console.log(`sinMapear (${sinMapear.length}):`)
@@ -168,12 +187,21 @@ if (!flag('--aplicar')) {
 // Escritura
 const db = process.env.ANALYTICS_DB
 if (!db) { console.error('Falta ANALYTICS_DB: no se escribe sin decir en qué base.'); process.exit(2) }
-if (db === PROD_DB && !flag('--prod')) { console.error(`ANALYTICS_DB=${PROD_DB} es PROD: no se escribe sin --prod.`); process.exit(2) }
+const esProd = flag('--prod')
+if (db === PROD_DB && !esProd) { console.error(`ANALYTICS_DB=${PROD_DB} es PROD: no se escribe sin --prod.`); process.exit(2) }
+if (String(process.env.PGPORT ?? '') === PROD_PORT && !esProd) { console.error(`PGPORT=${PROD_PORT} es el proxy de PROD: no se escribe sin --prod.`); process.exit(2) }
 const { default: pg } = await import('pg')
 const cfg = { host: process.env.PGHOST, port: Number(process.env.PGPORT || 5432), database: db, user: process.env.PGUSER_APP, password: process.env.PGPASSWORD_APP }
 console.log(`\nDestino: ${cfg.host}:${cfg.port}/${cfg.database} (usuario ${cfg.user})`)
 const client = new pg.Client(cfg)
 await client.connect()
+// La base a la que de verdad se conectó, no la que dice la variable.
+const real = (await client.query('SELECT current_database() AS d')).rows[0].d
+if (real !== db || (real === PROD_DB && !esProd)) {
+  console.error(`Conectado a "${real}" (ANALYTICS_DB=${db}): no se escribe${real === PROD_DB ? ' en PROD sin --prod' : ''}.`)
+  await client.end()
+  process.exit(2)
+}
 const pisar = flag('--pisar')
 try {
   for (const { d, datos } of resultados) {
@@ -188,14 +216,22 @@ try {
       const n = { nuevos: 0, pisados: 0, salteados: 0 }
       for (const mes of Object.keys(datos).sort()) {
         const snapshot = { locales: datos[mes] }
-        const previo = (await client.query('SELECT cerrado, origen FROM rv_cierre WHERE cliente_id = $1 AND mes = $2', [cli.id, mes])).rows[0]
-        if (previo && !pisar) { n.salteados++; console.log(`  ${d.cliente} ${mes}: ya existe (${previo.cerrado ? 'cerrado' : 'abierto'}, ${previo.origen}), no se pisa`); continue }
-        await client.query(
+        const previo = (await client.query('SELECT cerrado, origen FROM rv_cierre WHERE cliente_id = $1 AND mes = $2 FOR UPDATE', [cli.id, mes])).rows[0]
+        if (previo && (!pisar || previo.origen !== 'deck')) {
+          n.salteados++
+          console.log(`  ${d.cliente} ${mes}: ya existe (${previo.cerrado ? 'cerrado' : 'abierto'}, ${previo.origen}), no se pisa${pisar ? ' (--pisar solo reemplaza meses de deck)' : ''}`)
+          continue
+        }
+        // El WHERE repite el candado: un mes cerrado desde el reporte nunca se pisa.
+        const { rowCount } = await client.query(
           `INSERT INTO rv_cierre (cliente_id, mes, origen, snapshot, cerrado, cerrado_por, cerrado_at)
            VALUES ($1, $2, 'deck', $3, true, $4, now())
            ON CONFLICT (cliente_id, mes) DO UPDATE
-             SET origen = 'deck', snapshot = EXCLUDED.snapshot, cerrado = true, cerrado_por = EXCLUDED.cerrado_por, cerrado_at = now()`,
+             SET snapshot_anterior = rv_cierre.snapshot, snapshot = EXCLUDED.snapshot, cerrado = true,
+                 cerrado_por = EXCLUDED.cerrado_por, cerrado_at = now()
+           WHERE rv_cierre.origen = 'deck'`,
           [cli.id, mes, JSON.stringify(snapshot), POR])
+        if (!rowCount) { n.salteados++; continue }
         if (previo) n.pisados++; else n.nuevos++
       }
       await client.query('COMMIT')

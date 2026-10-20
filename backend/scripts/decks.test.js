@@ -162,3 +162,15 @@ test('leerTablas: celdas, celdas combinadas y título fuera de la tabla', async 
   assert.equal(t[0].titulo, 'HISTÓRICO & 2026')
   assert.deepEqual(t[0].filas, [['PERIODO','2.026',''], ['ene','52.338','']])
 })
+
+test('una celda con texto que no es número va a sinMapear, no se descarta en silencio', () => {
+  const h = interpretarHistorico([['PERIODO', '2.026', 'PERSONAS'], ['ene', '$ 37.005.243', 'N/A'], ['feb', '10', '#DIV/0!'], ['mar', '-', '5']], { anio: 2026 })
+  assert.equal(h.meses['2026-01'], undefined)
+  assert.ok(h.sinMapear.some((x) => x.includes('fila "ene"') && x.includes('"$ 37.005.243" no es un número')), h.sinMapear.join(' | '))
+  assert.equal(h.sinMapear.filter((x) => x.includes('no es un número')).length, 1) // N/A, #DIV/0! y '-' no avisan
+  const c = interpretarCanales([['Canal de Venta', 'Importe'], ['Local', '1O0'], ['Rappi', 'N/A'], ['Total', '100']])
+  assert.ok(c.sinMapear.some((x) => x.includes('fila "Local" importe: "1O0" no es un número')), c.sinMapear.join(' | '))
+  const d = interpretarDelivery([['PERIODO', 'Rappi', 'TICKET'], ['ene', '1.000', 'diez']], { anio: 2026 })
+  assert.deepEqual(d.meses['2026-01'], { Rappi: { venta: 1000 } })
+  assert.ok(d.sinMapear.some((x) => x.includes('tickets Rappi: "diez"')), d.sinMapear.join(' | '))
+})

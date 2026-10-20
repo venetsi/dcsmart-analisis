@@ -66,6 +66,16 @@ export const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, 
   .replace(/[`´’‘]/g, "'").replace(/\s+/g, ' ').trim().toUpperCase()
 
 const num = (s) => parseNumeroAR(typeof s === 'string' ? s.trim() : s)
+// Celdas que dicen "no hay dato" a propósito: no son un número ni un error.
+const SIN_DATO = /^(N\/?A|#DIV\/0!?|-+|—|–)$/i
+// num() que avisa: una celda con texto que no es un número va a sinMapear
+// (`donde` nombra fila y columna), no se descarta en silencio.
+function numAviso(celda, donde, sinMapear) {
+  const v = num(celda)
+  const t = String(celda ?? '').trim()
+  if (v == null && t && !SIN_DATO.test(t)) agregar(sinMapear, `${donde}: "${t}" no es un número, no se carga`)
+  return v
+}
 const vacia = (fila) => !fila || fila.every((c) => !String(c ?? '').trim())
 const esTotal = (s) => /^TOTAL(ES)?\b/.test(norm(s))
 const fmt = (n, d = 0) => fmtAR(n, d)
@@ -205,7 +215,7 @@ export function interpretarHistorico(filas, { anio } = {}) {
     if (vacia(fila)) continue
     const etiqueta = String(fila[p] ?? '').trim()
     const v = {}
-    for (const b of BASES) { const c = col(b); v[b] = c ? num(fila[c.i]) : null }
+    for (const b of BASES) { const c = col(b); v[b] = c ? numAviso(fila[c.i], `fila "${etiqueta}" ${c.h}`, sinMapear) : null }
     if (esTotal(etiqueta)) { leidas.push({ etiqueta, mes: null, total: true, fila, v }); continue }
     const mes = leerPeriodo(etiqueta, anio)
     if (!mes) { agregar(sinMapear, `fila "${etiqueta}"`); continue }
@@ -271,7 +281,7 @@ export function interpretarCanales(filas) {
   for (const fila of datos) {
     if (vacia(fila)) continue
     const nombre = String(fila[0] ?? '').trim()
-    const valor = num(fila[1])
+    const valor = numAviso(fila[1], `fila "${nombre}" importe`, sinMapear)
     if (esTotal(nombre)) {
       if (total != null) diferencias.push(`hay más de una fila ${nombre}`)
       else total = valor
@@ -307,13 +317,17 @@ export function interpretarCanalesHorizontal(filas) {
   if (!datos.length) return { canales, total: null, sinMapear: ['tabla sin filas de datos'], diferencias }
   datos.slice(1).forEach((f) => agregar(sinMapear, `fila "${f[0]}" (se lee solo la primera fila)`))
   const fila = datos[0]
-  const total = num(fila[1])
+  const total = numAviso(fila[1], `fila "${fila[0]}" total`, sinMapear)
   for (let i = 2; i < enc.length; i++) {
     const nombre = String(enc[i] ?? '').trim()
     const valor = num(fila[i])
     if (!nombre) { if (valor != null) agregar(sinMapear, `columna ${i + 1} sin encabezado`); continue }
     if (/USD|U\$S|DOLAR/.test(norm(nombre))) { agregar(sinMapear, `${nombre} (otra moneda, no se carga${valor != null ? `: ${fila[i]}` : ''})`); continue }
-    if (valor == null) { agregar(sinMapear, `${nombre} vacío`); continue }
+    if (valor == null) {
+      const t = String(fila[i] ?? '').trim()
+      agregar(sinMapear, t && !SIN_DATO.test(t) ? `fila "${fila[0]}" ${nombre}: "${t}" no es un número, no se carga` : `${nombre} vacío`)
+      continue
+    }
     canales[nombreCanal(nombre)] = valor
   }
   if (total == null) diferencias.push('no hay total en la fila')
@@ -366,11 +380,12 @@ export function interpretarDelivery(filas, { anio } = {}) {
     const total = esTotal(etiqueta)
     const mes = total ? null : leerPeriodo(etiqueta, anio)
     if (!total && !mes) { agregar(sinMapear, `fila "${etiqueta}"`); continue }
+    const aviso = (i, que) => numAviso(fila[i], `fila "${etiqueta}" ${que}`, sinMapear)
     const v = {
       totVenta: totVenta != null ? num(fila[totVenta]) : null,
       totTickets: totTickets != null ? num(fila[totTickets]) : null,
       apps: Object.fromEntries(apps.map((a) => [a.nombre, {
-        venta: num(fila[a.venta]), tickets: a.tickets != null ? num(fila[a.tickets]) : null, prom: a.prom != null ? num(fila[a.prom]) : null,
+        venta: aviso(a.venta, a.nombre), tickets: a.tickets != null ? aviso(a.tickets, `tickets ${a.nombre}`) : null, prom: a.prom != null ? num(fila[a.prom]) : null,
       }])),
     }
     leidas.push({ etiqueta, mes, total, fila, v })
