@@ -2,14 +2,15 @@
 // cada número, corrección a mano, descarga en PDF y cierre del mes.
 // El armado de los números vive en lib/reporteVentas.js; acá solo se juntan las piezas.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../lib/api.js'
 import { useGroup } from '../context/GroupContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import PageHeader from '../components/PageHeader.jsx'
-import { Hoja, mesEnPalabras } from '../components/reporteVentas/Paginas.jsx'
+import { Hoja, Mazo, mesEnPalabras } from '../components/reporteVentas/Paginas.jsx'
 import { msgError } from '../components/reporteVentas/errores.js'
 import PanelDatos from '../components/reporteVentas/PanelDatos.jsx'
-import { armarLocal, armarReporte, canalesAuto } from '../lib/reporteVentas.js'
+import { armarLocal, armarReporte, canalesAuto, snapshotDe } from '../lib/reporteVentas.js'
 import '../styles/reporte-editor.css'
 
 const ANCHO = 1456
@@ -102,7 +103,9 @@ export default function ReporteVentasPage() {
   const [paginaId, setPaginaId] = useState(null)
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
-  const [confirmar, setConfirmar] = useState(null) // 'restaurar'
+  const [confirmar, setConfirmar] = useState(null) // 'restaurar' | 'previo'
+  const [motivos, setMotivos] = useState([])
+  const [imprimir, setImprimir] = useState(null) // { borrador }
   const pedido = useRef(0)
 
   // ── clientes del grupo ──
@@ -125,7 +128,7 @@ export default function ReporteVentasPage() {
       if (mio === pedido.current) setData(d)
     } catch (e) { if (mio === pedido.current) setError(msgError(e)) }
   }, [clienteId, mes])
-  useEffect(() => { setData(null); setError(''); setConfirmar(null); recargar() }, [recargar])
+  useEffect(() => { setData(null); setError(''); setMotivos([]); setConfirmar(null); recargar() }, [recargar])
 
   const nombreLocal = useCallback((l) => data?.cliente?.nombres?.[l] || l, [data])
 
@@ -142,12 +145,18 @@ export default function ReporteVentasPage() {
 
   const cierre = data?.cierres.find((c) => c.mes === mes) || null
   const cerrado = !!cierre
+  const previoCerrado = !!data?.cierres.some((c) => c.mes === moverMes(mes, -1))
   const puedeEditar = interno && !cerrado
 
   const etiquetaHoja = (p) => {
     const n = p.local ? nombreLocal(p.local) : ''
     return { portada: 'Portada', consolidado: 'Consolidado', mes: `${n} · mes`, historico: `${n} · histórico`,
       delivery: `${n} · delivery`, contraportada: 'Contraportada' }[p.tipo]
+  }
+  const conNombres = (txt) => {
+    let t = txt.replace(/\d{4}-\d{2}/g, (m) => mesEnPalabras(m))
+    for (const l of data?.cliente?.locales || []) t = t.split(`${l}:`).join(`${nombreLocal(l)}:`)
+    return t
   }
 
   // ── guardar un dato ──
@@ -171,6 +180,47 @@ export default function ReporteVentasPage() {
     } catch (e) {
       setError(e?.status === 409 ? 'El mes está cerrado. Reabrilo para restaurar los valores.' : msgError(e))
     } finally { setOcupado(false) }
+  }
+
+  // ── descarga en PDF ──
+  useEffect(() => {
+    if (!imprimir || !reporte) return undefined
+    const anterior = document.title
+    document.title = `Reporte de Ventas - ${reporte.cliente.nombre} - ${mesEnPalabras(mes)}${imprimir.borrador ? ' (borrador)' : ''}`
+    const fin = () => {
+      document.title = anterior
+      document.body.classList.remove('imprimiendo-rv')
+      window.removeEventListener('afterprint', fin)
+      setImprimir(null)
+    }
+    window.addEventListener('afterprint', fin)
+    document.body.classList.add('imprimiendo-rv')
+    const t = setTimeout(() => window.print(), 80)
+    return () => { clearTimeout(t); window.removeEventListener('afterprint', fin); document.title = anterior; document.body.classList.remove('imprimiendo-rv') }
+  }, [imprimir])
+
+  const descargarBorrador = () => setImprimir({ borrador: true })
+  const descargarFinal = () => setImprimir({ borrador: false })
+
+  const cerrarMes = async (sinPreguntar = false) => {
+    setConfirmar(null)
+    setError('')
+    if (!reporte.puedeCerrar) { setMotivos(reporte.motivos); return }
+    setMotivos([])
+    if (!previoCerrado && !sinPreguntar) { setConfirmar('previo'); return }
+    setOcupado(true)
+    try {
+      await api.rvCerrar(clienteId, mes, snapshotDe(reporte))
+      await recargar()
+      setImprimir({ borrador: false })
+    } catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
+  }
+
+  const reabrir = async () => {
+    setError('')
+    setOcupado(true)
+    try { await api.rvReabrir(clienteId, mes); await recargar() }
+    catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
   }
 
   const sinClientes = clientes && clientes.length === 0
@@ -213,6 +263,15 @@ export default function ReporteVentasPage() {
               {puedeEditar && !confirmar && (
                 <button type="button" className="btn-sec" disabled={ocupado || !data} onClick={() => setConfirmar('restaurar')}>Restaurar originales</button>
               )}
+              {cerrado
+                ? <button type="button" className="btn-pri" disabled={!reporte} onClick={descargarFinal}>Descargar final</button>
+                : <button type="button" className="btn-sec" disabled={!reporte} onClick={descargarBorrador}>Descargar borrador</button>}
+              {interno && !cerrado && (
+                <button type="button" className="btn-pri" disabled={ocupado || !reporte} onClick={() => cerrarMes()}>Cerrar y descargar final</button>
+              )}
+              {interno && cerrado && (
+                <button type="button" className="btn-sec" disabled={ocupado} onClick={reabrir}>Reabrir mes</button>
+              )}
             </div>
           </section>
 
@@ -221,6 +280,19 @@ export default function ReporteVentasPage() {
               ¿Volver todos los datos de {mesEnPalabras(mes)} a sus valores originales? Las correcciones a mano se pierden (queda registro en el historial).
               <button type="button" className="btn-pri" onClick={restaurar}>Sí, restaurar</button>
               <button type="button" className="btn-sec" onClick={() => setConfirmar(null)}>No</button>
+            </div>
+          )}
+          {confirmar === 'previo' && (
+            <div className="rve-aviso rve-confirmar">
+              El mes anterior no está cerrado. ¿Cerrar {mesEnPalabras(mes)} igual?
+              <button type="button" className="btn-pri" onClick={() => cerrarMes(true)}>Sí, cerrar</button>
+              <button type="button" className="btn-sec" onClick={() => setConfirmar(null)}>Cancelar</button>
+            </div>
+          )}
+          {motivos.length > 0 && (
+            <div className="rve-aviso rve-motivos" role="alert">
+              <strong>No se puede cerrar {mesEnPalabras(mes)}:</strong>
+              <ul>{motivos.map((m) => <li key={m}>{conNombres(m)}</li>)}</ul>
             </div>
           )}
           {cerrado && (
@@ -251,6 +323,7 @@ export default function ReporteVentasPage() {
         </>
       )}
 
+      {imprimir && reporte && createPortal(<Mazo reporte={reporte} borrador={imprimir.borrador} imprimir />, document.body)}
     </div>
   )
 }

@@ -131,8 +131,8 @@
    con body.imprimiendo-rv se oculta la app (#root) y se muestra solo el mazo.
    Página con nombre (rv) para no chocar con los @page de global.css (A4) e informe.css. */
 .rv-print { display: none; }
-@page rv { size: 1456px 819px; margin: 0; }
 @media print {
+  @page rv { size: 1456px 819px !important; margin: 0 !important; }
   body.imprimiendo-rv #root { display: none !important; }
   body.imprimiendo-rv .rv-print { display: block !important; }
   body.imprimiendo-rv { background: #fff !important; margin: 0 !important; padding: 0 !important; }
