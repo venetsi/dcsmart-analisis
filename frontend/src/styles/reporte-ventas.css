@@ -1,0 +1,142 @@
+/* Reporte de Ventas mensual: hojas de 1456×819 que se imprimen en PDF.
+   Fondo claro, azul noche #0f1b2d, dorado #c9a24a, Montserrat (global.css).
+   Los selectores van con .rv-hoja delante para ganarle a las reglas de tabla de global.css. */
+
+.rv-hoja {
+  position: relative; width: 1456px; height: 819px; overflow: hidden; box-sizing: border-box;
+  background: #fff; color: #0f1b2d; font-family: 'Montserrat', system-ui, sans-serif;
+  font-size: 18px; line-height: 1.3; -webkit-font-smoothing: antialiased;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.rv-hoja * { box-sizing: border-box; }
+.rv-mazo .rv-hoja { margin: 0 auto 28px; box-shadow: 0 4px 24px rgba(0, 0, 0, .22); }
+
+/* encabezado y pie */
+.rv-hd { display: flex; justify-content: space-between; align-items: center; height: 86px; padding: 0 48px; border-bottom: 4px solid #c9a24a; }
+.rv-hd-tit { font-size: 27px; font-weight: 800; letter-spacing: .01em; }
+.rv-gold { color: #c9a24a; }
+.rv-k { font-size: 14px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #6b7689; }
+.rv-pie {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 40px; padding: 0 48px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; color: #8a93a6; border-top: 1px solid #eef0f4;
+}
+.rv-cuerpo { padding: 28px 48px 0; }
+
+/* indicadores */
+.rv-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.rv-kpis .rv-kpi { background: #f5f6f8; border-radius: 10px; padding: 20px 24px; border-top: 3px solid #0f1b2d; }
+.rv-kpis .rv-kpi:first-child { border-top-color: #c9a24a; }
+.rv-kpis-sec { margin-top: 16px; }
+.rv-kpis-sec .rv-kpi { padding: 14px 24px; border-top-width: 0; }
+.rv-big { font-size: 33px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 6px; white-space: nowrap; }
+.rv-big-chico { font-size: 26px; font-weight: 700; }
+.rv-neg { color: #b23a26; }
+.rv-nulo { color: #9aa3b2; }
+.rv-k-graf { margin-bottom: 14px; }
+
+/* tablas */
+.rv-hoja table.rv-tabla { width: 100%; border-collapse: collapse; font-size: 18px; font-variant-numeric: tabular-nums; margin-top: 18px; }
+.rv-hoja .rv-tabla th, .rv-hoja .rv-tabla td {
+  padding: 9px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid #eef0f4;
+  color: #0f1b2d; background: none; position: static;
+}
+.rv-hoja .rv-tabla thead th {
+  font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #6b7689;
+  border-bottom: 2px solid #0f1b2d;
+}
+.rv-hoja .rv-tabla th:first-child, .rv-hoja .rv-tabla td:first-child { text-align: left; padding-left: 0; }
+.rv-hoja .rv-tabla tbody tr:hover { background: none; }
+.rv-hoja .rv-tabla td .rv-neg { color: #b23a26; }
+.rv-hoja .rv-tabla td .rv-nulo { color: #9aa3b2; }
+.rv-hoja .rv-tabla tr.rv-tot td { font-weight: 800; border-top: 2px solid #0f1b2d; border-bottom: 0; }
+.rv-hoja .rv-tabla tr.rv-cur td { background: #faf5e8; font-weight: 700; }
+.rv-hoja .rv-tabla td.rv-fuerte { font-weight: 700; }
+.rv-hoja .rv-tabla td.rv-tenue { color: #6b7689; }
+.rv-hoja table.rv-tabla-chica { font-size: 16px; }
+.rv-hoja .rv-tabla-chica th, .rv-hoja .rv-tabla-chica td { padding: 7px 9px; }
+.rv-hoja table.rv-tabla-mini { font-size: 14.5px; }
+.rv-hoja .rv-tabla-mini th, .rv-hoja .rv-tabla-mini td { padding: 6px 7px; }
+.rv-hoja .rv-tabla-mini thead th { font-size: 11.5px; letter-spacing: .03em; }
+.rv-hoja .rv-tabla tr.rv-grupo th { border-bottom: 0; color: #0f1b2d; font-size: 14px; text-align: center; padding-bottom: 0; }
+.rv-hoja .rv-tabla .rv-sep { border-left: 1px solid #e3e6ec; }
+
+/* gráficos */
+.rv-svg { display: block; overflow: visible; font-family: 'Montserrat', system-ui, sans-serif; }
+.rv-svg-nom { font-size: 17px; font-weight: 600; fill: #0f1b2d; }
+.rv-svg-pct { font-size: 17px; font-weight: 700; fill: #0f1b2d; }
+.rv-svg-pct.rv-neg { fill: #b23a26; }
+.rv-svg-mes { font-size: 14px; font-weight: 600; fill: #6b7689; text-transform: capitalize; }
+.rv-svg-val { font-size: 14px; font-weight: 700; fill: #0f1b2d; }
+.rv-svg-ant { font-size: 12px; fill: #8a93a6; }
+.rv-svg-eje { font-size: 12px; fill: #8a93a6; }
+.rv-leyenda { display: flex; gap: 22px; font-size: 13px; color: #6b7689; margin: -6px 0 12px; }
+.rv-leyenda i { display: inline-block; vertical-align: middle; margin-right: 6px; }
+.rv-ley-act { width: 16px; height: 12px; border-radius: 2px; background: #0f1b2d; }
+.rv-ley-ant { width: 16px; height: 4px; background: #b9c1d0; }
+
+/* consolidado */
+.rv-consol { padding-top: 22px; }
+.rv-consol-arriba { display: grid; grid-template-columns: 330px 1fr 460px; gap: 48px; margin-bottom: 22px; align-items: start; }
+.rv-consol-arriba .rv-tabla { margin-top: 0; }
+.rv-hoja .rv-consol-arriba .rv-tabla th, .rv-hoja .rv-consol-arriba .rv-tabla td { padding-top: 6px; padding-bottom: 6px; }
+.rv-consol > .rv-tabla { margin-top: 0; }
+.rv-hoja .rv-consol > .rv-tabla td { padding-top: 5px; padding-bottom: 5px; }
+.rv-hoja .rv-consol > .rv-tabla-mini td { padding-top: 4px; padding-bottom: 4px; }
+
+/* mes */
+.rv-dos { display: grid; grid-template-columns: 1fr 600px; gap: 64px; margin-top: 36px; }
+.rv-dos > .rv-tabla { margin-top: 32px; align-self: start; }
+.rv-hoja .rv-dos > .rv-tabla { font-size: 20px; }
+.rv-hoja .rv-dos > .rv-tabla td { padding-top: 13px; padding-bottom: 13px; }
+
+/* histórico: la tabla se ensancha si suma columnas de cubiertos u órdenes */
+.rv-hist { display: grid; gap: 44px; padding-top: 22px; }
+.rv-hist-0 { grid-template-columns: 1fr 600px; }
+.rv-hist-1 { grid-template-columns: 1fr 500px; }
+.rv-hist-2 { grid-template-columns: 1fr 440px; gap: 32px; }
+.rv-hist > .rv-tabla { margin-top: 0; align-self: start; }
+
+/* delivery */
+.rv-minis { display: grid; gap: 24px; margin-top: 26px; }
+.rv-mini { border-top: 1px solid #eef0f4; padding-top: 12px; }
+.rv-mini .rv-k { margin-bottom: 4px; }
+.rv-mini-vacia { color: #9aa3b2; font-size: 18px; padding: 20px 0; }
+
+/* portada y contraportada */
+.rv-oscura { background: #0f1b2d; color: #f4efe4; }
+.rv-oscura .rv-pie { border-top-color: rgba(255, 255, 255, .08); color: rgba(244, 239, 228, .45); }
+.rv-portada-brillo { position: absolute; inset: 0; background: radial-gradient(circle at 88% 18%, rgba(201, 162, 74, .16), rgba(201, 162, 74, 0) 40%); }
+.rv-brillo-centro { background: radial-gradient(circle at 50% 45%, rgba(201, 162, 74, .12), rgba(201, 162, 74, 0) 45%); }
+.rv-portada-logo { position: absolute; left: 70px; top: 56px; width: 380px; height: auto; }
+.rv-portada-txt { position: absolute; left: 80px; top: 50%; transform: translateY(-38%); }
+.rv-portada-tit { font-size: 72px; font-weight: 800; line-height: 1.05; }
+.rv-portada-sub { font-size: 36px; font-weight: 600; color: #c9a24a; margin-top: 14px; }
+.rv-portada-locales { margin-top: 36px; font-size: 20px; color: #b9c1d0; letter-spacing: .02em; }
+.rv-portada-lema { position: absolute; right: 80px; bottom: 76px; font-size: 20px; color: #b9c1d0; }
+.rv-contra { position: absolute; inset: 0 0 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; }
+.rv-contra-logo { width: 560px; height: auto; }
+.rv-contra-lema { font-size: 40px; font-weight: 600; color: #c9a24a; letter-spacing: .01em; }
+
+/* marca de agua del borrador */
+.rv-marca {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-28deg);
+  font-size: 176px; font-weight: 800; letter-spacing: .12em; color: rgba(178, 58, 38, .10);
+  pointer-events: none; white-space: nowrap; user-select: none;
+}
+.rv-oscura .rv-marca { color: rgba(244, 239, 228, .08); }
+
+/* ═══════════════════════ PDF ═══════════════════════
+   Mismo patrón que informe.css: en pantalla el mazo de impresión no se ve; al imprimir
+   con body.imprimiendo-rv se oculta la app (#root) y se muestra solo el mazo.
+   Página con nombre (rv) para no chocar con los @page de global.css (A4) e informe.css. */
+.rv-print { display: none; }
+@media print {
+  @page rv { size: 1456px 819px !important; margin: 0 !important; }
+  body.imprimiendo-rv #root { display: none !important; }
+  body.imprimiendo-rv .rv-print { display: block !important; }
+  body.imprimiendo-rv { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  body.imprimiendo-rv::before { display: none !important; }
+  .rv-print .rv-hoja { page: rv; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
+  .rv-print .rv-hoja:last-child { page-break-after: auto; break-after: auto; }
+}

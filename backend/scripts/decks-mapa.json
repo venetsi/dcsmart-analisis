@@ -1,0 +1,85 @@
+[
+  { "archivo": "Reporte de Ventas - 878.pptx", "grupo": "GRUPO 878", "cliente": "878", "locales": ["878COOP"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "878COOP", "tipo": "historico" }, { "n": 2, "local": "878COOP", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas - ADA.pptx", "grupo": "GRUPO ADA", "cliente": "ADA", "locales": ["ADA"], "mes": "2026-09",
+    "slides": [ { "n": 2, "local": "ADA", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas - Acuario.pptx", "grupo": "GRUPO ACUARIO", "cliente": "Acuario", "locales": ["ACUARIO"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "ACUARIO", "tipo": "historico" }, { "n": 2, "local": "ACUARIO", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas - BUFE.pptx", "grupo": "BUFE", "cliente": "BUFE", "locales": ["BUFE"], "mes": "2026-09",
+    "slides": [ { "n": 2, "local": "BUFE", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas - Gran Bar Danzon.pptx", "grupo": "GRUPO BASA", "cliente": "Gran Bar Danzon", "locales": ["GRAN-DANZON"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "GRAN-DANZON", "tipo": "historico" }, { "n": 2, "local": "GRAN-DANZON", "tipo": "canales", "formato": "horizontal" } ] },
+
+  { "archivo": "Reporte de Ventas - Gran Latino.pptx", "grupo": "GRUPO LATINO", "cliente": "Gran Latino",
+    "locales": ["LATINO TACUARI 185", "LATINO TACUARI 84", "LATINO PASEO", "LATINO TUCUMAN"], "mes": "2026-09",
+    "slides": [
+      { "n": 3, "tipo": "multi", "columnas": { "TACUARI 185": "LATINO TACUARI 185", "TACUARI 84": "LATINO TACUARI 84", "PASEO": "LATINO PASEO", "Tucuman": "LATINO TUCUMAN" } },
+      { "n": 2, "tipo": "consolidado", "verificar": true, "columnas": { "Tacuari 185": "LATINO TACUARI 185", "Tacuari 84": "LATINO TACUARI 84", "Paseo Colon": "LATINO PASEO", "Tucuman": "LATINO TUCUMAN" } }
+    ] },
+
+  { "archivo": "Reporte de Ventas - Gris Gris.pptx", "grupo": "GRUPO GRIS GRIS", "cliente": "Gris Gris", "locales": ["GRIS GRIS"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "GRIS GRIS", "tipo": "historico" }, { "n": 2, "local": "GRIS GRIS", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas - Grupo Perros.pptx", "grupo": "GRUPO PERROS", "cliente": "Grupo Perros",
+    "locales": ["TOGNIS-CAFE", "TOGNIS-PIZZA", "EVELIA"], "mes": "2026-09",
+    "slides": [
+      { "n": 10, "local": "TOGNIS-CAFE", "tipo": "historico" },
+      { "n": 7, "local": "TOGNIS-CAFE", "tipo": "canales" },
+      { "n": 8, "local": "TOGNIS-CAFE", "tipo": "delivery" },
+      { "n": 5, "local": "TOGNIS-PIZZA", "tipo": "historico" },
+      { "n": 4, "local": "TOGNIS-PIZZA", "tipo": "canales" },
+      { "n": 13, "local": "EVELIA", "tipo": "historico" },
+      { "n": 12, "local": "EVELIA", "tipo": "canales" },
+      { "n": 3, "local": "TOGNIS-CAFE", "tipo": "historico", "verificar": true },
+      { "n": 2, "tipo": "consolidado", "verificar": true, "columnas": { "TOGNI'S CAFÉ": "TOGNIS-CAFE", "TOGNI'S PIZZA": "TOGNIS-PIZZA", "EVELIA": "EVELIA" } }
+    ] },
+
+  { "archivo": "Reporte de Ventas - LORETO.pptx", "grupo": "LORETO", "cliente": "Loreto", "locales": ["LORETO"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "LORETO", "tipo": "historico" }, { "n": 2, "local": "LORETO", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas - Mafia.pptx", "grupo": "GRUPO MAFIA", "cliente": "Mafia", "locales": ["MAFIA"], "mes": "2026-08",
+    "slides": [ { "n": 3, "local": "MAFIA", "tipo": "historico" }, { "n": 2, "local": "MAFIA", "tipo": "canales", "verificar": true } ] },
+
+  { "archivo": "Reporte de Ventas - Mono Gordo- Victor.pptx", "grupo": "GRUPO MONOS", "cliente": "Victor", "locales": ["VICTOR"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "VICTOR", "tipo": "historico" }, { "n": 2, "local": "VICTOR", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas 3 MONOS.pptx", "grupo": "GRUPO MONOS", "cliente": "3 Monos", "locales": ["3MONOS"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "3MONOS", "tipo": "historico" }, { "n": 2, "local": "3MONOS", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas ATT.pptx", "grupo": "GRUPO ATTE", "cliente": "ATT", "locales": ["ATTE"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "ATTE", "tipo": "historico" }, { "n": 2, "local": "ATTE", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas Cacho e Hijos - UAT.pptx", "grupo": "GRUPO MONOS", "cliente": "UAT", "locales": ["UAT"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "UAT", "tipo": "historico" }, { "n": 2, "local": "UAT", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas Club Lucero.pptx", "grupo": "GRUPO LUCERO", "cliente": "Club Lucero", "locales": ["LUCERO"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "LUCERO", "tipo": "historico" }, { "n": 2, "local": "LUCERO", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas Condarco.pptx", "grupo": "GRUPO CONDARCO", "cliente": "Condarco", "locales": ["CONDARCO"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "CONDARCO", "tipo": "historico" }, { "n": 2, "local": "CONDARCO", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas Don Aldo.pptx", "grupo": "GRUPO DON ALDO", "cliente": "Don Aldo", "locales": ["DON ALDO"], "mes": "2026-09",
+    "slides": [ { "n": 3, "local": "DON ALDO", "tipo": "historico" }, { "n": 2, "local": "DON ALDO", "tipo": "canales" } ] },
+
+  { "archivo": "Reporte de Ventas TiAmo.pptx", "grupo": "GRUPO PRITANY", "cliente": "TiAmo", "locales": ["SORELLINA", "TI AMO", "CAPRICHITO"], "mes": "2026-09",
+    "slides": [
+      { "n": 4, "local": "SORELLINA", "tipo": "historico" },
+      { "n": 6, "local": "TI AMO", "tipo": "historico" },
+      { "n": 8, "local": "CAPRICHITO", "tipo": "historico" },
+      { "n": 3, "tipo": "multi", "verificar": true, "columnas": { "LaSorellina": "SORELLINA", "TIAMO": "TI AMO", "CAPRICHITO": "CAPRICHITO" } },
+      { "n": 2, "tipo": "consolidado", "verificar": true, "columnas": { "La Sorellina": "SORELLINA", "Ti Amo": "TI AMO", "Caprichito": "CAPRICHITO" } }
+    ] },
+
+  { "archivo": "Reporte de Ventas Tita.pptx", "grupo": "GRUPO TITA", "cliente": "Tita", "locales": ["TITA", "TITA-CH"], "mes": "2026-09",
+    "slides": [
+      { "n": 4, "local": "TITA", "tipo": "historico" },
+      { "n": 3, "local": "TITA", "tipo": "canales" },
+      { "n": 7, "local": "TITA-CH", "tipo": "historico" },
+      { "n": 6, "local": "TITA-CH", "tipo": "canales" },
+      { "n": 2, "tipo": "consolidado", "verificar": true, "columnas": { "Tita - La Isla": "TITA", "Chacarita": "TITA-CH" } }
+    ] }
+]

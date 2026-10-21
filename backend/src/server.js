@@ -17,6 +17,7 @@ import datasetsRoutes from './routes/datasets.js'
 import aiRoutes from './routes/ai.js'
 import reporteManualRoutes from './routes/reporte_manual.js'
 import informeRoutes from './routes/informe.js'
+import reporteVentasRoutes from './routes/reporte_ventas.js'
 import tvRoutes from './routes/tv.js'
 
 // trustProxy: Cloud Run/Firebase Hosting están delante nuestro — sin esto, req.ip
@@ -59,6 +60,7 @@ await app.register(datasetsRoutes, { prefix: '/api/data' })
 await app.register(aiRoutes,       { prefix: '/api/ai' })
 await app.register(reporteManualRoutes, { prefix: '/api/reporte-manual' })
 await app.register(informeRoutes, { prefix: '/api/informe' })
+await app.register(reporteVentasRoutes, { prefix: '/api/reporte-ventas' })
 // Dashboard de la TV de oficina: si esta línea falta, la TV queda congelada en
 // "Sin conexión" sin que salte ninguna alarma (pasó del 25/09 al 05/10).
 await app.register(tvRoutes, { prefix: '/api/tv' })

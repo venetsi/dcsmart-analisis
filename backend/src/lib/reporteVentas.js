@@ -1,0 +1,70 @@
+// Reglas puras del Reporte de Ventas mensual (sin base ni red, para poder testearlas).
+
+export const okMes = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m || '')
+
+// Interno = personal de DCSMART. El is_admin de un usuario externo no cuenta.
+export const esInterno = (user) => {
+  const roles = Array.isArray(user?.roles) ? user.roles : []
+  return roles.includes('super_admin') || roles.includes('dcsmart')
+}
+
+// Datos que se pueden cargar a mano. "canal:Local" es calculado (venta - resto).
+export function normalizarDato (d) {
+  if (typeof d !== 'string') return null
+  if (d === 'venta' || d === 'cubiertos' || d === 'ordenes') return d
+  const m = /^(canal|tickets):(.+)$/s.exec(d)
+  if (!m) return null
+  const nombre = m[2].trim()
+  if (!nombre || nombre.length > 40) return null
+  if (m[1] === 'canal' && nombre === 'Local') return null
+  return `${m[1]}:${nombre}`
+}
+export const okDato = (d) => normalizarDato(d) !== null
+
+// Solo se cierra un mes ya terminado (en hora UTC, como el resto del sistema).
+export const mesCerrable = (mes, hoy = new Date()) => okMes(mes) && mes < hoy.toISOString().slice(0, 7)
+
+// Primer día de enero del año anterior a `mes`, y último día de `mes`.
+export function rangoReporte (mes) {
+  const [y, m] = mes.split('-').map(Number)
+  return { desde: `${y - 1}-01-01`, hasta: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) }
+}
+
+// Nombres para mostrar: { local: texto 1-60 }, solo de los locales del cliente.
+// undefined si no vino (no se toca); null si es inválido.
+export function nombresOk (v, locales) {
+  if (v === undefined) return undefined
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  const out = {}
+  for (const [k, t] of Object.entries(v)) {
+    if (!locales.includes(k)) continue
+    if (typeof t !== 'string') return null
+    const n = t.trim()
+    if (!n) continue
+    if (n.length > 60) return null
+    out[k] = n
+  }
+  return out
+}
+
+// Foto de un cierre: { locales: { L: {...} } }, con locales objeto (no arreglo).
+export function snapshotOk (s) {
+  const plano = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+  return plano(s) && plano(s.locales)
+}
+
+// ¿La foto del mes cerrado ya trae ese dato del local? Lo que trae no se edita
+// sin reabrir; lo que no trae se puede completar a mano. `dato` normalizado.
+export function datoEnSnapshot (snapshot, local, dato) {
+  const l = snapshot?.locales?.[local]
+  if (!l || typeof l !== 'object') return false
+  const m = /^(canal|tickets):(.+)$/s.exec(dato)
+  if (!m) return l[dato] != null
+  const grupo = m[1] === 'canal' ? l.canales : l.tickets
+  return grupo != null && typeof grupo === 'object' && grupo[m[2]] != null
+}
+
+// Las reglas por origen de caja son solo para la carga manual (DCSMART): las
+// cajas de TapTap o Fudo ya traen sus cobros por método y se contarían dos veces.
+export const ORIGEN_MANUAL = 'DCSMART'
+export const okOrigenRegla = (valor) => typeof valor === 'string' && valor.trim().toUpperCase() === ORIGEN_MANUAL
