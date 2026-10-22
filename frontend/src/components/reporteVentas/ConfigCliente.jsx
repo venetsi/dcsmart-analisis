@@ -12,6 +12,35 @@ import { msgError } from './errores.js'
 const ORIGEN_MANUAL = 'DCSMART'
 const esOrigenManual = (o) => String(o ?? '').trim().toUpperCase() === ORIGEN_MANUAL
 
+// Logo que sube el usuario: se achica en el navegador (PNG, conserva transparencia) hasta que
+// pese menos que el límite del servidor, así no importa si la imagen original es enorme.
+const LOGO_MAX_CHARS = 380 * 1024
+const LOGO_TIPOS = ['image/png', 'image/jpeg', 'image/webp']
+function achicarLogo(archivo) {
+  return new Promise((resolve, reject) => {
+    if (!LOGO_TIPOS.includes(archivo.type)) { reject(new Error('El logo tiene que ser una imagen PNG, JPG o WEBP.')); return }
+    const url = URL.createObjectURL(archivo)
+    const img = new Image()
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No pudimos leer esa imagen.')) }
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let lado = 640
+      for (;;) {
+        const k = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight))
+        const c = document.createElement('canvas')
+        c.width = Math.max(1, Math.round(img.naturalWidth * k))
+        c.height = Math.max(1, Math.round(img.naturalHeight * k))
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
+        const data = c.toDataURL('image/png')
+        if (data.length <= LOGO_MAX_CHARS) { resolve(data); return }
+        if (lado <= 120) { reject(new Error('El logo es demasiado pesado: probá con otra imagen.')); return }
+        lado = Math.round(lado * 0.75)
+      }
+    }
+    img.src = url
+  })
+}
+
 const verMonto = (v) => (v == null || !Number.isFinite(v) ? '—' : fmtAR(v, Number.isInteger(v) ? 0 : 2))
 
 // Una fila de regla: lo que cobró/entró, a qué canal va y si es delivery.
@@ -52,6 +81,7 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
   const [nombre, setNombre] = useState(cliente?.nombre ?? grupo ?? '')
   const [elegidos, setElegidos] = useState(cliente?.locales ?? [])
   const [nombres, setNombres] = useState(cliente?.nombres ?? {})
+  const [logos, setLogos] = useState(cliente?.logos ?? {})
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [guardado, setGuardado] = useState(false)
@@ -60,7 +90,8 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
     setNombre(cliente?.nombre ?? grupo ?? '')
     setElegidos(cliente?.locales ?? [])
     setNombres(cliente?.nombres ?? {})
-  }, [cliente?.id, cliente?.nombre, cliente?.locales, cliente?.nombres, grupo])
+    setLogos(cliente?.logos ?? {})
+  }, [cliente?.id, cliente?.nombre, cliente?.locales, cliente?.nombres, cliente?.logos, grupo])
 
   // Los locales del grupo salen de la misma consulta que usa el Informe Mensual.
   useEffect(() => {
@@ -83,6 +114,15 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
   const limpiarNombres = (locales) => Object.fromEntries(
     Object.entries(nombres).map(([k, v]) => [k, (v || '').trim()]).filter(([k, v]) => v && locales.includes(k)))
 
+  const elegirLogo = (local, archivo) => {
+    if (!archivo) return
+    setError('')
+    achicarLogo(archivo)
+      .then((data) => { setLogos((l) => ({ ...l, [local]: data })); setGuardado(false) })
+      .catch((e) => setError(e.message))
+  }
+  const quitarLogo = (local) => { setLogos((l) => { const n = { ...l }; delete n[local]; return n }); setGuardado(false) }
+
   const crear = () => correr(async () => {
     const creado = await api.rvCrearCliente({ grupo, nombre: grupo, locales: opciones })
     await onGuardado(creado.id)
@@ -92,7 +132,7 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
     if (!nombre.trim()) { setError('Escribí el nombre del cliente.'); return }
     if (!elegidos.length) { setError('Elegí al menos un local.'); return }
     const locales = opciones.filter((l) => elegidos.includes(l))
-    await api.rvGuardarCliente(cliente.id, { nombre: nombre.trim(), locales, nombres: limpiarNombres(locales) })
+    await api.rvGuardarCliente(cliente.id, { nombre: nombre.trim(), locales, nombres: limpiarNombres(locales), logos: Object.fromEntries(Object.entries(logos).filter(([k]) => locales.includes(k))) })
     setGuardado(true)
     await onGuardado(cliente.id)
   })
@@ -170,6 +210,16 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
                       aria-label={`Nombre de ${l} en el reporte`}
                       onChange={(e) => { setNombres((n) => ({ ...n, [l]: e.target.value })); setGuardado(false) }} />
                     <small>{(nombres[l] ?? '').length}/60</small>
+                  </div>
+                  <div className="rve-config-logo">
+                    {logos[l] ? <img src={logos[l]} alt={`Logo de ${nombres[l] || l}`} /> : <span className="rve-chico">Sin logo</span>}
+                    <label className={`btn-sec rve-logo-btn${elegidos.includes(l) ? '' : ' rve-logo-off'}`}>
+                      {logos[l] ? 'Cambiar logo' : 'Subir logo'}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={!elegidos.includes(l)}
+                        aria-label={`Logo de ${nombres[l] || l}`}
+                        onChange={(e) => { elegirLogo(l, e.target.files?.[0]); e.target.value = '' }} />
+                    </label>
+                    {logos[l] && <button type="button" className="btn-sec" onClick={() => quitarLogo(l)}>Quitar</button>}
                   </div>
                 </div>
               ))}

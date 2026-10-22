@@ -6,7 +6,7 @@
 // (lib/reporteVentas.js); acá solo se juntan las piezas.
 
 import {
-  okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla,
+  okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk, logosOk, snapshotOk, datoEnSnapshot, okOrigenRegla,
 } from '../lib/reporteVentas.js'
 
 const txt = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -25,6 +25,8 @@ const numOk = (v) => typeof v === 'number' && Number.isFinite(v)
 const numONull = (v) => v === null || numOk(v)
 const MSG_INTERNO = 'Solo el equipo DC puede editar el reporte.'
 const MSG_CERRADO = 'El mes está cerrado. Reabrilo para hacer cambios.'
+const MSG_LOGO = 'Cada logo debe ser una imagen PNG, JPG o WEBP de hasta 400 KB.'
+const BODY_CLIENTE = 4 * 1024 * 1024
 const MSG_EN_CIERRE = 'Ese dato quedó guardado en el cierre del mes. Reabrilo para cambiarlo.'
 
 // Nombre de 1 a 80 caracteres, recortado (null si no sirve).
@@ -44,7 +46,7 @@ export default async function (fastify) {
   fastify.get('/clientes', { preHandler: [fastify.authenticate] }, async (req) => {
     const grupo = txt(req.query.grupo)
     const { rows } = await db.query(
-      `SELECT id, grupo, nombre, locales, nombres FROM rv_cliente
+      `SELECT id, grupo, nombre, locales, nombres, logos FROM rv_cliente
         WHERE ($1 = '' OR grupo = $1) ORDER BY grupo, nombre`, [grupo])
     return rows
   })
@@ -56,7 +58,7 @@ export default async function (fastify) {
     const mes = req.query.mes
     if (!Number.isInteger(id) || id <= 0 || !okMes(mes)) return reply.code(400).send({ error: 'id y mes (YYYY-MM) requeridos' })
 
-    const cli = (await db.query('SELECT id, grupo, nombre, locales, nombres FROM rv_cliente WHERE id = $1', [id])).rows[0]
+    const cli = (await db.query('SELECT id, grupo, nombre, locales, nombres, logos FROM rv_cliente WHERE id = $1', [id])).rows[0]
     if (!cli) return reply.code(404).send({ error: 'Cliente no encontrado' })
 
     const { desde, hasta } = rangoReporte(mes)
@@ -135,7 +137,7 @@ export default async function (fastify) {
   const pre = { preHandler: [fastify.authenticate, interno] }
   const quien = (req) => req.user.email || req.user.nombre || String(req.user.id)
   const idDe = (req) => { const n = Number(req.params.id); return Number.isInteger(n) && n > 0 ? n : null }
-  const getCli = async (id) => (await db.query('SELECT id, grupo, nombre, locales, nombres FROM rv_cliente WHERE id = $1', [id])).rows[0]
+  const getCli = async (id) => (await db.query('SELECT id, grupo, nombre, locales, nombres, logos FROM rv_cliente WHERE id = $1', [id])).rows[0]
   const mesCerrado = async (c, id, mes) =>
     (await c.query('SELECT 1 FROM rv_cierre WHERE cliente_id = $1 AND mes = $2 AND cerrado', [id, mes])).rowCount > 0
   // Foto del mes si está cerrado (null si está abierto), bloqueada hasta el fin de la transacción.
@@ -244,17 +246,20 @@ export default async function (fastify) {
   })
 
   // ---- Clientes ----
-  fastify.post('/clientes', pre, async (req, reply) => {
+  fastify.post('/clientes', { ...pre, bodyLimit: BODY_CLIENTE }, async (req, reply) => {
     const grupo = txt(req.body?.grupo)
     const nombre = nombreOk(req.body?.nombre)
     const locales = localesOk(req.body?.locales)
     if (!grupo || !nombre || !locales) return reply.code(400).send({ error: 'Faltan el grupo, el nombre (hasta 80 caracteres) o los locales.' })
     const nombres = nombresOk(req.body?.nombres, locales)
     if (nombres === null) return reply.code(400).send({ error: 'Los nombres de los locales deben ser texto de hasta 60 caracteres.' })
+    const logos = logosOk(req.body?.logos, locales)
+    if (logos === null) return reply.code(400).send({ error: MSG_LOGO })
     try {
       const { rows } = await db.query(
-        `INSERT INTO rv_cliente (grupo, nombre, locales, nombres, creado_por) VALUES ($1,$2,$3,$4,$5)
-         RETURNING id, grupo, nombre, locales, nombres`, [grupo, nombre, locales, JSON.stringify(nombres ?? {}), quien(req)])
+        `INSERT INTO rv_cliente (grupo, nombre, locales, nombres, logos, creado_por) VALUES ($1,$2,$3,$4,$5,$6)
+         RETURNING id, grupo, nombre, locales, nombres, logos`,
+        [grupo, nombre, locales, JSON.stringify(nombres ?? {}), JSON.stringify(logos ?? {}), quien(req)])
       return rows[0]
     } catch (e) {
       if (e.code === '23505') return reply.code(409).send({ error: 'Ya existe un cliente con ese nombre en el grupo.' })
@@ -262,21 +267,26 @@ export default async function (fastify) {
     }
   })
 
-  fastify.put('/clientes/:id', pre, async (req, reply) => {
+  fastify.put('/clientes/:id', { ...pre, bodyLimit: BODY_CLIENTE }, async (req, reply) => {
     const id = idDe(req)
     const nombre = nombreOk(req.body?.nombre)
     const locales = localesOk(req.body?.locales)
     if (!id || !nombre || !locales) return reply.code(400).send({ error: 'Faltan el nombre (hasta 80 caracteres) o los locales.' })
     const nombres = nombresOk(req.body?.nombres, locales)
     if (nombres === null) return reply.code(400).send({ error: 'Los nombres de los locales deben ser texto de hasta 60 caracteres.' })
+    const logos = logosOk(req.body?.logos, locales)
+    if (logos === null) return reply.code(400).send({ error: MSG_LOGO })
     try {
-      // Sin `nombres` en el pedido se conservan los que había (solo de los locales que siguen).
+      // Sin `nombres` o `logos` en el pedido se conservan los que había (solo de los locales que siguen).
       const { rows } = await db.query(
         `UPDATE rv_cliente SET nombre = $2, locales = $3,
                 nombres = COALESCE($4::jsonb, (SELECT COALESCE(jsonb_object_agg(k, v), '{}'::jsonb)
-                                                 FROM jsonb_each(nombres) AS e(k, v) WHERE k = ANY($3)))
+                                                 FROM jsonb_each(nombres) AS e(k, v) WHERE k = ANY($3))),
+                logos = COALESCE($5::jsonb, (SELECT COALESCE(jsonb_object_agg(k, v), '{}'::jsonb)
+                                               FROM jsonb_each(logos) AS e(k, v) WHERE k = ANY($3)))
           WHERE id = $1
-         RETURNING id, grupo, nombre, locales, nombres`, [id, nombre, locales, nombres === undefined ? null : JSON.stringify(nombres)])
+         RETURNING id, grupo, nombre, locales, nombres, logos`,
+        [id, nombre, locales, nombres === undefined ? null : JSON.stringify(nombres), logos === undefined ? null : JSON.stringify(logos)])
       if (!rows[0]) return reply.code(404).send({ error: 'Cliente no encontrado' })
       return rows[0]
     } catch (e) {

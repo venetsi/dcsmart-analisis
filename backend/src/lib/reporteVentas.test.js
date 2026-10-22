@@ -70,3 +70,16 @@ test('okOrigenRegla: solo DCSMART', () => {
   assert.equal(okOrigenRegla(' dcsmart '), true)
   for (const v of ['TAPTAP', 'FFUDO', 'FUDO', '', null]) assert.equal(okOrigenRegla(v), false)
 })
+
+test('logosOk: acepta imágenes en base64, descarta locales ajenos y rechaza lo demás', async () => {
+  const { logosOk } = await import('./reporteVentas.js')
+  const png = 'data:image/png;base64,iVBORw0KGgo='
+  const locales = ['A', 'B']
+  assert.equal(logosOk(undefined, locales), undefined)
+  assert.deepEqual(logosOk({ A: png, C: png, B: null }, locales), { A: png })
+  assert.equal(logosOk({ A: 'data:text/html;base64,PHNjcmlwdD4=' }, locales), null)
+  assert.equal(logosOk({ A: 'https://x.com/logo.png' }, locales), null)
+  assert.equal(logosOk({ A: 'data:image/svg+xml;base64,PHN2Zz4=' }, locales), null)
+  assert.equal(logosOk({ A: `data:image/png;base64,${'A'.repeat(400 * 1024)}` }, locales), null)
+  assert.equal(logosOk([png], locales), null)
+})

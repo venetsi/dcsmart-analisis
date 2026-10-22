@@ -149,7 +149,7 @@ test('consolidado de Grupo Perros sep-26', () => {
   assert.deepEqual(r.paginas.map((p) => [p.tipo, p.local]), [
     ['portada', undefined], ['consolidado', undefined],
     ['mes', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'],
-    ['mes', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'],
+    ['mes', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'],
     ['mes', 'EVELIA'], ['historico', 'EVELIA'],
     ['contraportada', undefined]])
   assert.equal(new Set(r.paginas.map((p) => p.id)).size, r.paginas.length)
@@ -242,4 +242,16 @@ test('mes cerrado: la foto dice qué canales son delivery (Ecommerce incluido)',
   const noDel = [{ ...cierres[0], snapshot: { locales: { 'TOGNIS-CAFE': { ...cierres[0].snapshot.locales['TOGNIS-CAFE'], delivery: ['Cheaf'] } } } }]
   const l3 = armarLocal({ local: 'TOGNIS-CAFE', mes: '2026-08', auto: { meses: {}, canales: {} }, valores: [], cierres: noDel })
   assert.deepEqual(Object.keys(l3.delivery.find((d) => d.mes === '2026-08').apps), ['Cheaf'])
+})
+test('con año anterior, cada local suma una hoja aparte de comparación después del histórico', () => {
+  const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: { '2025-09': { venta: 1 }, '2026-09': { venta: 200 } }, canales: {} },
+    valores: [], cierres: [{ mes: '2025-09', origen: 'deck', snapshot: { locales: { P: { venta: 100 } } } }] })
+  const r = armarReporte({ cliente: { nombre: 'P', locales: ['P'] }, mes: '2026-09', porLocal: { P: l }, cierres: [], hoy: HOY })
+  assert.deepEqual(r.paginas.map((p) => p.tipo), ['portada', 'mes', 'historico', 'comparativo', 'contraportada'])
+  assert.equal(new Set(r.paginas.map((p) => p.id)).size, r.paginas.length)
+})
+test('sin ventas del año anterior no hay hoja de comparación', () => {
+  const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: { '2026-09': { venta: 200 } }, canales: {} }, valores: [], cierres: [] })
+  const r = armarReporte({ cliente: { nombre: 'P', locales: ['P'] }, mes: '2026-09', porLocal: { P: l }, cierres: [], hoy: HOY })
+  assert.ok(!r.paginas.some((p) => p.tipo === 'comparativo'))
 })

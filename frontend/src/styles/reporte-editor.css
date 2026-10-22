@@ -65,7 +65,11 @@
 .rve-config-sec p { font-size: 12.5px; color: var(--txt2); margin-bottom: 10px; line-height: 1.5; }
 .rve-chico { font-size: 11.5px !important; color: var(--txt3) !important; }
 .rve-config-locales { margin: 12px 0; display: grid; gap: 8px; }
-.rve-config-local { display: grid; grid-template-columns: 280px minmax(0, 320px); gap: 14px; align-items: center; }
+.rve-config-local { display: grid; grid-template-columns: 280px minmax(0, 320px) minmax(0, 360px); gap: 14px; align-items: center; }
+.rve-config-logo { display: flex; gap: 10px; align-items: center; }
+.rve-config-logo img { height: 40px; max-width: 110px; object-fit: contain; background: #fff; border: 1px solid #dfe3ea; border-radius: 6px; padding: 3px; }
+.rve-logo-btn { cursor: pointer; display: inline-block; }
+.rve-logo-off { opacity: .5; cursor: not-allowed; }
 .rve-check { display: flex; gap: 8px; align-items: center; font-size: 12.5px; font-weight: 600; }
 .rve-config-nombre { display: flex; flex-direction: column; gap: 2px; }
 .rve-config-btns { display: flex; gap: 12px; align-items: center; }
@@ -78,4 +82,5 @@
 .rve-regla-canal { display: flex; flex-direction: column; gap: 2px; }
 .rve-regla-del { display: flex; gap: 6px; align-items: center; font-size: 12px; }
 .rve-regla-btn { display: flex; gap: 8px; }
+@media (max-width: 1250px) { .rve-config-local { grid-template-columns: 280px minmax(0, 320px); } .rve-config-logo { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .rve-regla, .rve-config-local { grid-template-columns: 1fr; } }
