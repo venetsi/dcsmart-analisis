@@ -338,6 +338,10 @@ export function armarReporte({ cliente, mes, porLocal, hoy = new Date() }) {
   for (const l of locales) {
     paginas.push({ id: `mes:${l.local}`, tipo: 'mes', local: l.local })
     paginas.push({ id: `historico:${l.local}`, tipo: 'historico', local: l.local })
+    // La venta contra el año anterior va en su propia hoja; sin año anterior no hay qué comparar.
+    if (l.historico.some((h) => h.anterior != null && Number.isFinite(h.anterior))) {
+      paginas.push({ id: `comparativo:${l.local}`, tipo: 'comparativo', local: l.local })
+    }
     const hayDelivery = l.delivery.some((d) => Object.values(d.apps).some((a) => a.venta != null && a.venta !== 0))
     if (hayDelivery) paginas.push({ id: `delivery:${l.local}`, tipo: 'delivery', local: l.local })
   }

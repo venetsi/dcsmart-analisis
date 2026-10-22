@@ -143,6 +143,9 @@ export default function PanelDatos({ reporte, pagina, data, interno, cerradoMes,
   if (!pagina || pagina.tipo === 'portada' || pagina.tipo === 'contraportada') {
     return <PanelVacio texto="Esta hoja no tiene datos para editar." />
   }
+  if (pagina.tipo === 'comparativo') {
+    return <PanelVacio texto="Esta hoja solo compara con el año anterior. Para corregir un número, usá la hoja histórico del local." />
+  }
   if (pagina.tipo === 'consolidado') {
     return <PanelVacio texto="El consolidado suma las ventas de cada local. Para corregir un número, elegí la hoja de ese local." />
   }

@@ -47,6 +47,23 @@ export function nombresOk (v, locales) {
   return out
 }
 
+// Logos de los locales ({ local: data URL }). undefined = no se tocan; null = inválido.
+// Solo imágenes en base64 (PNG, JPG o WEBP) de hasta 400 KB cada una.
+export const LOGO_MAX = 400 * 1024
+const RE_LOGO = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/
+export function logosOk (v, locales) {
+  if (v === undefined) return undefined
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  const out = {}
+  for (const [k, t] of Object.entries(v)) {
+    if (!locales.includes(k)) continue
+    if (t === null || t === '') continue
+    if (typeof t !== 'string' || t.length > LOGO_MAX || !RE_LOGO.test(t)) return null
+    out[k] = t
+  }
+  return out
+}
+
 // Foto de un cierre: { locales: { L: {...} } }, con locales objeto (no arreglo).
 export function snapshotOk (s) {
   const plano = (v) => !!v && typeof v === 'object' && !Array.isArray(v)

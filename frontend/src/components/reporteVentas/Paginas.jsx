@@ -10,7 +10,7 @@ import '../../styles/reporte-ventas.css'
 
 const NAVY = '#0f1b2d'
 const GOLD = '#c9a24a'
-const GRIS = '#b9c1d0'
+const ANTERIOR = '#6f8fbf' // año anterior: azul acero, se distingue del azul marino del año actual
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto',
   'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -73,11 +73,11 @@ function Barras({ filas, ancho = 600, alto = 72 }) {
   )
 }
 
-// Venta mes a mes del año: barra del año actual y una marca fina con el año anterior.
+// Venta mes a mes del año (sin comparación): una barra por mes, el último en dorado.
 function BarrasAnio({ filas, ancho = 600, alto = 560 }) {
   const etiqueta = 52
   const margenDer = 120
-  const max = Math.max(0, ...filas.flatMap((f) => [f.venta, f.anterior]).filter(esNum))
+  const max = Math.max(0, ...filas.map((f) => f.venta).filter(esNum))
   const fila = alto / Math.max(filas.length, 1)
   const util = ancho - etiqueta - margenDer
   const x = (v) => etiqueta + (max > 0 && esNum(v) && v > 0 ? (util * v) / max : 0)
@@ -85,24 +85,49 @@ function BarrasAnio({ filas, ancho = 600, alto = 560 }) {
     <svg className="rv-svg" width={ancho} height={alto} viewBox={`0 0 ${ancho} ${alto}`}>
       {filas.map((f, i) => {
         const y = i * fila
-        const barra = Math.min(22, fila * 0.42)
+        const barra = Math.min(26, fila * 0.5)
         const ult = i === filas.length - 1
         return (
           <g key={f.mes}>
-            <text x={0} y={y + fila * 0.42} className="rv-svg-mes">{mesCorto(f.mes).slice(0, 3)}</text>
+            <text x={0} y={y + fila * 0.5} className="rv-svg-mes">{mesCorto(f.mes).slice(0, 3)}</text>
             {esNum(f.venta) && f.venta > 0 && (
-              <rect x={etiqueta} y={y + fila * 0.42 - barra * 0.75} width={x(f.venta) - etiqueta} height={barra} rx={3}
+              <rect x={etiqueta} y={y + fila * 0.5 - barra * 0.6} width={x(f.venta) - etiqueta} height={barra} rx={3}
                 fill={ult ? GOLD : NAVY} />
             )}
-            <text x={x(f.venta) + 8} y={y + fila * 0.42 + barra * 0.1} className="rv-svg-val">
+            <text x={x(f.venta) + 8} y={y + fila * 0.5 + 5} className="rv-svg-val">
               {esNum(f.venta) ? fmtAR(f.venta) : '—'}
             </text>
-            {esNum(f.anterior) && f.anterior > 0 && (
-              <>
-                <rect x={etiqueta} y={y + fila * 0.42 + barra * 0.45} width={x(f.anterior) - etiqueta} height={4} rx={1} fill={GRIS} />
-                <text x={x(f.anterior) + 8} y={y + fila * 0.42 + barra * 0.45 + 6} className="rv-svg-ant">{fmtAR(f.anterior)}</text>
-              </>
-            )}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+// Venta del año contra el año anterior, mes a mes: dos barras gruesas por mes, cada una con su importe.
+function BarrasComparativo({ filas, ancho = 1360, alto = 560 }) {
+  const etiqueta = 64
+  const margenDer = 130
+  const max = Math.max(0, ...filas.flatMap((f) => [f.venta, f.anterior]).filter(esNum))
+  const fila = alto / Math.max(filas.length, 1)
+  const barra = Math.min(20, (fila - 10) / 2)
+  const util = ancho - etiqueta - margenDer
+  const largo = (v) => (max > 0 && esNum(v) && v > 0 ? (util * v) / max : 0)
+  const barraDe = (y, v, color, claseVal) => (
+    <>
+      {largo(v) > 0 && <rect x={etiqueta} y={y} width={largo(v)} height={barra} rx={3} fill={color} />}
+      <text x={etiqueta + largo(v) + 8} y={y + barra * 0.5 + 5} className={claseVal}>{esNum(v) ? fmtAR(v) : '—'}</text>
+    </>
+  )
+  return (
+    <svg className="rv-svg" width={ancho} height={alto} viewBox={`0 0 ${ancho} ${alto}`}>
+      {filas.map((f, i) => {
+        const y0 = i * fila + (fila - (2 * barra + 3)) / 2
+        return (
+          <g key={f.mes}>
+            <text x={0} y={y0 + barra + 6} className="rv-svg-mes">{mesCorto(f.mes).slice(0, 3)}</text>
+            {barraDe(y0, f.venta, NAVY, 'rv-svg-val')}
+            {barraDe(y0 + barra + 3, f.anterior, ANTERIOR, 'rv-svg-ant')}
           </g>
         )
       })}
@@ -181,10 +206,17 @@ function Kpi({ k, children, chico = false }) {
 // Hojas
 
 function Portada({ reporte, ...m }) {
+  // Logos de los locales que lo tienen cargado, en el orden de las hojas.
+  const logos = reporte.locales.map((l) => ({ local: l.local, src: reporte.cliente?.logos?.[l.local] })).filter((x) => x.src)
   return (
     <Marco {...m} oscura>
       <div className="rv-portada-brillo" />
       <LogoDcManagement className="rv-portada-logo" />
+      {logos.length > 0 && (
+        <div className={`rv-portada-logos rv-logos-${Math.min(logos.length, 4)}`}>
+          {logos.map((x) => <img key={x.local} src={x.src} alt={`Logo de ${nom(reporte, x.local)}`} />)}
+        </div>
+      )}
       <div className="rv-portada-txt">
         <div className="rv-portada-tit">Reporte de Ventas</div>
         <div className="rv-portada-sub">{reporte.cliente?.nombre} · {mesEnPalabras(reporte.mes)}</div>
@@ -326,7 +358,7 @@ function Historico({ reporte, local: l, ...m }) {
   const rango = hist.length > 1 ? `${MESES[0]} – ${mesEnPalabras(reporte.mes)}` : mesEnPalabras(reporte.mes)
   return (
     <Marco {...m} titulo={nom(reporte, l.local)} sub={`histórico ${anio}`} derecha={rango}>
-      <div className={`rv-cuerpo rv-hist rv-hist-${extra}`}>
+      <div className={`rv-cuerpo rv-hist ${hayAnt ? 'rv-hist-solo' : `rv-hist-${extra}`}`}>
         <table className={`rv-tabla rv-tabla-chica${extra === 2 ? ' rv-tabla-mini' : ''}`}>
           <thead>
             <tr>
@@ -356,17 +388,32 @@ function Historico({ reporte, local: l, ...m }) {
             </tr>
           </tbody>
         </table>
-        <div>
-          <div className="rv-k rv-k-graf">{hayAnt ? `Venta ${anio} vs ${anio - 1}` : `Venta ${anio}`}</div>
-          {hayAnt && (
-            <div className="rv-leyenda">
-              <span><i className="rv-ley-act" /> {anio}</span>
-              <span><i className="rv-ley-ant" /> {anio - 1}</span>
-            </div>
-          )}
-          <BarrasAnio filas={hist.map((h) => ({ mes: h.mes, venta: h.venta.valor, anterior: h.anterior }))}
-            ancho={extra === 2 ? 440 : extra === 1 ? 500 : 600} alto={Math.min(560, hist.length * 62)} />
+        {!hayAnt && (
+          <div>
+            <div className="rv-k rv-k-graf">{`Venta ${anio}`}</div>
+            <BarrasAnio filas={hist.map((h) => ({ mes: h.mes, venta: h.venta.valor }))}
+              ancho={extra === 2 ? 440 : extra === 1 ? 500 : 600} alto={Math.min(560, hist.length * 62)} />
+          </div>
+        )}
+      </div>
+    </Marco>
+  )
+}
+
+// Hoja aparte: la venta del año contra el año anterior, mes a mes.
+function Comparativo({ reporte, local: l, ...m }) {
+  const anio = Number(reporte.mes.slice(0, 4))
+  const hist = l.historico
+  const rango = hist.length > 1 ? `${MESES[0]} – ${mesEnPalabras(reporte.mes)}` : mesEnPalabras(reporte.mes)
+  return (
+    <Marco {...m} titulo={nom(reporte, l.local)} sub={`venta ${anio} vs ${anio - 1}`} derecha={rango}>
+      <div className="rv-cuerpo rv-comp">
+        <div className="rv-leyenda rv-leyenda-grande">
+          <span><i className="rv-ley-act" /> {anio}</span>
+          <span><i className="rv-ley-ant" /> {anio - 1}</span>
         </div>
+        <BarrasComparativo filas={hist.map((h) => ({ mes: h.mes, venta: h.venta.valor, anterior: h.anterior }))}
+          alto={Math.min(560, Math.max(hist.length, 6) * 54)} />
       </div>
     </Marco>
   )
@@ -439,7 +486,7 @@ function Delivery({ reporte, local: l, ...m }) {
   )
 }
 
-const HOJAS = { portada: Portada, consolidado: Consolidado, mes: Mes, historico: Historico, delivery: Delivery, contraportada: Contraportada }
+const HOJAS = { portada: Portada, consolidado: Consolidado, mes: Mes, historico: Historico, comparativo: Comparativo, delivery: Delivery, contraportada: Contraportada }
 
 // Una hoja según pagina.tipo. `local` (LocalMes) es opcional: si no viene se busca
 // por pagina.local. `numero` también: si no viene sale de la posición en reporte.paginas.

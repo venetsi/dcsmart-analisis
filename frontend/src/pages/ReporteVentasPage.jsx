@@ -157,6 +157,7 @@ export default function ReporteVentasPage() {
   const etiquetaHoja = (p) => {
     const n = p.local ? nombreLocal(p.local) : ''
     return { portada: 'Portada', consolidado: 'Consolidado', mes: `${n} · mes`, historico: `${n} · histórico`,
+      comparativo: `${n} · vs año anterior`,
       delivery: `${n} · delivery`, contraportada: 'Contraportada' }[p.tipo]
   }
   const conNombres = (txt) => {

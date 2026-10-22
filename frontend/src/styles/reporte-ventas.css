@@ -68,12 +68,14 @@
 .rv-svg-pct.rv-neg { fill: #b23a26; }
 .rv-svg-mes { font-size: 14px; font-weight: 600; fill: #6b7689; text-transform: capitalize; }
 .rv-svg-val { font-size: 14px; font-weight: 700; fill: #0f1b2d; }
-.rv-svg-ant { font-size: 12px; fill: #8a93a6; }
+.rv-svg-ant { font-size: 14px; font-weight: 700; fill: #4d6a99; }
 .rv-svg-eje { font-size: 12px; fill: #8a93a6; }
 .rv-leyenda { display: flex; gap: 22px; font-size: 13px; color: #6b7689; margin: -6px 0 12px; }
 .rv-leyenda i { display: inline-block; vertical-align: middle; margin-right: 6px; }
 .rv-ley-act { width: 16px; height: 12px; border-radius: 2px; background: #0f1b2d; }
-.rv-ley-ant { width: 16px; height: 4px; background: #b9c1d0; }
+.rv-ley-ant { width: 16px; height: 12px; border-radius: 2px; background: #6f8fbf; }
+.rv-leyenda-grande { font-size: 17px; font-weight: 600; margin: 0 0 14px; }
+.rv-comp { padding-top: 22px; }
 
 /* consolidado */
 .rv-consol { padding-top: 22px; }
@@ -95,6 +97,7 @@
 .rv-hist-0 { grid-template-columns: 1fr 600px; }
 .rv-hist-1 { grid-template-columns: 1fr 500px; }
 .rv-hist-2 { grid-template-columns: 1fr 440px; gap: 32px; }
+.rv-hist-solo { grid-template-columns: 1fr; }
 .rv-hist > .rv-tabla { margin-top: 0; align-self: start; }
 
 /* delivery */
@@ -109,7 +112,13 @@
 .rv-portada-brillo { position: absolute; inset: 0; background: radial-gradient(circle at 88% 18%, rgba(201, 162, 74, .16), rgba(201, 162, 74, 0) 40%); }
 .rv-brillo-centro { background: radial-gradient(circle at 50% 45%, rgba(201, 162, 74, .12), rgba(201, 162, 74, 0) 45%); }
 .rv-portada-logo { position: absolute; left: 70px; top: 56px; width: 380px; height: auto; }
-.rv-portada-txt { position: absolute; left: 80px; top: 50%; transform: translateY(-38%); }
+.rv-portada-txt { position: absolute; left: 80px; top: 50%; transform: translateY(-38%); max-width: 760px; }
+/* logos de los locales: sobre blanco para que se vean sea cual sea su color */
+.rv-portada-logos { position: absolute; right: 80px; top: 50%; transform: translateY(-50%); max-width: 520px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px 32px; padding: 32px 36px; background: #fff; border-radius: 18px; }
+.rv-portada-logos img { display: block; object-fit: contain; max-width: 100%; }
+.rv-logos-1 img { max-height: 240px; max-width: 440px; }
+.rv-logos-2 img { max-height: 150px; max-width: 400px; }
+.rv-logos-3 img, .rv-logos-4 img { max-height: 110px; max-width: 200px; }
 .rv-portada-tit { font-size: 72px; font-weight: 800; line-height: 1.05; }
 .rv-portada-sub { font-size: 36px; font-weight: 600; color: #c9a24a; margin-top: 14px; }
 .rv-portada-locales { margin-top: 36px; font-size: 20px; color: #b9c1d0; letter-spacing: .02em; }
