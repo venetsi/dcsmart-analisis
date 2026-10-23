@@ -3,8 +3,9 @@
 // datos reales; un null se muestra "—", nunca 0, y no hay texto interpretativo.
 // Cada hoja es un div.rv-hoja de 1456×819 px; los gráficos son SVG propio para que
 // impriman nítidos.
-import { Fragment } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { fmtAR } from '../../lib/reporteVentas.js'
+import { recortarLogo } from '../../lib/recorteLogo.js'
 import LogoDcManagement from '../informe/LogoDcManagement.jsx'
 import '../../styles/reporte-ventas.css'
 
@@ -205,19 +206,31 @@ function Kpi({ k, children, chico = false }) {
 // ---------------------------------------------------------------------------
 // Hojas
 
+// Logo sin los márgenes vacíos del archivo, para que se vea del tamaño del dibujo.
+function LogoLocal({ src, alt }) {
+  const [recortado, setRecortado] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    recortarLogo(src).then((r) => { if (vivo) setRecortado(r) })
+    return () => { vivo = false }
+  }, [src])
+  return <img src={recortado || src} alt={alt} />
+}
+
 function Portada({ reporte, ...m }) {
   // Logo de cada local, en el orden de las hojas: el que se subió para el reporte o,
   // si no hay, el que el local tiene cargado en gestión. Los que no tienen ninguno no salen.
   const logos = reporte.locales
     .map((l) => ({ local: l.local, src: reporte.cliente?.logos?.[l.local] || reporte.cliente?.logosLocal?.[l.local] }))
-    .filter((x) => x.src)
+    // Locales con el mismo logo (Gran Latino tiene uno solo para los cuatro): va una vez.
+    .filter((x, i, todos) => x.src && todos.findIndex((y) => y.src === x.src) === i)
   return (
     <Marco {...m} oscura>
       <div className="rv-portada-brillo" />
       <LogoDcManagement className="rv-portada-logo" />
       {logos.length > 0 && (
         <div className={`rv-portada-logos rv-logos-${Math.min(logos.length, 6)}`}>
-          {logos.map((x) => <img key={x.local} src={x.src} alt={`Logo de ${nom(reporte, x.local)}`} />)}
+          {logos.map((x) => <LogoLocal key={x.local} src={x.src} alt={`Logo de ${nom(reporte, x.local)}`} />)}
         </div>
       )}
       <div className="rv-portada-txt">
