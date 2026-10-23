@@ -119,6 +119,7 @@
 .rv-logos-1 img { max-height: 240px; max-width: 440px; }
 .rv-logos-2 img { max-height: 150px; max-width: 400px; }
 .rv-logos-3 img, .rv-logos-4 img { max-height: 110px; max-width: 200px; }
+.rv-logos-5 img, .rv-logos-6 img { max-height: 80px; max-width: 150px; }
 .rv-portada-tit { font-size: 72px; font-weight: 800; line-height: 1.05; }
 .rv-portada-sub { font-size: 36px; font-weight: 600; color: #c9a24a; margin-top: 14px; }
 .rv-portada-locales { margin-top: 36px; font-size: 20px; color: #b9c1d0; letter-spacing: .02em; }
