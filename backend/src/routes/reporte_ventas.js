@@ -5,6 +5,8 @@
 // base de gestión. El armado de los números vive en el frontend
 // (lib/reporteVentas.js); acá solo se juntan las piezas.
 
+import { Storage } from '@google-cloud/storage'
+import { crearLogosLocales } from '../lib/logosLocales.js'
 import {
   okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk, logosOk, snapshotOk, datoEnSnapshot, okOrigenRegla,
 } from '../lib/reporteVentas.js'
@@ -42,13 +44,24 @@ export default async function (fastify) {
   const DS = fastify.bqDataset
   const db = fastify.analyticsDb
 
+  // Logo que cada local tiene en gestión: el de respaldo cuando el cliente no subió uno propio.
+  const storage = new Storage()
+  const logosDe = crearLogosLocales({
+    consultar: async (grupo, locales) => (await fastify.dcsmartRo.query(
+      `SELECT l.nombre, l.logo_url FROM locales l JOIN apps a ON a.id = l.id_app
+        WHERE a.nombre = $1 AND l.nombre = ANY($2) AND l.logo_url IS NOT NULL`, [grupo, locales])).rows,
+    descargar: async ({ bucket, archivo }) => (await storage.bucket(bucket).file(archivo).download())[0],
+    log: fastify.log,
+  })
+  const conLogosLocal = async (cli) => (cli ? { ...cli, logosLocal: await logosDe(cli.grupo, cli.locales) } : cli)
+
   // GET /api/reporte-ventas/clientes?grupo= — los clientes definidos.
   fastify.get('/clientes', { preHandler: [fastify.authenticate] }, async (req) => {
     const grupo = txt(req.query.grupo)
     const { rows } = await db.query(
       `SELECT id, grupo, nombre, locales, nombres, logos FROM rv_cliente
         WHERE ($1 = '' OR grupo = $1) ORDER BY grupo, nombre`, [grupo])
-    return rows
+    return Promise.all(rows.map(conLogosLocal))
   })
 
   // GET /api/reporte-ventas/:id?mes=YYYY-MM — todo lo que la pantalla necesita,
@@ -122,7 +135,7 @@ export default async function (fastify) {
     }
 
     return {
-      cliente: cli, mes, auto,
+      cliente: await conLogosLocal(cli), mes, auto,
       valores: valores.rows.map((v) => ({ ...v, valor: numOrNull(v.valor), original: numOrNull(v.original) })),
       cierres: cierres.rows,
       reglas: reglas.rows,
@@ -260,7 +273,7 @@ export default async function (fastify) {
         `INSERT INTO rv_cliente (grupo, nombre, locales, nombres, logos, creado_por) VALUES ($1,$2,$3,$4,$5,$6)
          RETURNING id, grupo, nombre, locales, nombres, logos`,
         [grupo, nombre, locales, JSON.stringify(nombres ?? {}), JSON.stringify(logos ?? {}), quien(req)])
-      return rows[0]
+      return conLogosLocal(rows[0])
     } catch (e) {
       if (e.code === '23505') return reply.code(409).send({ error: 'Ya existe un cliente con ese nombre en el grupo.' })
       throw e
@@ -288,7 +301,7 @@ export default async function (fastify) {
          RETURNING id, grupo, nombre, locales, nombres, logos`,
         [id, nombre, locales, nombres === undefined ? null : JSON.stringify(nombres), logos === undefined ? null : JSON.stringify(logos)])
       if (!rows[0]) return reply.code(404).send({ error: 'Cliente no encontrado' })
-      return rows[0]
+      return conLogosLocal(rows[0])
     } catch (e) {
       if (e.code === '23505') return reply.code(409).send({ error: 'Ya existe un cliente con ese nombre en el grupo.' })
       throw e

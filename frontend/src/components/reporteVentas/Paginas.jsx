@@ -206,14 +206,17 @@ function Kpi({ k, children, chico = false }) {
 // Hojas
 
 function Portada({ reporte, ...m }) {
-  // Logos de los locales que lo tienen cargado, en el orden de las hojas.
-  const logos = reporte.locales.map((l) => ({ local: l.local, src: reporte.cliente?.logos?.[l.local] })).filter((x) => x.src)
+  // Logo de cada local, en el orden de las hojas: el que se subió para el reporte o,
+  // si no hay, el que el local tiene cargado en gestión. Los que no tienen ninguno no salen.
+  const logos = reporte.locales
+    .map((l) => ({ local: l.local, src: reporte.cliente?.logos?.[l.local] || reporte.cliente?.logosLocal?.[l.local] }))
+    .filter((x) => x.src)
   return (
     <Marco {...m} oscura>
       <div className="rv-portada-brillo" />
       <LogoDcManagement className="rv-portada-logo" />
       {logos.length > 0 && (
-        <div className={`rv-portada-logos rv-logos-${Math.min(logos.length, 4)}`}>
+        <div className={`rv-portada-logos rv-logos-${Math.min(logos.length, 6)}`}>
           {logos.map((x) => <img key={x.local} src={x.src} alt={`Logo de ${nom(reporte, x.local)}`} />)}
         </div>
       )}

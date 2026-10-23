@@ -212,9 +212,12 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
                     <small>{(nombres[l] ?? '').length}/60</small>
                   </div>
                   <div className="rve-config-logo">
-                    {logos[l] ? <img src={logos[l]} alt={`Logo de ${nombres[l] || l}`} /> : <span className="rve-chico">Sin logo</span>}
+                    {(logos[l] || cliente?.logosLocal?.[l])
+                      ? <img src={logos[l] || cliente.logosLocal[l]} alt={`Logo de ${nombres[l] || l}`} />
+                      : <span className="rve-chico">Sin logo</span>}
+                    {!logos[l] && cliente?.logosLocal?.[l] && <span className="rve-chico">Logo del local</span>}
                     <label className={`btn-sec rve-logo-btn${elegidos.includes(l) ? '' : ' rve-logo-off'}`}>
-                      {logos[l] ? 'Cambiar logo' : 'Subir logo'}
+                      {(logos[l] || cliente?.logosLocal?.[l]) ? 'Cambiar logo' : 'Subir logo'}
                       <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={!elegidos.includes(l)}
                         aria-label={`Logo de ${nombres[l] || l}`}
                         onChange={(e) => { elegirLogo(l, e.target.files?.[0]); e.target.value = '' }} />
