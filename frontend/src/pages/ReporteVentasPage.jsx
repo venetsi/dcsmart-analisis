@@ -345,7 +345,7 @@ export default function ReporteVentasPage() {
           {cerrado && (
             <div className="rve-cerrado">
               Mes cerrado por {cierre.cerrado_por || '—'}{cierre.cerrado_at ? ` el ${fecha(cierre.cerrado_at)}` : ''}.
-              {interno ? ' Lo que quedó en el cierre no se edita; los datos que faltan se pueden completar.' : ' No se puede editar.'}
+              {interno ? ' La venta y los canales del cierre no se editan; cubiertos, órdenes, tickets, observaciones y lo que falta, sí.' : ' No se puede editar.'}
             </div>
           )}
 
