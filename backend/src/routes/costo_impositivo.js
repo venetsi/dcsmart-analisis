@@ -106,16 +106,17 @@ export default async function (fastify) {
     if (!mes || !idLocal) return reply.code(400).send({ error: 'Falta el local o el mes.' })
     const [desde, hasta] = rango(mes)
     const { rows } = await ro.query(
-      `SELECT p.id, coalesce(p.periodo, p.fecha) AS fecha, p.id_tipo::text AS tipo, p.pv, p.nro::text AS nro,
+      `SELECT p.id, to_char(p.fecha, 'YYYY-MM-DD') AS fecha,
+              to_char(coalesce(p.periodo, p.fecha), 'YYYY-MM') AS periodo, p.id_tipo::text AS tipo, p.pv, p.nro::text AS nro,
               p.ingresa_egreso, coalesce(pr.nombre, pr.razon_social) AS proveedor, p.importe_neto AS neto,
               t.iva, t.perc_iva, t.perc_iibb, t.internos, t.perc_vieja, t.retencion
          FROM pagos p ${IMPUESTOS_POR_PAGO}
          LEFT JOIN proveedores pr ON pr.id = p.id_proveedor
         WHERE p.id_local = $1 AND ${FILTRO_FACTURAS}
-        ORDER BY p.ingresa_egreso DESC, coalesce(p.periodo, p.fecha), p.nro
+        ORDER BY p.ingresa_egreso DESC, p.fecha, p.nro
         LIMIT 2000`, [idLocal, TIPOS, desde, hasta])
     return rows.map((r) => ({
-      id: r.id, fecha: r.fecha, tipo: r.tipo, pv: r.pv, nro: r.nro,
+      id: r.id, fecha: r.fecha, periodo: r.periodo, tipo: r.tipo, pv: r.pv, nro: r.nro,
       sentido: r.ingresa_egreso ? 'INGRESO' : 'EGRESO', proveedor: r.proveedor,
       neto: num(r.neto), iva: num(r.iva), percIva: num(r.perc_iva), percIibb: num(r.perc_iibb),
       internos: num(r.internos), percVieja: num(r.perc_vieja), retencion: num(r.retencion)

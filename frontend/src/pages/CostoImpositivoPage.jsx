@@ -122,7 +122,10 @@ function Facturas({ local, mes }) {
         <tbody>
           {filas.map((f) => (
             <tr key={f.id} className={f.sentido === 'INGRESO' ? 'ci-ingreso' : ''}>
-              <td>{fmtDate(f.fecha)}</td>
+              <td>
+                {fmtDate(f.fecha)}
+                {f.fecha && f.fecha.slice(0, 7) !== f.periodo && <span className="ci-periodo" title="La factura es de otro mes pero se cargó con el período de este">período {f.periodo.slice(5, 7)}/{f.periodo.slice(2, 4)}</span>}
+              </td>
               <td>
                 <span className={`ci-tipo ${f.sentido === 'INGRESO' ? 'ing' : 'egr'}`}>{f.tipo}</span>
                 {f.pv != null && f.nro != null ? ` ${String(f.pv).padStart(5, '0')}-${String(f.nro).padStart(8, '0')}` : ''}
