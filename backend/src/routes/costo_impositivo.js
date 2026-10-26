@@ -40,7 +40,7 @@ const describir = (per) => (per.modo === 'mes'
 const num = (v) => (v === null || v === undefined ? 0 : Number(v))
 
 export default async function (fastify) {
-  const ro = fastify.dcsmartRo
+  const ro = fastify.gestionLectura
   const db = fastify.analyticsDb
 
   // GET /api/costo-impositivo?grupo=&mes=YYYY-MM  |  ?grupo=&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
