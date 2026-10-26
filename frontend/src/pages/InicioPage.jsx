@@ -51,7 +51,7 @@ export default function InicioPage() {
       <div className="quick-actions-grid">
         {TABLEROS.map(({ to, label, sub, Icon }, i) => (
           <Link key={to} to={to} className="quick-action-card" style={{ '--i': i }}>
-            {to === '/reporte-mensual' && <span className="qac-tag">Nuevo</span>}
+            {to === '/costo-impositivo' && <span className="qac-tag">Nuevo</span>}
             <div className="qac-icon"><Icon /></div>
             <div>
               <div className="qac-title">{label}</div>

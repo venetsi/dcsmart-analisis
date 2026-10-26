@@ -70,9 +70,7 @@ export const api = {
   getGrupos: () => request('/data/grupos'),
   getDashboard: (query) => request(`/data/dashboard${toQueryString(query)}`),
   getPyl: (query) => request(`/data/pyl${toQueryString(query)}`),
-  getResumenFinanciero: (query) => request(`/data/resumen-financiero${toQueryString(query)}`),
   getDatasetOptions: (dataset, query) => request(`/data/${dataset}/options${toQueryString(query)}`),
-  getDataset: (dataset, query) => request(`/data/${dataset}${toQueryString(query)}`),
   getEtlStatus: () => request('/data/etl/status'),
 
   // Reporte de Ventas Mensuales (P&L por tipo de comprobante)
@@ -103,7 +101,10 @@ export const api = {
   rvPutRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'PUT', body }),
   rvDelRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'DELETE', body }),
 
-  askAi: (payload) => request('/ai', { method: 'POST', body: payload }),
+  // periodo = { mes } o { desde, hasta }
+  ciGet: (grupo, periodo) => request(`/costo-impositivo${toQueryString({ grupo, ...periodo })}`),
+  ciFacturas: (idLocal, periodo) => request(`/costo-impositivo/facturas${toQueryString({ id_local: idLocal, ...periodo })}`),
+  ciPutLocal: (body) => request('/costo-impositivo/local', { method: 'PUT', body }),
 
   getUsers: (search) => request(`/access/users${toQueryString({ search })}`),
   updateUserAccess: (id, body) => request(`/access/users/${id}`, { method: 'PUT', body })

@@ -3,18 +3,18 @@
 // op:false = movimiento no operativo (tesorería, financiación, distribución) — se
 // muestra abajo de la línea y NO distorsiona el resultado operativo.
 const SECTIONS = [
-  { key: 'cmv', titulo: 'CMV — Costo de Mercadería Vendida', rubros: ['CMV Alimentos', 'CMV Bebidas', 'CMV MovStock', 'CMV MovStock B2B'], op: true, cmv: true },
-  { key: 'alquiler', titulo: 'Alquiler y Servicios', rubros: ['Fijos/Variables', 'Fijos/Variable'], op: true },
-  { key: 'generales', titulo: 'Gastos Generales', rubros: ['Publicidad', 'Descartables/Limpieza', 'Instalaciones/Otros'], op: true },
-  { key: 'financieros', titulo: 'Costos Financieros', rubros: ['Costos Financieros', 'Comisiones por Ventas'], op: true },
-  { key: 'labor', titulo: 'Sueldos y Cargas', rubros: ['Sueldos'], op: true, labor: true },
-  { key: 'honorarios', titulo: 'Honorarios', rubros: ['Honorarios'], op: true },
-  { key: 'eventos', titulo: 'Eventos', rubros: ['Eventos', 'Musicos'], op: true },
-  { key: 'impositivos', titulo: 'Impositivos', rubros: ['Impositivo'], op: true },
-  { key: 'otros', titulo: 'Otros gastos operativos', rubros: [], op: true, cajon: true },
-  { key: 'tesoreria', titulo: 'Movimientos de tesorería (Caja Mayor)', rubros: ['Caja Mayor', 'Local'], op: false },
-  { key: 'financiacion', titulo: 'Préstamos / Financiación', rubros: ['Plan de Pagos'], op: false, fin: true },
-  { key: 'distribucion', titulo: 'Socios / Dividendos', rubros: ['Socios', 'Aportes'], op: false }
+  { key: 'cmv', corto: 'CMV', titulo: 'CMV — Costo de Mercadería Vendida', rubros: ['CMV Alimentos', 'CMV Bebidas', 'CMV MovStock', 'CMV MovStock B2B'], op: true, cmv: true },
+  { key: 'alquiler', corto: 'Alquiler', titulo: 'Alquiler y Servicios', rubros: ['Fijos/Variables', 'Fijos/Variable'], op: true },
+  { key: 'generales', corto: 'Generales', titulo: 'Gastos Generales', rubros: ['Publicidad', 'Descartables/Limpieza', 'Instalaciones/Otros'], op: true },
+  { key: 'financieros', corto: 'Financieros', titulo: 'Costos Financieros', rubros: ['Costos Financieros', 'Comisiones por Ventas'], op: true },
+  { key: 'labor', corto: 'Sueldos', titulo: 'Sueldos y Cargas', rubros: ['Sueldos'], op: true, labor: true },
+  { key: 'honorarios', corto: 'Honorarios', titulo: 'Honorarios', rubros: ['Honorarios'], op: true },
+  { key: 'eventos', corto: 'Eventos', titulo: 'Eventos', rubros: ['Eventos', 'Musicos'], op: true },
+  { key: 'impositivos', corto: 'Impositivos', titulo: 'Impositivos', rubros: ['Impositivo'], op: true },
+  { key: 'otros', corto: 'Otros', titulo: 'Otros gastos operativos', rubros: [], op: true, cajon: true },
+  { key: 'tesoreria', corto: 'Tesorería', titulo: 'Movimientos de tesorería (Caja Mayor)', rubros: ['Caja Mayor', 'Local'], op: false },
+  { key: 'financiacion', corto: 'Préstamos', titulo: 'Préstamos / Financiación', rubros: ['Plan de Pagos'], op: false, fin: true },
+  { key: 'distribucion', corto: 'Socios', titulo: 'Socios / Dividendos', rubros: ['Socios', 'Aportes'], op: false }
 ]
 
 const rubroToSection = {}
@@ -68,10 +68,34 @@ export function waterfallSteps(pyl) {
   const t = pyl.totales
   const steps = [{ label: 'Ventas', tipo: 'ingreso', valor: t.ventas }]
   steps.push({ label: 'CMV', tipo: 'egreso', valor: -t.cmv })
-  steps.push({ label: 'Result. Bruto', tipo: 'subtotal', valor: t.resultadoBruto })
+  steps.push({ label: 'Bruto', tipo: 'subtotal', valor: t.resultadoBruto })
   for (const s of pyl.operativas.filter(s => !s.cmv)) {
-    steps.push({ label: s.titulo.split(' ')[0].replace('—', ''), tipo: 'egreso', valor: -s.total })
+    steps.push({ label: s.corto, tipo: 'egreso', valor: -s.total })
   }
-  steps.push({ label: 'Result. Econ.', tipo: 'resultado', valor: t.resultadoEconomico })
+  steps.push({ label: 'Resultado', tipo: 'resultado', valor: t.resultadoEconomico })
   return steps
+}
+
+// En qué se va la venta: cada sección operativa como % de las ventas, de mayor
+// a menor, y al final lo que queda (el resultado económico). Si los gastos
+// superan la venta, el resultado sale negativo y se marca aparte.
+export function repartoVentas(pyl) {
+  const filas = pyl.operativas
+    .filter(s => s.total)
+    .map(s => ({ key: s.key, label: s.corto, valor: s.total, pct: pyl.pct(s.total) }))
+    .sort((a, b) => b.valor - a.valor)
+  const r = pyl.totales.resultadoEconomico
+  return { filas, resultado: { valor: r, pct: pyl.pct(r) } }
+}
+
+// Variación porcentual contra otro período; null si no hay base para comparar.
+export function variacion(actual, anterior) {
+  if (!anterior || actual == null) return null
+  return +((actual - anterior) / Math.abs(anterior) * 100).toFixed(1)
+}
+
+// '2026-09' -> '2026-08' (y enero pasa al diciembre anterior).
+export function mesAnterior(mes) {
+  const [y, m] = mes.split('-').map(Number)
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
 }

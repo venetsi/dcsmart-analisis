@@ -16,16 +16,6 @@ function IcoDashboard() {
     </svg>
   )
 }
-function IcoPagos() {
-  return (
-    <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <polyline points="14 2 14 8 20 8"/>
-      <line x1="16" y1="13" x2="8" y2="13"/>
-      <line x1="16" y1="17" x2="8" y2="17"/>
-    </svg>
-  )
-}
 function IcoVentas() {
   return (
     <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -33,16 +23,6 @@ function IcoVentas() {
       <line x1="12" y1="20" x2="12" y2="4"/>
       <line x1="6" y1="20" x2="6" y2="14"/>
       <line x1="2" y1="20" x2="22" y2="20"/>
-    </svg>
-  )
-}
-function IcoCashflow() {
-  return (
-    <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 3v6h-6"/>
-      <path d="M21 9a9 9 0 0 0-15-6.7L3 5"/>
-      <path d="M7 21v-6h6"/>
-      <path d="M3 15a9 9 0 0 0 15 6.7l3-2.7"/>
     </svg>
   )
 }
@@ -66,11 +46,12 @@ function IcoReporteMensual() {
     </svg>
   )
 }
-function IcoResumenFin() {
+function IcoImpuestos() {
   return (
     <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9"/>
-      <path d="M12 7v5l3.5 2"/>
+      <path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-2-2z"/>
+      <line x1="15" y1="8" x2="9" y2="14"/>
+      <circle cx="9.5" cy="8.5" r="1"/><circle cx="14.5" cy="13.5" r="1"/>
     </svg>
   )
 }
@@ -102,17 +83,15 @@ function IcoInicio() {
   )
 }
 
-// Las mismas secciones de siempre; el orden sigue el recorrido del dinero:
-// resumen, lo que entra y sale, y los reportes que se arman con eso.
+// El resumen del período, el resultado del mes y los reportes que se arman
+// con eso. Pagos, Ventas, Cashflow y Resumen Financiero se sacaron (26/10):
+// lo que mostraban ya está en gestión y en estos tableros.
 export const TABLEROS = [
   { to: '/dashboard',       label: 'Dashboard',          sub: 'Ventas, pagos y CMV del período', Icon: IcoDashboard },
-  { to: '/pagos',           label: 'Pagos',              sub: 'Egresos por rubro y proveedor', Icon: IcoPagos },
-  { to: '/ventas',          label: 'Ventas',             sub: 'Venta por local, canal y turno', Icon: IcoVentas },
-  { to: '/cashflow',        label: 'Cashflow',           sub: 'Entradas y salidas de dinero', Icon: IcoCashflow },
   { to: '/pyl',             label: 'P&L',                sub: 'Resultado mensual por rubro', Icon: IcoPyl },
   { to: '/reporte-mensual', label: 'Informe Mensual',    sub: 'P&L, resumen y presentación del mes', Icon: IcoReporteMensual },
   { to: '/reporte-ventas',   label: 'Reporte de Ventas',  sub: 'Reporte mensual para el cliente, en PDF', Icon: IcoVentas },
-  { to: '/financiero',      label: 'Resumen Financiero', sub: 'Flujo, márgenes y rentabilidad', Icon: IcoResumenFin },
+  { to: '/costo-impositivo', label: 'Costo impositivo',   sub: 'IVA e IIBB a pagar e impuestos internos', Icon: IcoImpuestos },
 ]
 
 function iniciales(nombre, email) {
