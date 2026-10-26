@@ -11,7 +11,7 @@ import { Hoja, Mazo, mesEnPalabras } from '../components/reporteVentas/Paginas.j
 import { msgError } from '../components/reporteVentas/errores.js'
 import PanelDatos from '../components/reporteVentas/PanelDatos.jsx'
 import ConfigCliente from '../components/reporteVentas/ConfigCliente.jsx'
-import { armarLocal, armarReporte, canalesAuto, snapshotDe } from '../lib/reporteVentas.js'
+import { armarLocal, armarReporte, canalesAuto, snapshotDe, ticketsAuto } from '../lib/reporteVentas.js'
 import '../styles/reporte-editor.css'
 
 const ANCHO = 1456
@@ -33,6 +33,12 @@ const mesActual = () => moverMes(mesAnterior(), 1)
 const fecha = (iso) => (iso ? new Date(iso).toLocaleDateString('es-AR') : '')
 
 // Datos de la API → un LocalMes por local, con los canales automáticos de cada mes.
+// Tickets de cada app y la venta de las líneas que los traen, como los espera armarLocal.
+function ticketsDelMes(cantidades, reglas) {
+  const t = ticketsAuto({ cantidades, reglas })
+  return { tickets: t.tickets, ticketsBase: t.base }
+}
+
 function armarPorLocal(data) {
   const porLocal = {}
   for (const local of data.cliente.locales) {
@@ -46,8 +52,13 @@ function armarPorLocal(data) {
       canales[m] = canalesAuto({ detalles: a.detalles[m], cajasOrigen: a.cajasOrigen[m], reglas })
         .sort((x, y) => (y.valor ?? 0) - (x.valor ?? 0) || x.nombre.localeCompare(y.nombre))
     }
+    // Tickets de cada app: la cantidad de cobros que trae gestión, por mes.
+    const mesesAuto = { ...a.meses }
+    for (const [m, cantidades] of Object.entries(a.cantidades || {})) {
+      mesesAuto[m] = { ...mesesAuto[m], ...ticketsDelMes(cantidades, reglas) }
+    }
     porLocal[local] = armarLocal({
-      local, mes: data.mes, auto: { meses: a.meses, canales }, valores: data.valores, cierres: data.cierres,
+      local, mes: data.mes, auto: { meses: mesesAuto, canales }, valores: data.valores, cierres: data.cierres,
     })
   }
   return porLocal
@@ -137,7 +148,10 @@ export default function ReporteVentasPage() {
 
   const reporte = useMemo(() => {
     if (!data) return null
-    return armarReporte({ cliente: data.cliente, mes: data.mes, porLocal: armarPorLocal(data), hoy: new Date() })
+    return armarReporte({
+      cliente: data.cliente, mes: data.mes, porLocal: armarPorLocal(data), hoy: new Date(),
+      ipc: data.ipc || {}, observaciones: data.observaciones || {},
+    })
   }, [data])
 
   const pagina = useMemo(() => {
@@ -156,9 +170,9 @@ export default function ReporteVentasPage() {
 
   const etiquetaHoja = (p) => {
     const n = p.local ? nombreLocal(p.local) : ''
-    return { portada: 'Portada', consolidado: 'Consolidado', mes: `${n} · mes`, historico: `${n} · histórico`,
-      comparativo: `${n} · vs año anterior`,
-      delivery: `${n} · delivery`, contraportada: 'Contraportada' }[p.tipo]
+    return { portada: 'Portada', sintesis: 'Síntesis', consolidado: 'Venta por local', consolidadoHist: 'Histórico del grupo',
+      mes: `${n} · indicadores`, canales: `${n} · canales`, comparativo: `${n} · mes a mes`, historico: `${n} · histórico`,
+      delivery: `${n} · delivery`, acumulado: 'Acumulado del año', contraportada: 'Contraportada' }[p.tipo]
   }
   const conNombres = (txt) => {
     let t = txt.replace(/\d{4}-\d{2}/g, (m) => mesEnPalabras(m))
@@ -176,6 +190,22 @@ export default function ReporteVentasPage() {
       return true
     } catch (e) { setError(msgError(e)); return false } finally { setOcupado(false) }
   }, [clienteId, recargar])
+
+  // ── observación de una hoja ('' la borra) ──
+  const guardarObs = useCallback(async (paginaObs, texto) => {
+    setError('')
+    setOcupado(true)
+    try { await api.rvPutObs(clienteId, { mes, pagina: paginaObs, texto }); await recargar() }
+    catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
+  }, [clienteId, mes, recargar])
+
+  // ── inflación de un mes (null = volver a la de INDEC) ──
+  const guardarIpc = useCallback(async (mesIpc, variacion) => {
+    setError('')
+    setOcupado(true)
+    try { await api.rvPutIpc({ mes: mesIpc, variacion }); await recargar() }
+    catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
+  }, [recargar])
 
   const restaurar = async () => {
     setConfirmar(null)
@@ -326,7 +356,7 @@ export default function ReporteVentasPage() {
           {cerrado && (
             <div className="rve-cerrado">
               Mes cerrado por {cierre.cerrado_por || '—'}{cierre.cerrado_at ? ` el ${fecha(cierre.cerrado_at)}` : ''}.
-              {interno ? ' Lo que quedó en el cierre no se edita; los datos que faltan se pueden completar.' : ' No se puede editar.'}
+              {interno ? ' La venta y los canales del cierre no se editan; cubiertos, órdenes, tickets, observaciones y lo que falta, sí.' : ' No se puede editar.'}
             </div>
           )}
 
@@ -345,7 +375,8 @@ export default function ReporteVentasPage() {
               </div>
               <aside className="rve-panel">
                 <PanelDatos reporte={reporte} pagina={pagina} data={data} interno={interno} cerradoMes={cerrado}
-                  ocupado={ocupado} onGuardar={guardar} onError={setError} nombreLocal={nombreLocal} />
+                  ocupado={ocupado} onGuardar={guardar} onError={setError} nombreLocal={nombreLocal}
+                  onGuardarObs={guardarObs} onGuardarIpc={guardarIpc} />
               </aside>
             </div>
           )}

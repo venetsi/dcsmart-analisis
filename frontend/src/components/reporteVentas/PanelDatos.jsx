@@ -2,7 +2,7 @@
 // hoja con su valor y de dónde sale (automático, calculado, a mano, falta o cerrado).
 // Regla de oro: un dato que no está se ve "—" y FALTA, nunca 0.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { fmtAR, parseNumeroAR } from '../../lib/reporteVentas.js'
+import { datoLibre, fmtAR, parseNumeroAR } from '../../lib/reporteVentas.js'
 import { mesEnPalabras } from './Paginas.jsx'
 
 const esNum = (v) => v != null && Number.isFinite(v)
@@ -98,7 +98,7 @@ const Candado = () => (
 
 const ETIQUETAS = {
   auto: ['AUTOMÁTICO', 'rve-b-auto'], calc: ['CALCULADO', 'rve-b-calc'], mano: ['A MANO', 'rve-b-mano'],
-  falta: ['FALTA', 'rve-b-falta'], cerrado: ['CERRADO', 'rve-b-cerrado'],
+  falta: ['FALTA', 'rve-b-falta'], cerrado: ['CERRADO', 'rve-b-cerrado'], indec: ['INDEC', 'rve-b-auto'],
 }
 
 function Fuente({ d, nota }) {
@@ -111,6 +111,9 @@ function Fuente({ d, nota }) {
         <small>{d.por ? `por ${d.por}` : ''}{d.at ? ` el ${fechaCorta(d.at)}` : ''}</small>
       )}
       {d.fuente === 'falta' && d.parcial && <small className="rve-parcial">{textoParcial(d.parcial)}</small>}
+      {d.fuente === 'auto' && d.sinInformar > 0 && (
+        <small>sin {fmtAR(d.sinInformar)} {d.sinInformar === 1 ? 'caja que no lo informó' : 'cajas que no lo informaron'}; el promedio usa la venta de las demás</small>
+      )}
       {nota && <small>{nota}</small>}
     </div>
   )
@@ -125,10 +128,106 @@ function textoParcial({ valor, cajas, sin }) {
 
 const NOTA_CALC = { 'Local': 'Venta del mes menos los demás canales' }
 
+// Panel completo: la observación de la hoja arriba y sus datos abajo.
+export default function PanelDatos(props) {
+  const { pagina, reporte, interno, ocupado, onGuardarObs } = props
+  return (
+    <>
+      {pagina && (
+        <EditorObs key={pagina.id} texto={reporte.observaciones?.[pagina.id]?.texto || ''} interno={interno} ocupado={ocupado}
+          por={reporte.observaciones?.[pagina.id]?.actualizado_por} onGuardar={(t) => onGuardarObs(pagina.id, t)} />
+      )}
+      {pagina?.tipo === 'acumulado' ? <PanelIpc {...props} /> : <DatosHoja {...props} />}
+    </>
+  )
+}
+
+const OBS_MAX = 280
+
+// Observación opcional de la hoja: sale abajo, arriba del pie (hasta dos renglones).
+function EditorObs({ texto, interno, ocupado, por, onGuardar }) {
+  const [t, setT] = useState(texto)
+  const ref = useRef(null)
+  useEffect(() => { setT(texto) }, [texto])
+  // El cuadro crece con el texto.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight + 2}px`
+  }, [t])
+  if (!interno) {
+    return texto ? (
+      <div className="rve-panel-int rve-obs-ed"><div className="rve-k">Observación de esta hoja</div><p className="rve-vacio">{texto}</p></div>
+    ) : null
+  }
+  const cambio = t.trim() !== texto
+  return (
+    <div className="rve-panel-int rve-obs-ed">
+      <label className="rve-k" htmlFor="rve-obs">Observación de esta hoja (opcional)</label>
+      <textarea id="rve-obs" ref={ref} rows={2} maxLength={OBS_MAX} value={t} placeholder="Ej.: el local estuvo cerrado 4 días por obras."
+        onChange={(e) => setT(e.target.value)} />
+      <div className="rve-obs-pie">
+        <small>{t.length}/{OBS_MAX} · sale en la hoja, arriba del pie{por && texto ? ` · última edición: ${por}` : ''}</small>
+        <div className="rve-obs-botones">
+          {texto && <button type="button" className="btn-sec" disabled={ocupado} onClick={() => onGuardar('')}>Quitar</button>}
+          <button type="button" className="btn-pri" disabled={ocupado || !cambio} onClick={() => onGuardar(t.trim())}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Hoja de acumulado: la inflación mensual (IPC de INDEC) que usa, editable por mes.
+// Vale para todos los clientes. Lo cargado a mano le gana a INDEC; "Volver a INDEC" lo borra.
+function PanelIpc({ reporte, interno, ocupado, onGuardarIpc, onError }) {
+  const anio = Number(reporte.mes.slice(0, 4))
+  const hasta = Number(reporte.mes.slice(5, 7))
+  // Para el crecimiento real de enero hace falta la inflación de febrero del año anterior en adelante.
+  const meses = []
+  for (let m = hasta; m >= 1; m--) meses.push(`${anio}-${String(m).padStart(2, '0')}`)
+  for (let m = 12; m >= 2; m--) meses.push(`${anio - 1}-${String(m).padStart(2, '0')}`)
+  const fila = (mes) => {
+    const x = reporte.ipc?.[mes]
+    const d = x ? { valor: x.variacion, fuente: x.fuente === 'mano' ? 'mano' : 'indec', por: x.por, at: x.at } : { valor: null, fuente: 'falta' }
+    return (
+      <tr key={mes}>
+        <td className="rve-dato">{mesCorto(mes)}</td>
+        <td className="rve-valor">
+          {interno
+            ? <CampoNum valor={d.valor} tieneCorreccion={d.fuente === 'mano'} disabled={ocupado} etiqueta={`Inflación de ${mesEnPalabras(mes)} en %`}
+                onGuardar={(v) => onGuardarIpc(mes, v)} onRestaurar={() => onGuardarIpc(mes, null)} onError={onError} placeholder="%" />
+            : <span>{esNum(d.valor) ? `${verNum(d.valor)}%` : '—'}</span>}
+        </td>
+        <td className="rve-src">
+          <Fuente d={d} />
+          {interno && !ocupado && d.fuente === 'mano' && (
+            <button type="button" className="rve-volver" onClick={() => onGuardarIpc(mes, null)}>Volver a INDEC</button>
+          )}
+        </td>
+      </tr>
+    )
+  }
+  return (
+    <div className="rve-panel-int">
+      <div className="rve-k">Inflación mensual (IPC de INDEC)</div>
+      <p className="rve-vacio">
+        Se toma sola de INDEC (IPC nivel general nacional). Si un mes todavía no salió, cargalo a mano en %:
+        por ejemplo 2,1. Vale para todos los clientes.
+      </p>
+      <table className="rve-tabla">
+        <thead><tr><th>Mes</th><th>Inflación %</th><th>De dónde sale</th></tr></thead>
+        <tbody>{meses.map(fila)}</tbody>
+      </table>
+    </div>
+  )
+}
+
 // `interno`: equipo DC. En un mes abierto edita lo automático, lo cargado a mano
 // y lo que falta; en uno cerrado solo completa lo que la foto no trae (FALTA) y
-// corrige o quita lo que se completó después (A MANO). El servidor lo valida igual.
-export default function PanelDatos({ reporte, pagina, data, interno, cerradoMes, ocupado, onGuardar, onError, nombreLocal }) {
+// corrige o quita lo que se completó después (A MANO). Cubiertos, órdenes y tickets
+// se corrigen siempre, aunque el mes esté cerrado. El servidor lo valida igual.
+function DatosHoja({ reporte, pagina, data, interno, cerradoMes, ocupado, onGuardar, onError, nombreLocal }) {
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [nuevoImporte, setNuevoImporte] = useState(null)
   const [claveImporte, setClaveImporte] = useState(0)
@@ -137,31 +236,35 @@ export default function PanelDatos({ reporte, pagina, data, interno, cerradoMes,
   const l = pagina?.local ? reporte.locales.find((x) => x.local === pagina.local) : null
   const mesesCerrados = new Set(data.cierres.map((c) => c.mes))
   const abierto = (mes) => !mesesCerrados.has(mes)
-  // Fuentes que se pueden tocar según el mes.
-  const tocable = (mes, d) => (abierto(mes) ? ['auto', 'mano', 'falta'] : ['mano', 'falta']).includes(d.fuente)
+  // Fuentes que se pueden tocar según el mes (cubiertos, órdenes y tickets, siempre).
+  const tocable = (mes, d, dato) => d.fuente !== 'calc'
+    && (datoLibre(dato) || (abierto(mes) ? ['auto', 'mano', 'falta'] : ['mano', 'falta']).includes(d.fuente))
 
   if (!pagina || pagina.tipo === 'portada' || pagina.tipo === 'contraportada') {
     return <PanelVacio texto="Esta hoja no tiene datos para editar." />
   }
   if (pagina.tipo === 'comparativo') {
-    return <PanelVacio texto="Esta hoja solo compara con el año anterior. Para corregir un número, usá la hoja histórico del local." />
+    return <PanelVacio texto="Esta hoja muestra la venta mes a mes. Para corregir un número, usá la hoja histórico del local." />
   }
-  if (pagina.tipo === 'consolidado') {
-    return <PanelVacio texto="El consolidado suma las ventas de cada local. Para corregir un número, elegí la hoja de ese local." />
+  if (pagina.tipo === 'consolidado' || pagina.tipo === 'consolidadoHist') {
+    return <PanelVacio texto="Estas hojas suman las ventas de cada local. Para corregir un número, elegí la hoja de ese local." />
+  }
+  if (pagina.tipo === 'sintesis') {
+    return <PanelVacio texto="Esta hoja se arma con los números de las demás. Para corregir uno, usá la hoja de indicadores o el histórico del local." />
   }
   if (!l) return <PanelVacio texto="Esta hoja no tiene datos para editar." />
 
   // Fila editable: etiqueta, dato, fuente. `mes` es el mes del dato.
   const fila = ({ clave, etiqueta, mes, dato, d, nota }) => {
-    const editable = interno && tocable(mes, d) && !ocupado
-    const original = d.fuente === 'mano' ? (d.original ?? null) : d.fuente === 'auto' ? d.valor : null
+    const editable = interno && tocable(mes, d, dato) && !ocupado
+    const original = d.fuente === 'mano' ? (d.original ?? null) : d.fuente === 'auto' || d.fuente === 'cerrado' ? d.valor : null
     const quitar = !esNum(original) && d.fuente === 'mano' && dato.startsWith('canal:')
     const guardar = (valor) => onGuardar({ local: l.local, mes, dato, valor, original })
     return (
       <tr key={clave}>
         <td className="rve-dato">{etiqueta}</td>
         <td className="rve-valor">
-          {interno && tocable(mes, d)
+          {interno && tocable(mes, d, dato)
             ? <CampoNum valor={d.valor} tieneCorreccion={d.fuente === 'mano'} disabled={!editable} etiqueta={`${etiqueta}, ${mesEnPalabras(mes)}`}
                 onGuardar={guardar} onRestaurar={() => guardar(null)} onError={onError} />
             : <span className={esNum(d.valor) && d.valor < 0 ? 'rve-neg' : undefined}>{verNum(d.valor)}</span>}
@@ -182,7 +285,7 @@ export default function PanelDatos({ reporte, pagina, data, interno, cerradoMes,
   let cuerpo = null
   let agregar = null
 
-  if (pagina.tipo === 'mes') {
+  if (pagina.tipo === 'mes' || pagina.tipo === 'canales') {
     const mes = reporte.mes
     cuerpo = [
       fila({ clave: 'venta', etiqueta: 'Venta total', mes, dato: 'venta', d: l.venta }),
@@ -248,7 +351,7 @@ export default function PanelDatos({ reporte, pagina, data, interno, cerradoMes,
       <div className="rve-titulo-panel">{nombreLocal(l.local)}</div>
       {!interno && <div className="rve-solo-lectura">Solo el equipo DC puede corregir los datos.</div>}
       {interno && cerradoMes && (
-        <div className="rve-solo-lectura">Mes cerrado: lo que quedó en el cierre no se edita. Solo se completan los datos que faltan.</div>
+        <div className="rve-solo-lectura">Mes cerrado: la venta y los canales del cierre no se editan. Cubiertos, órdenes y tickets se corrigen igual.</div>
       )}
       <table className="rve-tabla">{encabezado}<tbody>{cuerpo}</tbody></table>
       {agregar}
