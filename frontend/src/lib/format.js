@@ -44,3 +44,28 @@ export function fmtMesLargo(mes) {
   if (!m) return mes || ''
   return `${MESES[Number(m[2]) - 1]} ${m[1]}`
 }
+
+// Pesos con separador argentino: '$ 792.270.211'.
+export function fmtPesos(v) {
+  const n = Number(v)
+  if (v === undefined || v === null || Number.isNaN(n)) return '—'
+  return (n < 0 ? '-$ ' : '$ ') + Math.round(Math.abs(n)).toLocaleString('es-AR')
+}
+
+// Pesos abreviados para tarjetas y gráficos: '$ 792,3 M'. Debajo del millón,
+// el importe entero.
+export function fmtPesosCorto(v) {
+  const n = Number(v)
+  if (v === undefined || v === null || Number.isNaN(n)) return '—'
+  const abs = Math.abs(n)
+  if (abs < 1e6) return fmtPesos(n)
+  const m = (abs / 1e6).toLocaleString('es-AR', { maximumFractionDigits: abs >= 1e8 ? 0 : 1 })
+  return (n < 0 ? '-$ ' : '$ ') + m + ' M'
+}
+
+// Porcentaje con coma: 25.2 -> '25,2%'.
+export function fmtPct(v, dec = 1) {
+  const n = Number(v)
+  if (v === undefined || v === null || Number.isNaN(n)) return '—'
+  return n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + '%'
+}
