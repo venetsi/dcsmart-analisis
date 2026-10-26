@@ -1,64 +1,15 @@
 // Consulta las vistas de BigQuery con filtros PARAMETRIZADOS.
-// El LLM nunca genera SQL: los filtros del UI se traducen acá con whitelist.
+// Los filtros del UI se traducen acá con whitelist (nunca SQL armado afuera).
 // Todas las consultas filtran por fecha → escanean solo particiones necesarias (FinOps).
 
+// Vistas que alimentan los desplegables (locales, rubros, etc.) de las pantallas.
+// Las pantallas Pagos, Ventas y Cashflow, que traían las filas crudas de estas
+// vistas, se sacaron el 26/10: queda solo /options.
 const DATASETS = {
-  pagos: {
-    view: 'vw_pagos', dateCol: 'fecha_dia', amount: 'importe',
-    // Selector de tipo de fecha (pantalla Pagos): qué columna maneja el rango del período.
-    dateCols: {
-      factura: 'fecha_dia',
-      cashflow: 'cashflow_dia',
-      pago: 'fecha_pago_dia',
-      periodo: 'periodo_dia'
-    },
-    filters: {
-      grupo: 'grupo', local: 'local', rubro: 'rubro', proveedor: 'proveedor',
-      metodo: 'metodo', estado: 'estado', ingresa_egreso: 'ingresa_egreso',
-      pagado: 'pagado'
-    },
-    dims: ['local', 'rubro', 'proveedor', 'metodo', 'estado']
-  },
-  cajas: {
-    view: 'vw_cajas', dateCol: 'fecha_dia', amount: 'total',
-    filters: { grupo: 'grupo', local: 'local', cajero: 'cajero', origin: 'origin' },
-    dims: ['local', 'cajero', 'origin']
-  },
-  flujo: {
-    view: 'vw_flujo_caja', dateCol: 'fecha_dia', amount: 'neto',
-    filters: { grupo: 'grupo', local: 'local', cuadratura: 'cuadratura' },
-    dims: ['local']
-  },
-  // Detalle de pagos por turno: cómo se cobró cada caja por método/canal.
-  caja_detalles: {
-    view: 'vw_caja_detalles', dateCol: 'fecha_dia', amount: 'monto',
-    filters: { grupo: 'grupo', local: 'local', metodo: 'metodo', cajero: 'cajero', tipo: 'tipo' },
-    dims: ['metodo', 'local', 'cajero']
-  }
-}
-
-// Resuelve la columna de fecha activa: para datasets con dateCols (pagos), el query
-// param fecha_col elige del mapa whitelisteado; cualquier otro valor es inválido.
-function resolveDateCol (def, q) {
-  if (!def.dateCols) return def.dateCol
-  const key = q.fecha_col || 'factura'
-  return def.dateCols[key] || null
-}
-
-function buildWhere (def, q, params, dateCol) {
-  const conds = []
-  // rango de fechas (default: últimos 90 días para no escanear todo)
-  const desde = q.desde || new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10)
-  conds.push(`${dateCol} >= @desde`); params.desde = desde
-  if (q.hasta) { conds.push(`${dateCol} <= @hasta`); params.hasta = q.hasta }
-
-  for (const [key, col] of Object.entries(def.filters)) {
-    if (q[key] !== undefined && q[key] !== '') {
-      if (key === 'pagado') { conds.push(`${col} = @${key}`); params[key] = q[key] === 'true' }
-      else { conds.push(`${col} = @${key}`); params[key] = String(q[key]) }
-    }
-  }
-  return conds.join(' AND ')
+  pagos: { view: 'vw_pagos', dateCol: 'fecha_dia', dims: ['local', 'rubro', 'proveedor', 'metodo', 'estado'] },
+  cajas: { view: 'vw_cajas', dateCol: 'fecha_dia', dims: ['local', 'cajero', 'origin'] },
+  flujo: { view: 'vw_flujo_caja', dateCol: 'fecha_dia', dims: ['local'] },
+  caja_detalles: { view: 'vw_caja_detalles', dateCol: 'fecha_dia', dims: ['metodo', 'local', 'cajero'] }
 }
 
 // El cliente de BigQuery envuelve DATE/TIMESTAMP en objetos {value} y NUMERIC en Big —
@@ -328,87 +279,6 @@ export default async function (fastify) {
     }
   })
 
-  // GET /api/data/resumen-financiero?mes=YYYY-MM&grupo=&local= — panel financiero.
-  // Sólo lo derivable de flujos: márgenes de rentabilidad, flujo de caja neto (base caja)
-  // y días de proveedores aprox. Los ratios de balance (liquidez, ROA/ROE) NO se calculan
-  // acá porque requieren saldos (activo/pasivo/patrimonio) que la data transaccional no tiene.
-  fastify.get('/resumen-financiero', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const mes = /^\d{4}-\d{2}$/.test(req.query.mes || '') ? req.query.mes : null
-    if (!mes) return reply.code(400).send({ error: 'mes (YYYY-MM) requerido' })
-    const [y, m] = mes.split('-').map(Number)
-    const desde = `${mes}-01`
-    const hasta = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    const diasMes = new Date(Date.UTC(y, m, 0)).getUTCDate()
-    const local = req.query.local ? String(req.query.local) : null
-    const grupo = req.query.grupo ? String(req.query.grupo) : null
-    const scopeCond = local ? ' AND local = @local' : (grupo ? ' AND grupo = @grupo' : '')
-    const params = { desde, hasta }
-    if (local) params.local = local
-    else if (grupo) params.grupo = grupo
-
-    // rubros que NO son gasto operativo (tesorería / financiación / distribución)
-    const NO_OP = "('Caja Mayor','Local','Plan de Pagos','Socios','Aportes')"
-
-    const [[ventasRow], [clasesRows]] = await Promise.all([
-      fastify.bq.query({
-        query: `SELECT CAST(ROUND(SUM(total)) AS INT64) total FROM ${DS}.vw_cajas
-                WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}`,
-        params
-      }),
-      fastify.bq.query({
-        query: `SELECT
-                  CASE WHEN STARTS_WITH(UPPER(rubro),'CMV') THEN 'cmv'
-                       WHEN rubro IN ${NO_OP} THEN 'no_op' ELSE 'op' END AS clase,
-                  ingresa_egreso, pagado,
-                  CAST(ROUND(SUM(importe)) AS INT64) AS total
-                FROM ${DS}.vw_pagos
-                WHERE fecha_dia BETWEEN @desde AND @hasta${scopeCond}
-                GROUP BY 1, 2, 3`,
-        params
-      })
-    ])
-
-    const rows = plainRows(clasesRows).map(r => ({ ...r, total: Number(r.total || 0) }))
-    const sum = (f) => rows.filter(f).reduce((a, r) => a + r.total, 0)
-    const egr = (r) => r.ingresa_egreso === 'EGRESO'
-    const ing = (r) => r.ingresa_egreso === 'INGRESO'
-
-    const ventas = Number(ventasRow[0]?.total || 0)
-    const cmv = sum(r => r.clase === 'cmv' && egr(r))
-    const opex = sum(r => r.clase === 'op' && egr(r))
-    const noOp = sum(r => r.clase === 'no_op' && egr(r))
-    const otrosIngresos = sum(ing)
-    const pendienteProv = sum(r => (r.clase === 'cmv' || r.clase === 'op') && egr(r) && r.pagado === false)
-    const salidasOpPagadas = sum(r => (r.clase === 'cmv' || r.clase === 'op') && egr(r) && r.pagado === true)
-    const salidasFinPagadas = sum(r => r.clase === 'no_op' && egr(r) && r.pagado === true)
-
-    const pct = (x) => (ventas ? +(x / ventas * 100).toFixed(1) : null)
-    const resultadoBruto = ventas - cmv
-    const resultadoOperativo = resultadoBruto - opex
-    const resultadoNeto = resultadoOperativo + otrosIngresos
-    const comprasDiarias = (cmv + opex) / diasMes
-    const flujoNeto = ventas + otrosIngresos - salidasOpPagadas - salidasFinPagadas
-
-    return {
-      mes, scope: { grupo, local },
-      rentabilidad: {
-        ventas, cmv, resultadoBruto, resultadoOperativo, resultadoNeto,
-        margenBruto: pct(resultadoBruto), margenOperativo: pct(resultadoOperativo), margenNeto: pct(resultadoNeto)
-      },
-      flujoCaja: {
-        entradas_operativas: ventas,
-        salidas_operativas: salidasOpPagadas,
-        entradas_financieras: otrosIngresos,
-        salidas_financieras: salidasFinPagadas,
-        neto: flujoNeto
-      },
-      capitalTrabajo: {
-        deuda_proveedores_pendiente: pendienteProv,
-        dias_proveedores: comprasDiarias ? +(pendienteProv / comprasDiarias).toFixed(0) : null
-      }
-    }
-  })
-
   // GET /api/data/:dataset/options — valores para poblar los dropdowns (acotados por grupo)
   fastify.get('/:dataset/options', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const def = DATASETS[req.params.dataset]
@@ -428,41 +298,6 @@ export default async function (fastify) {
     const out = {}
     def.dims.forEach((dim, i) => { out[dim] = results[i][0].map(r => r.v) })
     return out
-  })
-
-  // GET /api/data/:dataset?desde=&hasta=&grupo=&fecha_col=&local=... — filas + agregados
-  fastify.get('/:dataset', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const def = DATASETS[req.params.dataset]
-    if (!def) return reply.code(404).send({ error: 'Dataset inválido' })
-
-    const dateCol = resolveDateCol(def, req.query)
-    if (!dateCol) return reply.code(400).send({ error: 'fecha_col inválido' })
-
-    const params = {}
-    const where = buildWhere(def, req.query, params, dateCol)
-    const limit = Math.min(parseInt(req.query.limit) || 500, 2000)
-
-    const groupDim = def.dims[0] // local
-    // Las 3 consultas en paralelo (en serie sumaban ~3x la latencia de BigQuery)
-    const [[rows], [aggMes], [aggDim]] = await Promise.all([
-      fastify.bq.query({
-        query: `SELECT * FROM ${DS}.${def.view} WHERE ${where} ORDER BY ${dateCol} DESC LIMIT ${limit}`,
-        params
-      }),
-      fastify.bq.query({
-        query: `SELECT FORMAT_DATE('%Y-%m', ${dateCol}) AS mes,
-                       COUNT(*) AS n, SUM(${def.amount}) AS total
-                FROM ${DS}.${def.view} WHERE ${where} GROUP BY 1 ORDER BY 1`,
-        params
-      }),
-      fastify.bq.query({
-        query: `SELECT ${groupDim} AS dim, COUNT(*) AS n, SUM(${def.amount}) AS total
-                FROM ${DS}.${def.view} WHERE ${where} GROUP BY 1 ORDER BY total DESC LIMIT 20`,
-        params
-      })
-    ])
-
-    return { rows: plainRows(rows), agg: { por_mes: plainRows(aggMes), por_dim: plainRows(aggDim) }, total_rows: rows.length }
   })
 
   // GET /api/data/etl/status — último corte y cuadratura para el header
