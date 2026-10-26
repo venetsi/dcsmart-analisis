@@ -244,3 +244,28 @@
   .rv-print .rv-hoja { page: rv; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
   .rv-print .rv-hoja:last-child { page-break-after: auto; break-after: auto; }
 }
+
+/* mes a mes (D3): la venta en dorado contra el año anterior actualizado por inflación */
+.rv-d3-venta { stroke: var(--rv-oro); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.rv-d3-ref { stroke: var(--rv-teal); stroke-width: 3; stroke-linecap: round; }
+.rv-d3-ref-nom { stroke: #7d8da0; stroke-dasharray: 8 7; }
+.rv-d3-gana { fill: rgba(95, 203, 146, .30); }
+.rv-d3-pierde { fill: rgba(240, 123, 123, .30); }
+.rv-d3-pto { fill: var(--rv-oro); stroke: var(--rv-fondo); stroke-width: 3; }
+.rv-d3-pill { fill: rgba(255, 255, 255, .10); }
+.rv-d3-pill-tx { font-weight: 700; fill: var(--rv-tx); }
+.rv-d3-fin { font-size: 16px; font-weight: 700; }
+.rv-d3-fin-venta { fill: var(--rv-oro); }
+.rv-d3-fin-ref { fill: var(--rv-teal); }
+.rv-d3-fin-nom { fill: #7d8da0; }
+.rv-d3-chip-pos rect { fill: rgba(95, 203, 146, .15); }
+.rv-d3-chip-pos text { fill: var(--rv-verde); font-size: 16px; font-weight: 700; }
+.rv-d3-chip-neg rect { fill: rgba(240, 123, 123, .15); }
+.rv-d3-chip-neg text { fill: var(--rv-rojo); font-size: 16px; font-weight: 700; }
+.rv-d3-chip-nulo rect { fill: rgba(255, 255, 255, .04); }
+.rv-d3-chip-nulo text { fill: var(--rv-tx-3); font-size: 16px; }
+.rv-leyenda-d3 { justify-content: flex-start; align-items: center; margin-bottom: 10px; }
+.rv-leyenda i.rv-ley-d3-venta { border-top: 5px solid var(--rv-oro); border-radius: 3px; }
+.rv-leyenda i.rv-ley-d3-ref { border-top: 3px solid var(--rv-teal); }
+.rv-leyenda i.rv-ley-d3-nom { border-top: 3px dashed #7d8da0; }
+.rv-leyenda-lee { color: #d6d2ca; margin-left: 8px; }

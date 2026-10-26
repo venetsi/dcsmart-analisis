@@ -4,7 +4,7 @@
 // lib/titularesReporte.js y solo repiten los números de la hoja.
 // Diseño oscuro de oct-26 (referencia: "Reporte de ventas · 3 Monos · Septiembre 2026").
 // Cada hoja es un div.rv-hoja de 1456×819 px; los gráficos son SVG o divs para que impriman nítidos.
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { fmtAR } from '../../lib/reporteVentas.js'
 import { recortarLogo } from '../../lib/recorteLogo.js'
 import { enMillones, titularCanales, titularConsolidado, titularSintesis } from '../../lib/titularesReporte.js'
@@ -118,91 +118,145 @@ function Tarjeta({ k, children, sub, clase = '' }) {
 // ---------------------------------------------------------------------------
 // Gráficos
 
-// Líneas mes a mes: el año (claro), el anterior (gris, punteado) y el anterior
-// actualizado por inflación (turquesa). Debajo, por mes, la variación nominal y la
-// real (descontada la inflación). Los importes van en millones con un decimal.
-//   filas: [{ mes, venta, anterior, anteriorAct }]
-function Lineas({ filas, ancho = 1262, alto = 300 }) {
-  const conAnterior = filas.some((f) => esNum(f.anterior))
-  const conReal = filas.some((f) => esNum(f.anteriorAct))
-  const izq = conAnterior ? 150 : 60
-  const der = ancho - 34
+// Curva suave por los puntos (Catmull-Rom pasado a Bézier): 'M x,y C ...'.
+function curva(pts) {
+  const r1 = (n) => Math.round(n * 10) / 10
+  let d = `M${r1(pts[0][0])},${r1(pts[0][1])}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
+    d += ` C${r1(c1[0])},${r1(c1[1])} ${r1(c2[0])},${r1(c2[1])} ${r1(p2[0])},${r1(p2[1])}`
+  }
+  return d
+}
+
+// Tramos de índices consecutivos donde `ok(i)`: un mes sin dato corta la curva.
+function tramosDe(n, ok) {
+  const out = []
+  let t = []
+  for (let i = 0; i < n; i++) {
+    if (ok(i)) t.push(i)
+    else if (t.length) { out.push(t); t = [] }
+  }
+  if (t.length) out.push(t)
+  return out
+}
+
+// Mes a mes: la venta del año (curva dorada) contra la referencia (turquesa: el año
+// anterior actualizado por inflación, o el año anterior a secas si no hay IPC). El
+// espacio entre las dos va verde donde el año le ganó a la referencia y rojo donde
+// le perdió; debajo de cada mes, ese % (real si la referencia tiene inflación).
+//   filas: [{ mes, venta, ref }]
+function Lineas({ filas, refNombre, conInflacion, ancho = 1262, alto = 300 }) {
+  const id = useId().replace(/:/g, '')
   const n = filas.length
+  const conRef = filas.some((f) => esNum(f.ref))
+  const izq = 60
+  const der = ancho - (conRef ? 170 : 60)
   const x = (i) => (n > 1 ? izq + (i * (der - izq)) / (n - 1) : (izq + der) / 2)
-  const tope = Math.max(0, ...filas.flatMap((f) => [f.venta, f.anterior, f.anteriorAct]).filter(esNum))
+  const tope = Math.max(0, ...filas.flatMap((f) => [f.venta, f.ref]).filter(esNum))
   // Guías en números redondos (10, 20, 50... millones) hasta pasar el máximo.
   const paso = tope > 0 ? pasoRedondo(tope / 4) : 0
   const guias = paso ? Array.from({ length: Math.ceil(tope / paso) }, (_, i) => (i + 1) * paso) : []
   const max = Math.max(tope * 1.06, guias[guias.length - 1] || 0) || 1
-  const arriba = 44
+  const arriba = 46
   const y = (v) => arriba + (alto - arriba) * (1 - v / max)
+  const punto = (i, campo) => [x(i), y(filas[i][campo])]
   const mill = (v) => fmtAR(v / 1e6, 1)
-  // Tramos de puntos consecutivos con dato: un mes sin dato corta la línea.
-  const tramos = (campo) => {
-    const out = []
-    let t = []
-    filas.forEach((f, i) => {
-      if (esNum(f[campo])) t.push([x(i), y(f[campo])])
-      else if (t.length) { out.push(t); t = [] }
-    })
-    if (t.length) out.push(t)
-    return out
-  }
-  const puntos = (t) => t.map((p) => p.join(',')).join(' ')
-  const linea = (campo, clase) => tramos(campo).map((t, i) => (t.length > 1
-    ? <polyline key={`${campo}${i}`} points={puntos(t)} className={clase} fill="none" /> : null))
-  const area = tramos('venta').map((t, i) => (t.length > 1
-    ? <polygon key={`a${i}`} className="rv-lin-area" points={puntos([...t, [t[t.length - 1][0], alto], [t[0][0], alto]])} /> : null))
-  const fuente = n > 9 ? 16 : 18
-  const variacionDe = (a, b) => (esNum(a) && esNum(b) && b !== 0 ? (a / b - 1) * 100 : null)
-  // Fila de porcentajes por mes, debajo de los meses. Con 1 decimal para que entre.
-  const filaPct = (yy, etiqueta, valor, conColor) => (
-    <g>
-      <text x={0} y={yy} className="rv-lin-fila">{etiqueta}</text>
-      {filas.map((f, i) => {
-        const v = valor(f)
-        const clase = !esNum(v) ? 'rv-lin-nulo' : conColor ? (v >= 0 ? 'rv-lin-pos' : 'rv-lin-neg') : 'rv-lin-nom'
-        return (
-          <text key={f.mes} x={x(i)} y={yy} textAnchor="middle" fontSize={fuente - 1} className={clase}>
-            {esNum(v) ? `${v > 0 ? '+' : v < 0 ? MENOS : ''}${fmtAR(Math.abs(v), 1)}%` : '—'}
-          </text>
-        )
-      })}
-    </g>
-  )
-  const altoTotal = alto + (conAnterior ? (conReal ? 118 : 86) : 46)
+  const pct = (f) => (esNum(f.venta) && esNum(f.ref) && f.ref !== 0 ? (f.venta / f.ref - 1) * 100 : null)
+
+  const tramosVenta = tramosDe(n, (i) => esNum(filas[i].venta))
+  const tramosRef = tramosDe(n, (i) => esNum(filas[i].ref))
+  const tramosAmbos = tramosDe(n, (i) => esNum(filas[i].venta) && esNum(filas[i].ref))
+  const fuente = n > 9 ? 15 : 16
+
   return (
-    <svg className="rv-svg" width={ancho} height={altoTotal} viewBox={`0 0 ${ancho} ${altoTotal}`}>
+    <svg className="rv-svg" width={ancho} height={alto + (conRef ? 90 : 46)} viewBox={`0 0 ${ancho} ${alto + (conRef ? 90 : 46)}`}>
+      <defs>
+        {tramosAmbos.map((t, k) => {
+          const dRef = curva(t.map((i) => punto(i, 'ref')))
+          const x0 = x(t[0]), x1 = x(t[t.length - 1])
+          return (
+            <g key={k}>
+              <clipPath id={`${id}-sobre-${k}`}><path d={`${dRef} L${x1},0 L${x0},0 Z`} /></clipPath>
+              <clipPath id={`${id}-bajo-${k}`}><path d={`${dRef} L${x1},${alto} L${x0},${alto} Z`} /></clipPath>
+            </g>
+          )
+        })}
+      </defs>
       {guias.map((g) => (
         <g key={g}>
-          <line x1={izq - 24} x2={ancho} y1={y(g)} y2={y(g)} className="rv-lin-guia" />
-          <text x={izq - 34} y={y(g) + 5} textAnchor="end" className="rv-lin-eje">{fmtAR(g / 1e6, 0)}</text>
+          <line x1={0} x2={der + 30} y1={y(g)} y2={y(g)} className="rv-lin-guia" />
+          <text x={0} y={y(g) - 6} className="rv-lin-eje">{fmtAR(g / 1e6, 0)}</text>
         </g>
       ))}
-      {area}
-      {linea('anterior', 'rv-lin-ant')}
-      {linea('anteriorAct', 'rv-lin-act')}
-      {linea('venta', 'rv-lin-venta')}
+      {/* brecha: verde donde la venta quedó arriba de la referencia, roja donde quedó abajo */}
+      {tramosAmbos.map((t, k) => {
+        if (t.length < 2) return null
+        const ida = curva(t.map((i) => punto(i, 'venta')))
+        const vuelta = curva([...t].reverse().map((i) => punto(i, 'ref'))).replace(/^M[^ ]+/, '')
+        const [ux, uy] = punto(t[t.length - 1], 'ref')
+        const d = `${ida} L${ux},${uy}${vuelta} Z`
+        return (
+          <g key={k}>
+            <path d={d} className="rv-d3-gana" clipPath={`url(#${id}-sobre-${k})`} />
+            <path d={d} className="rv-d3-pierde" clipPath={`url(#${id}-bajo-${k})`} />
+          </g>
+        )
+      })}
+      {tramosRef.map((t, k) => (t.length > 1
+        ? <path key={k} d={curva(t.map((i) => punto(i, 'ref')))} className={conInflacion ? 'rv-d3-ref' : 'rv-d3-ref rv-d3-ref-nom'} fill="none" /> : null))}
+      {tramosVenta.map((t, k) => (t.length > 1
+        ? <path key={k} d={curva(t.map((i) => punto(i, 'venta')))} className="rv-d3-venta" fill="none" /> : null))}
+      {filas.map((f, i) => {
+        if (!esNum(f.venta)) return null
+        const [px, py] = punto(i, 'venta')
+        // La etiqueta va del lado libre: abajo del punto si la venta quedó por debajo de la referencia.
+        const ty = esNum(f.ref) && f.venta < f.ref ? py + 14 : py - 42
+        return (
+          <g key={f.mes}>
+            <circle cx={px} cy={py} r={5.5} className="rv-d3-pto" />
+            <rect x={px - 31} y={ty} width={62} height={26} rx={13} className="rv-d3-pill" />
+            <text x={px} y={ty + 18} textAnchor="middle" fontSize={fuente} className="rv-d3-pill-tx">{mill(f.venta)}</text>
+          </g>
+        )
+      })}
+      {(() => {
+        // Nombre de cada curva al final; si terminan muy juntas, se separan para no pisarse.
+        const uV = tramosVenta.length ? tramosVenta[tramosVenta.length - 1].at(-1) : null
+        const uR = tramosRef.length ? tramosRef[tramosRef.length - 1].at(-1) : null
+        let yV = uV != null ? y(filas[uV].venta) + 6 : null
+        let yR = uR != null ? y(filas[uR].ref) + 6 : null
+        if (yV != null && yR != null && Math.abs(yV - yR) < 20) {
+          const medio = (yV + yR) / 2
+          const vArriba = filas[uV].venta >= filas[uR].ref
+          yV = medio + (vArriba ? -10 : 10)
+          yR = medio + (vArriba ? 10 : -10)
+        }
+        return (
+          <>
+            {uV != null && <text x={x(uV) + 18} y={yV} className="rv-d3-fin rv-d3-fin-venta">{filas[uV].mes.slice(0, 4)}</text>}
+            {uR != null && <text x={x(uR) + 18} y={yR} className={conInflacion ? 'rv-d3-fin rv-d3-fin-ref' : 'rv-d3-fin rv-d3-fin-nom'}>{refNombre}</text>}
+          </>
+        )
+      })()}
+      <line x1={0} x2={der + 30} y1={alto + 0.5} y2={alto + 0.5} className="rv-col-base" />
       {filas.map((f, i) => (
-        <g key={f.mes}>
-          {esNum(f.anterior) && <circle cx={x(i)} cy={y(f.anterior)} r={5} className="rv-lin-pto-ant" />}
-          {esNum(f.anteriorAct) && <circle cx={x(i)} cy={y(f.anteriorAct)} r={5} className="rv-lin-pto-act" />}
-          {esNum(f.anterior) && (
-            <text x={x(i)} y={y(f.anterior) + 28} textAnchor="middle" fontSize={fuente - 2} className="rv-lin-val-ant">{mill(f.anterior)}</text>
-          )}
-          {esNum(f.venta) && (
-            <>
-              <circle cx={x(i)} cy={y(f.venta)} r={i === n - 1 ? 9 : 7} className={i === n - 1 ? 'rv-lin-pto-cur' : 'rv-lin-pto'} />
-              <text x={x(i)} y={y(f.venta) - 18} textAnchor="middle" fontSize={fuente}
-                className={i === n - 1 ? 'rv-lin-val rv-lin-val-cur' : 'rv-lin-val'}>{mill(f.venta)}</text>
-            </>
-          )}
-          <text x={x(i)} y={alto + 34} textAnchor="middle" className={i === n - 1 ? 'rv-col-mes rv-col-mes-cur' : 'rv-col-mes'}>{mes3(f.mes)}</text>
-        </g>
+        <text key={f.mes} x={x(i)} y={alto + 32} textAnchor="middle" className="rv-col-mes">{mes3(f.mes)}</text>
       ))}
-      <line x1={izq - 24} x2={ancho} y1={alto + 0.5} y2={alto + 0.5} className="rv-col-base" />
-      {conAnterior && filaPct(alto + 78, 'Vs año ant.', (f) => variacionDe(f.venta, f.anterior), false)}
-      {conReal && filaPct(alto + 110, 'Real', (f) => variacionDe(f.venta, f.anteriorAct), true)}
+      {conRef && filas.map((f, i) => {
+        const v = pct(f)
+        const clase = !esNum(v) ? 'rv-d3-chip-nulo' : v >= 0 ? 'rv-d3-chip-pos' : 'rv-d3-chip-neg'
+        return (
+          <g key={f.mes} className={clase}>
+            <rect x={x(i) - 42} y={alto + 50} width={84} height={30} rx={15} />
+            <text x={x(i)} y={alto + 71} textAnchor="middle">
+              {esNum(v) ? `${v > 0 ? '+' : v < 0 ? MENOS : ''}${fmtAR(Math.abs(v), 1)}%` : '—'}
+            </text>
+          </g>
+        )
+      })}
     </svg>
   )
 }
@@ -539,28 +593,32 @@ function ConsolidadoHist({ reporte, ...m }) {
   )
 }
 
-// Venta del año mes a mes, contra el año anterior y su versión actualizada por inflación.
+// Venta del año mes a mes contra el año anterior actualizado por inflación (opción D3
+// del lienzo, con la curva del año en dorado). Sin inflación cargada, contra el año anterior.
 function Comparativo({ reporte, local: l, ...m }) {
-  const filas = l.historico.map((h) => ({
-    mes: h.mes, venta: h.venta.valor, anterior: h.anterior, anteriorAct: anteriorActualizado(reporte.ipc, h.mes, h.anterior),
-  }))
-  const conAnterior = filas.some((f) => esNum(f.anterior))
-  const conReal = filas.some((f) => esNum(f.anteriorAct))
+  const actualizado = l.historico.map((h) => anteriorActualizado(reporte.ipc, h.mes, h.anterior))
+  const conAnterior = l.historico.some((h) => esNum(h.anterior))
+  const conInflacion = actualizado.some(esNum)
+  const filas = l.historico.map((h, i) => ({ mes: h.mes, venta: h.venta.valor, ref: conInflacion ? actualizado[i] : h.anterior }))
   const anio = Number(reporte.mes.slice(0, 4))
   const rango = filas.length > 1 ? `Enero – ${nombreMes(reporte.mes).toLowerCase()}` : nombreMes(reporte.mes)
+  const refNombre = conInflacion ? `${anio - 1} + inflación` : String(anio - 1)
   return (
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `${rango} · millones de $`)} tituloChico
       titulo={conAnterior ? 'Total de ventas por mes comparado con el año anterior' : 'Total de ventas por mes'}
-      notaPie={conReal ? 'Real = descontada la inflación (IPC de INDEC)' : undefined}>
+      notaPie={conInflacion ? 'Inflación: IPC de INDEC' : undefined}>
       <div className="rv-cuerpo rv-comp">
         {conAnterior && (
-          <div className="rv-leyenda">
-            <span><i className="rv-ley-venta" /> {anio}</span>
-            <span><i className="rv-ley-ant" /> {anio - 1}</span>
-            {conReal && <span><i className="rv-ley-act" /> {anio - 1} actualizado por inflación</span>}
+          <div className="rv-leyenda rv-leyenda-d3">
+            <span><i className="rv-ley-d3-venta" /> {anio}</span>
+            <span><i className={conInflacion ? 'rv-ley-d3-ref' : 'rv-ley-d3-ref rv-ley-d3-nom'} />
+              {conInflacion ? `${anio - 1} actualizado por inflación` : anio - 1}</span>
+            <span className="rv-leyenda-lee">
+              Verde: le ganó {conInflacion ? 'a la inflación' : `a ${anio - 1}`} · Rojo: le perdió
+            </span>
           </div>
         )}
-        <Lineas filas={filas} alto={m.obs ? 240 : 320} />
+        <Lineas filas={filas} refNombre={refNombre} conInflacion={conInflacion} alto={m.obs ? 250 : 330} />
       </div>
     </Marco>
   )
