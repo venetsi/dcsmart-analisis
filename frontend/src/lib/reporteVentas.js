@@ -243,6 +243,9 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     if (d.fuente === 'auto' && a.base != null) return { ...d, base: a.base, sinInformar: a.sin }
     const baseFoto = num(snap(m)?.[BASE[campo]])
     if (d.fuente === 'cerrado' && baseFoto != null) return { ...d, base: baseFoto }
+    // Foto vieja sin esa venta: si el número guardado es el mismo que suma hoy lo
+    // automático, son las mismas cajas y vale su venta.
+    if (d.fuente === 'cerrado' && a.base != null && a.valor === d.valor) return { ...d, base: a.base }
     return d
   }
 
