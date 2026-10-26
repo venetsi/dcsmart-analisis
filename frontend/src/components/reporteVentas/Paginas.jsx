@@ -580,8 +580,7 @@ function Historico({ reporte, local: l, ...m }) {
   const prom = (v, n) => (esNum(v) && esNum(n) && n !== 0 ? v / n : null)
   const cols = [
     { k: 'v', th: 'Venta', clase: 'rv-fuerte',
-      td: (h) => <ConFlecha act={h.venta.valor} ant={h.anterior}><Mill v={h.venta.valor} /></ConFlecha>,
-      tot: <ConFlecha act={a.venta} ant={a.anterior}><Mill v={a.venta} /></ConFlecha> },
+      td: (h) => <Mill v={h.venta.valor} />, tot: <Mill v={a.venta} /> },
     hayAnt && { k: 'a', th: String(anio - 1), td: (h) => <Mill v={h.anterior} />, tot: <Mill v={a.anterior} />, clase: 'rv-tenue' },
     { k: 'vpc', th: 'Var. % MA', td: (h) => <Num v={h.varPct} pct signo /> },
     hayAnt && { k: 'va', th: `Vs ${anio - 1}`, td: (h) => <Num v={h.varAnual} pct signo />, tot: <Num v={a.varAnual} pct signo /> },
@@ -617,15 +616,13 @@ function ConsolidadoHist({ reporte, ...m }) {
     ...locales.map((l) => ({ k: `l:${l}`, th: nom(reporte, l), td: (h) => <Mill v={h.porLocal[l]} />,
       tot: <Mill v={suma(c.historico.map((h) => h.porLocal[l]))} /> })),
     { k: 't', th: 'Total', clase: 'rv-fuerte',
-      td: (h) => <ConFlecha act={h.total} ant={h.anterior}><Mill v={h.total} /></ConFlecha>,
-      tot: <ConFlecha act={c.acumulado.venta} ant={c.acumulado.anterior}><Mill v={c.acumulado.venta} /></ConFlecha> },
+      td: (h) => <Mill v={h.total} />, tot: <Mill v={c.acumulado.venta} /> },
     { k: 'vpc', th: 'Var. % MA', td: (h) => <Num v={h.varPct} pct signo /> },
     hayAnt && { k: 'a', th: String(anio - 1), td: (h) => <Mill v={h.anterior} />, tot: <Mill v={c.acumulado.anterior} />, clase: 'rv-tenue' },
     hayAnt && { k: 'va', th: `Vs ${anio - 1}`, td: (h) => <Num v={h.varAnual} pct signo />, tot: <Num v={c.acumulado.varAnual} pct signo /> },
   ].filter(Boolean)
   return (
-    <Marco m={{ reporte, ...m }} ceja={`Histórico ${anio} · todos los locales`} titulo="Venta mensual del grupo"
-      notaPie={`MA = mes anterior · Flechas: contra el mismo mes de ${anio - 1}`}>
+    <Marco m={{ reporte, ...m }} ceja={`Histórico ${anio} · todos los locales`} titulo="Venta mensual del grupo" notaPie="MA = mes anterior">
       <div className="rv-cuerpo">
         <TablaMensual filas={c.historico} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
       </div>
