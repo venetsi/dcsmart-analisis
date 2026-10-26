@@ -284,6 +284,9 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
   })
 
   const canales = canalesDe(mes, actual.venta)
+  const acumulado = acumuladoDe(historico.map((h) => ({
+    venta: h.venta.valor, anterior: h.anterior, cubiertos: h.cubiertos.valor, ordenes: h.ordenes.valor,
+  })))
   const alertas = []
   if (actual.venta.valor == null) alertas.push(`${local}: falta la venta del mes`)
   const localCanal = canales[canales.length - 1]
@@ -293,7 +296,20 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     local,
     venta: actual.venta, cubiertos: actual.cubiertos, ordenes: actual.ordenes,
     promCubierto: actual.promCubierto, promOrden: actual.promOrden,
-    canales, historico, delivery, alertas,
+    canales, historico, delivery, acumulado, alertas,
+  }
+}
+
+// Acumulado del año hasta el mes: sumas estrictas (si falta un mes, el total falta).
+//   filas: [{ venta, anterior, cubiertos, ordenes }]
+export function acumuladoDe(filas) {
+  const venta = sumaEstricta(filas.map((f) => f.venta))
+  const anterior = sumaEstricta(filas.map((f) => f.anterior))
+  const cubiertos = sumaEstricta(filas.map((f) => f.cubiertos))
+  const ordenes = sumaEstricta(filas.map((f) => f.ordenes))
+  return {
+    venta, anterior, varAnual: variacion(venta, anterior), cubiertos, ordenes,
+    promCubierto: dividir(venta, cubiertos), promOrden: dividir(venta, ordenes),
   }
 }
 
@@ -326,25 +342,39 @@ export function armarReporte({ cliente, mes, porLocal, hoy = new Date() }) {
       return {
         mes: h0.mes,
         porLocal: Object.fromEntries(locales.map((l) => [l.local, l.historico[i].venta.valor])),
-        total: totalMes, anterior,
+        total: totalMes, anterior, previo,
+        varPesos: totalMes != null && previo != null ? r2(totalMes - previo) : null,
         varPct: variacion(totalMes, previo), varAnual: variacion(totalMes, anterior),
       }
     })
-    consolidado = { filas, total, historico }
+    const acumulado = acumuladoDe(locales.map((l) => l.acumulado))
+    consolidado = { filas, total, historico, acumulado }
   }
 
-  const paginas = [{ id: 'portada', tipo: 'portada' }]
-  if (consolidado) paginas.push({ id: 'consolidado', tipo: 'consolidado' })
+  // Orden de las hojas (diseño de oct-26): portada, síntesis, consolidado del grupo
+  // (si hay más de un local), por local indicadores → canales → evolución → histórico
+  // → delivery, acumulado del año y contraportada.
+  const paginas = [{ id: 'portada', tipo: 'portada' }, { id: 'sintesis', tipo: 'sintesis' }]
+  if (consolidado) {
+    paginas.push({ id: 'consolidado', tipo: 'consolidado' })
+    paginas.push({ id: 'consolidadoHist', tipo: 'consolidadoHist' })
+  }
   for (const l of locales) {
     paginas.push({ id: `mes:${l.local}`, tipo: 'mes', local: l.local })
-    paginas.push({ id: `historico:${l.local}`, tipo: 'historico', local: l.local })
-    // La venta contra el año anterior va en su propia hoja; sin año anterior no hay qué comparar.
-    if (l.historico.some((h) => h.anterior != null && Number.isFinite(h.anterior))) {
+    // Canales solo si hay alguno además de "Local": un 100% Local no dice nada.
+    if (l.canales.some((c) => c.nombre !== LOCAL && c.valor != null && c.valor !== 0)) {
+      paginas.push({ id: `canales:${l.local}`, tipo: 'canales', local: l.local })
+    }
+    // Venta mes a mes (contra el año anterior si lo hay): solo si hay alguna venta del año.
+    if (l.historico.some((h) => h.venta.valor != null)) {
       paginas.push({ id: `comparativo:${l.local}`, tipo: 'comparativo', local: l.local })
     }
+    paginas.push({ id: `historico:${l.local}`, tipo: 'historico', local: l.local })
     const hayDelivery = l.delivery.some((d) => Object.values(d.apps).some((a) => a.venta != null && a.venta !== 0))
     if (hayDelivery) paginas.push({ id: `delivery:${l.local}`, tipo: 'delivery', local: l.local })
   }
+  // El acumulado de enero sería el mismo mes otra vez.
+  if (Number(mes.slice(5, 7)) > 1) paginas.push({ id: 'acumulado', tipo: 'acumulado' })
   paginas.push({ id: 'contraportada', tipo: 'contraportada' })
 
   const motivos = []

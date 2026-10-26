@@ -132,7 +132,8 @@ test('un mes que no terminó no se puede cerrar', () => {
   assert.equal(r.puedeCerrar, false)
   assert.equal(r.motivos.length, 1); assert.match(r.motivos[0], /no terminó/)
   assert.equal(r.consolidado, null)
-  assert.deepEqual(r.paginas.map((p) => p.tipo), ['portada', 'mes', 'historico', 'contraportada'])
+  assert.deepEqual(r.paginas.map((p) => p.tipo),
+    ['portada', 'sintesis', 'mes', 'comparativo', 'historico', 'acumulado', 'contraportada'])
 })
 test('consolidado de Grupo Perros sep-26', () => {
   // Setup: Togni's Café con Rappi (delivery), Togni's Pizza con Rappi y Pedidos Ya (delivery),
@@ -147,11 +148,11 @@ test('consolidado de Grupo Perros sep-26', () => {
   assert.deepEqual(r.consolidado.filas.map((f) => [f.local, f.valor, f.inc]),
     [['TOGNIS-CAFE', 80003001, 10.10], ['TOGNIS-PIZZA', 316106840, 39.90], ['EVELIA', 396160370, 50.00]])
   assert.deepEqual(r.paginas.map((p) => [p.tipo, p.local]), [
-    ['portada', undefined], ['consolidado', undefined],
-    ['mes', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'],
-    ['mes', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'],
-    ['mes', 'EVELIA'], ['historico', 'EVELIA'],
-    ['contraportada', undefined]])
+    ['portada', undefined], ['sintesis', undefined], ['consolidado', undefined], ['consolidadoHist', undefined],
+    ['mes', 'TOGNIS-CAFE'], ['canales', 'TOGNIS-CAFE'], ['comparativo', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'],
+    ['mes', 'TOGNIS-PIZZA'], ['canales', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'],
+    ['mes', 'EVELIA'], ['comparativo', 'EVELIA'], ['historico', 'EVELIA'],
+    ['acumulado', undefined], ['contraportada', undefined]])
   assert.equal(new Set(r.paginas.map((p) => p.id)).size, r.paginas.length)
   assert.equal(r.puedeCerrar, true); assert.deepEqual(r.motivos, [])
   assert.equal(r.consolidado.historico.find((h) => h.mes === '2026-09').total, 792270211)
@@ -243,15 +244,35 @@ test('mes cerrado: la foto dice qué canales son delivery (Ecommerce incluido)',
   const l3 = armarLocal({ local: 'TOGNIS-CAFE', mes: '2026-08', auto: { meses: {}, canales: {} }, valores: [], cierres: noDel })
   assert.deepEqual(Object.keys(l3.delivery.find((d) => d.mes === '2026-08').apps), ['Cheaf'])
 })
-test('con año anterior, cada local suma una hoja aparte de comparación después del histórico', () => {
+test('cada local tiene su hoja de evolución mes a mes antes del histórico', () => {
   const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: { '2025-09': { venta: 1 }, '2026-09': { venta: 200 } }, canales: {} },
     valores: [], cierres: [{ mes: '2025-09', origen: 'deck', snapshot: { locales: { P: { venta: 100 } } } }] })
   const r = armarReporte({ cliente: { nombre: 'P', locales: ['P'] }, mes: '2026-09', porLocal: { P: l }, cierres: [], hoy: HOY })
-  assert.deepEqual(r.paginas.map((p) => p.tipo), ['portada', 'mes', 'historico', 'comparativo', 'contraportada'])
+  assert.deepEqual(r.paginas.map((p) => p.tipo),
+    ['portada', 'sintesis', 'mes', 'comparativo', 'historico', 'acumulado', 'contraportada'])
   assert.equal(new Set(r.paginas.map((p) => p.id)).size, r.paginas.length)
 })
-test('sin ventas del año anterior no hay hoja de comparación', () => {
-  const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: { '2026-09': { venta: 200 } }, canales: {} }, valores: [], cierres: [] })
+test('sin ninguna venta en el año no hay hoja de evolución; en enero no hay acumulado', () => {
+  const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: {}, canales: {} }, valores: [], cierres: [] })
   const r = armarReporte({ cliente: { nombre: 'P', locales: ['P'] }, mes: '2026-09', porLocal: { P: l }, cierres: [], hoy: HOY })
   assert.ok(!r.paginas.some((p) => p.tipo === 'comparativo'))
+  const e = armarLocal({ local: 'P', mes: '2026-01', auto: { meses: { '2026-01': { venta: 5 } }, canales: {} }, valores: [], cierres: [] })
+  const re = armarReporte({ cliente: { nombre: 'P', locales: ['P'] }, mes: '2026-01', porLocal: { P: e }, cierres: [], hoy: HOY })
+  assert.ok(!re.paginas.some((p) => p.tipo === 'acumulado'))
+})
+test('acumulado del año: sumas estrictas, promedios y variación contra el año anterior', () => {
+  const cierres = [
+    { mes: '2025-01', origen: 'deck', snapshot: { locales: { P: { venta: 100 } } } },
+    { mes: '2025-02', origen: 'deck', snapshot: { locales: { P: { venta: 100 } } } },
+  ]
+  const l = armarLocal({ local: 'P', mes: '2026-02', cierres, valores: [], auto: { canales: {}, meses: {
+    '2026-01': { venta: 150, cubiertos: 10, ordenes: 5 }, '2026-02': { venta: 150, cubiertos: 20 } } } })
+  assert.deepEqual(l.acumulado, { venta: 300, anterior: 200, varAnual: 50, cubiertos: 30, ordenes: null, promCubierto: 10, promOrden: null })
+  const q = armarLocal({ local: 'Q', mes: '2026-02', cierres: [], valores: [], auto: { canales: {}, meses: {
+    '2026-01': { venta: 50, cubiertos: 5 }, '2026-02': { venta: 50, cubiertos: 5 } } } })
+  const r = armarReporte({ cliente: { nombre: 'G', locales: ['P', 'Q'] }, mes: '2026-02', porLocal: { P: l, Q: q }, hoy: HOY })
+  assert.equal(r.consolidado.acumulado.venta, 400)
+  assert.equal(r.consolidado.acumulado.cubiertos, 40)
+  assert.equal(r.consolidado.acumulado.anterior, null) // Q no tiene 2025: no se inventa
+  assert.equal(r.consolidado.historico[1].varPesos, 0)
 })
