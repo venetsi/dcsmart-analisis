@@ -144,10 +144,13 @@ export default function PanelDatos({ reporte, pagina, data, interno, cerradoMes,
     return <PanelVacio texto="Esta hoja no tiene datos para editar." />
   }
   if (pagina.tipo === 'comparativo') {
-    return <PanelVacio texto="Esta hoja solo compara con el año anterior. Para corregir un número, usá la hoja histórico del local." />
+    return <PanelVacio texto="Esta hoja muestra la venta mes a mes. Para corregir un número, usá la hoja histórico del local." />
   }
-  if (pagina.tipo === 'consolidado') {
-    return <PanelVacio texto="El consolidado suma las ventas de cada local. Para corregir un número, elegí la hoja de ese local." />
+  if (pagina.tipo === 'consolidado' || pagina.tipo === 'consolidadoHist') {
+    return <PanelVacio texto="Estas hojas suman las ventas de cada local. Para corregir un número, elegí la hoja de ese local." />
+  }
+  if (pagina.tipo === 'sintesis' || pagina.tipo === 'acumulado') {
+    return <PanelVacio texto="Esta hoja se arma con los números de las demás. Para corregir uno, usá la hoja de indicadores o el histórico del local." />
   }
   if (!l) return <PanelVacio texto="Esta hoja no tiene datos para editar." />
 
@@ -182,7 +185,7 @@ export default function PanelDatos({ reporte, pagina, data, interno, cerradoMes,
   let cuerpo = null
   let agregar = null
 
-  if (pagina.tipo === 'mes') {
+  if (pagina.tipo === 'mes' || pagina.tipo === 'canales') {
     const mes = reporte.mes
     cuerpo = [
       fila({ clave: 'venta', etiqueta: 'Venta total', mes, dato: 'venta', d: l.venta }),

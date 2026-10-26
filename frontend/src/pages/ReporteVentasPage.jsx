@@ -156,9 +156,9 @@ export default function ReporteVentasPage() {
 
   const etiquetaHoja = (p) => {
     const n = p.local ? nombreLocal(p.local) : ''
-    return { portada: 'Portada', consolidado: 'Consolidado', mes: `${n} · mes`, historico: `${n} · histórico`,
-      comparativo: `${n} · vs año anterior`,
-      delivery: `${n} · delivery`, contraportada: 'Contraportada' }[p.tipo]
+    return { portada: 'Portada', sintesis: 'Síntesis', consolidado: 'Venta por local', consolidadoHist: 'Histórico del grupo',
+      mes: `${n} · indicadores`, canales: `${n} · canales`, comparativo: `${n} · mes a mes`, historico: `${n} · histórico`,
+      delivery: `${n} · delivery`, acumulado: 'Acumulado del año', contraportada: 'Contraportada' }[p.tipo]
   }
   const conNombres = (txt) => {
     let t = txt.replace(/\d{4}-\d{2}/g, (m) => mesEnPalabras(m))
