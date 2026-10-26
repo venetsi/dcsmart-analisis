@@ -85,3 +85,38 @@ export function datoEnSnapshot (snapshot, local, dato) {
 // cajas de TapTap o Fudo ya traen sus cobros por método y se contarían dos veces.
 export const ORIGEN_MANUAL = 'DCSMART'
 export const okOrigenRegla = (valor) => typeof valor === 'string' && valor.trim().toUpperCase() === ORIGEN_MANUAL
+
+// Datos de operación que se corrigen libremente, aunque el mes esté cerrado:
+// cubiertos, órdenes y tickets de cada app. Lo corregido a mano le gana a la foto.
+export const datoLibre = (dato) => dato === 'cubiertos' || dato === 'ordenes' || /^tickets:/.test(dato || '')
+
+// Observación de una hoja: texto de hasta OBS_MAX caracteres (vacío = borrarla).
+// pagina = el id de la hoja ('sintesis', 'mes:LOCAL', ...).
+export const OBS_MAX = 280
+export const paginaOk = (p) => typeof p === 'string' && /^[a-zA-Z]+(:[^\n]{1,60})?$/.test(p)
+export function obsOk (v) {
+  if (typeof v !== 'string') return null
+  const t = v.replace(/\r\n?/g, '\n').trim()
+  return t.length <= OBS_MAX ? t : null
+}
+
+// Inflación mensual cargada a mano: % entre -50 y 100 (null = volver a la de INDEC).
+export const ipcOk = (v) => v === null || (typeof v === 'number' && Number.isFinite(v) && v > -50 && v < 100)
+
+// Serie del índice ([['2025-01-01', 7864.1], ...], ordenada) → variación mensual en %
+// por mes: { '2025-01': 2.2109 }. El primer punto solo sirve de base.
+export function variacionesIpc (serie) {
+  const out = {}
+  const pts = (serie || []).filter((p) => Array.isArray(p) && typeof p[0] === 'string' && Number.isFinite(p[1]) && p[1] > 0)
+  for (let i = 1; i < pts.length; i++) {
+    const mes = pts[i][0].slice(0, 7)
+    const previo = pts[i - 1][0].slice(0, 7)
+    if (mesSiguiente(previo) !== mes) continue // un hueco en la serie no se salta
+    out[mes] = Math.round((pts[i][1] / pts[i - 1][1] - 1) * 1e6) / 1e4
+  }
+  return out
+}
+function mesSiguiente (mes) {
+  const [y, m] = mes.split('-').map(Number)
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
+}

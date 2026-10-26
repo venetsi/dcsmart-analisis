@@ -7,8 +7,10 @@
 
 import { Storage } from '@google-cloud/storage'
 import { crearLogosLocales } from '../lib/logosLocales.js'
+import { crearIpc } from '../lib/ipc.js'
 import {
   okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk, logosOk, snapshotOk, datoEnSnapshot, okOrigenRegla,
+  datoLibre, obsOk, paginaOk, ipcOk, OBS_MAX,
 } from '../lib/reporteVentas.js'
 
 const txt = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -54,6 +56,14 @@ export default async function (fastify) {
     log: fastify.log,
   })
   const conLogosLocal = async (cli) => (cli ? { ...cli, logosLocal: await logosDe(cli.grupo, cli.locales) } : cli)
+  // Inflación mensual (IPC de INDEC) para el acumulado; si falla, el reporte sale igual sin ella.
+  const ipc = crearIpc({ db, log: fastify.log })
+  const ipcDe = async (desde, hasta) => {
+    try { return await ipc.leer(desde, hasta) } catch (err) {
+      fastify.log.warn({ err }, 'reporte-ventas: no se pudo leer el IPC')
+      return {}
+    }
+  }
 
   // GET /api/reporte-ventas/clientes?grupo= — los clientes definidos.
   fastify.get('/clientes', { preHandler: [fastify.authenticate] }, async (req) => {
@@ -80,7 +90,7 @@ export default async function (fastify) {
 
     // BigQuery no acepta un arreglo vacío como parámetro: sin locales no hay nada que consultar.
     const bq = cli.locales.length ? (q) => fastify.bq.query(q) : async () => [[]]
-    const [[ventasRows], [detRows], [origRows], valores, cierres, reglas, historial] = await Promise.all([
+    const [[ventasRows], [detRows], [origRows], valores, cierres, reglas, historial, observaciones, inflacion] = await Promise.all([
       // SUM sin COALESCE: si todo es NULL el dato no existe (null, no 0).
       // cajas / sinCubiertos / sinOrdenes: cuántas cajas hubo y cuántas no informaron
       // (NULL o 0). Con alguna sin informar, el motor no toma la suma como dato.
@@ -115,6 +125,9 @@ export default async function (fastify) {
                  WHERE cliente_id = $1 ORDER BY local, match, valor`, [id]),
       db.query(`SELECT local, mes, dato, antes, despues, por, at FROM rv_valor_historial
                  WHERE cliente_id = $1 AND mes = $2 ORDER BY at DESC, id DESC LIMIT 200`, [id, mes]),
+      db.query(`SELECT pagina, texto, actualizado_por, actualizado_at FROM rv_observacion
+                 WHERE cliente_id = $1 AND mes = $2`, [id, mes]),
+      ipcDe(desde.slice(0, 7), mes),
     ])
 
     const auto = Object.fromEntries(cli.locales.map((l) => [l, { meses: {}, detalles: {}, cajasOrigen: {} }]))
@@ -140,6 +153,8 @@ export default async function (fastify) {
       cierres: cierres.rows,
       reglas: reglas.rows,
       historial: historial.rows.map((h) => ({ ...h, antes: numOrNull(h.antes), despues: numOrNull(h.despues) })),
+      observaciones: Object.fromEntries(observaciones.rows.map((o) => [o.pagina, o])),
+      ipc: inflacion,
     }
   })
 
@@ -158,7 +173,8 @@ export default async function (fastify) {
     (await c.query('SELECT snapshot FROM rv_cierre WHERE cliente_id = $1 AND mes = $2 AND cerrado FOR UPDATE', [id, mes])).rows[0] || null
 
   // Corrige (o borra la corrección de) un dato. valor null = restaurar.
-  // En un mes cerrado solo se completa lo que la foto no trae (Ruling 24).
+  // En un mes cerrado solo se completa lo que la foto no trae (Ruling 24), salvo
+  // cubiertos, órdenes y tickets, que se corrigen siempre (datoLibre).
   fastify.put('/:id/valor', pre, async (req, reply) => {
     const id = idDe(req)
     const b = req.body || {}
@@ -176,7 +192,7 @@ export default async function (fastify) {
     try {
       await c.query('BEGIN')
       const cierre = await cierreDe(c, id, b.mes)
-      if (cierre && datoEnSnapshot(cierre.snapshot, local, dato)) { await c.query('ROLLBACK'); return reply.code(409).send({ error: MSG_EN_CIERRE }) }
+      if (cierre && !datoLibre(dato) && datoEnSnapshot(cierre.snapshot, local, dato)) { await c.query('ROLLBACK'); return reply.code(409).send({ error: MSG_EN_CIERRE }) }
       const prev = (await c.query(
         'SELECT valor FROM rv_valor WHERE cliente_id = $1 AND local = $2 AND mes = $3 AND dato = $4 FOR UPDATE',
         [id, local, b.mes, dato])).rows[0]
@@ -203,6 +219,46 @@ export default async function (fastify) {
   })
 
   // Borra todas las correcciones del mes (queda en el historial).
+  // Observación opcional de una hoja. texto vacío = borrarla. Se puede escribir aunque
+  // el mes esté cerrado: es un comentario, no cambia ningún número.
+  fastify.put('/:id/observacion', pre, async (req, reply) => {
+    const id = idDe(req)
+    const b = req.body || {}
+    const texto = obsOk(b.texto)
+    if (!id || !okMes(b.mes) || !paginaOk(b.pagina)) return reply.code(400).send({ error: 'Faltan datos o son inválidos (mes, hoja).' })
+    if (texto === null) return reply.code(400).send({ error: `La observación puede tener hasta ${OBS_MAX} caracteres.` })
+    if (!(await getCli(id))) return reply.code(404).send({ error: 'Cliente no encontrado' })
+    if (!texto) {
+      await db.query('DELETE FROM rv_observacion WHERE cliente_id = $1 AND mes = $2 AND pagina = $3', [id, b.mes, b.pagina])
+    } else {
+      await db.query(
+        `INSERT INTO rv_observacion (cliente_id, mes, pagina, texto, actualizado_por) VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (cliente_id, mes, pagina)
+         DO UPDATE SET texto = EXCLUDED.texto, actualizado_por = EXCLUDED.actualizado_por, actualizado_at = now()`,
+        [id, b.mes, b.pagina, texto, quien(req)])
+    }
+    return { ok: true }
+  })
+
+  // Inflación de un mes cargada a mano (vale para todos los clientes). null = volver
+  // a la de INDEC: se borra lo cargado y se vuelve a consultar.
+  fastify.put('/ipc', pre, async (req, reply) => {
+    const b = req.body || {}
+    if (!okMes(b.mes) || b.variacion === undefined || !ipcOk(b.variacion)) {
+      return reply.code(400).send({ error: 'mes (YYYY-MM) y variacion (un % entre -50 y 100, o null) requeridos.' })
+    }
+    if (b.variacion === null) {
+      await db.query(`DELETE FROM rv_ipc WHERE mes = $1 AND fuente = 'mano'`, [b.mes])
+      try { await ipc.actualizar(b.mes) } catch (err) { fastify.log.warn({ err }, 'reporte-ventas: no se pudo consultar el IPC de INDEC') }
+    } else {
+      await db.query(
+        `INSERT INTO rv_ipc (mes, variacion, fuente, actualizado_por) VALUES ($1, $2, 'mano', $3)
+         ON CONFLICT (mes) DO UPDATE SET variacion = EXCLUDED.variacion, fuente = 'mano',
+           actualizado_por = EXCLUDED.actualizado_por, actualizado_at = now()`, [b.mes, b.variacion, quien(req)])
+    }
+    return { ok: true }
+  })
+
   fastify.post('/:id/restaurar', pre, async (req, reply) => {
     const id = idDe(req)
     const mes = req.body?.mes

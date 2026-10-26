@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla } from './reporteVentas.js'
+import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla, datoLibre, obsOk, paginaOk, ipcOk, variacionesIpc } from './reporteVentas.js'
 
 test('esInterno: el is_admin externo no alcanza', () => {
   assert.equal(esInterno({ roles: ['dcsmart'] }), true)
@@ -82,4 +82,30 @@ test('logosOk: acepta imágenes en base64, descarta locales ajenos y rechaza lo 
   assert.equal(logosOk({ A: 'data:image/svg+xml;base64,PHN2Zz4=' }, locales), null)
   assert.equal(logosOk({ A: `data:image/png;base64,${'A'.repeat(400 * 1024)}` }, locales), null)
   assert.equal(logosOk([png], locales), null)
+})
+
+test('datos libres: cubiertos, órdenes y tickets; la venta y los canales no', () => {
+  assert.equal(datoLibre('cubiertos'), true)
+  assert.equal(datoLibre('ordenes'), true)
+  assert.equal(datoLibre('tickets:Rappi'), true)
+  assert.equal(datoLibre('venta'), false)
+  assert.equal(datoLibre('canal:Rappi'), false)
+})
+test('observaciones: hasta 280 caracteres, recortadas; páginas con id válido', () => {
+  assert.equal(obsOk('  Cerró por obra 5 días.  '), 'Cerró por obra 5 días.')
+  assert.equal(obsOk(''), '')
+  assert.equal(obsOk('x'.repeat(281)), null)
+  assert.equal(obsOk(5), null)
+  assert.equal(paginaOk('sintesis'), true)
+  assert.equal(paginaOk('mes:LATINO TACUARI 185'), true)
+  assert.equal(paginaOk('mes:'), false)
+  assert.equal(paginaOk('../x'), false)
+})
+test('IPC: variación mensual desde el índice de INDEC, sin saltar huecos', () => {
+  const v = variacionesIpc([['2025-08-01', 9193.2441], ['2025-09-01', 9384.0922], ['2025-11-01', 9841.3581]])
+  assert.deepEqual(v, { '2025-09': 2.0760 })
+  assert.equal(ipcOk(2.1), true)
+  assert.equal(ipcOk(null), true)
+  assert.equal(ipcOk(150), false)
+  assert.equal(ipcOk('2'), false)
 })
