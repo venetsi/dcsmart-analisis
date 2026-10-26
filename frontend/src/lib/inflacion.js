@@ -54,16 +54,31 @@ export function crecimientoReal(venta, anteriorAct) {
   return r2((venta / anteriorAct - 1) * 100)
 }
 
+// Último mes con inflación publicada, desde `mes` hacia atrás dentro del mismo año
+// (INDEC publica a mitad del mes siguiente). null si no hay ninguno.
+export function ultimoMesConDato(ipc, mes) {
+  for (let m = mes; m.slice(0, 4) === mes.slice(0, 4); m = mesPrevio(m)) {
+    if (variacion(ipc, m) != null) return m
+  }
+  return null
+}
+
 // Resumen para el acumulado: filas = [{ mes, venta, anterior }] de enero al mes del reporte.
+// Si la inflación del mes todavía no salió, todo se calcula hasta el último mes que
+// tiene dato (`hasta`), para no dejar la hoja vacía.
 export function inflacionDelAcumulado(ipc, filas, mes) {
-  const act = filas.map((f) => anteriorActualizado(ipc, f.mes, f.anterior))
-  const ventas = filas.map((f) => f.venta)
+  const hasta = ultimoMesConDato(ipc, mes)
+  if (!hasta) return { hasta: null, mes: null, anio: null, anteriorAct: null, real: null }
+  const tramo = filas.filter((f) => f.mes <= hasta)
+  const act = tramo.map((f) => anteriorActualizado(ipc, f.mes, f.anterior))
+  const ventas = tramo.map((f) => f.venta)
   const todas = (xs) => xs.length > 0 && xs.every(esNum)
   const suma = (xs) => xs.reduce((t, v) => t + v, 0)
   const anteriorAct = todas(act) ? suma(act) : null
   return {
-    mes: inflacionMes(ipc, mes),
-    anio: inflacionAnio(ipc, mes),
+    hasta,
+    mes: inflacionMes(ipc, hasta),
+    anio: inflacionAnio(ipc, hasta),
     anteriorAct,
     real: todas(ventas) ? crecimientoReal(suma(ventas), anteriorAct) : null,
   }

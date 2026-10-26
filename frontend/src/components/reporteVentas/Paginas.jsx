@@ -621,6 +621,9 @@ function Acumulado({ reporte, ...m }) {
     esNum(a.cubiertos) && <Tarjeta key="pc" k="Prom. por cubierto" clase="rv-card-acum"><Num v={a.promCubierto} pesos /></Tarjeta>,
     esNum(a.ordenes) && <Tarjeta key="po" k="Prom. por orden" clase="rv-card-acum"><Num v={a.promOrden} pesos /></Tarjeta>,
   ].filter(Boolean)
+  // Si la inflación del mes todavía no salió, las tarjetas van hasta el último mes publicado y lo dicen.
+  const mesInf = inf.hasta ? nombreMes(inf.hasta).toLowerCase() : mesNom
+  const atrasado = inf.hasta && inf.hasta !== reporte.mes
   const sinDato = 'Sin dato de INDEC'
   // Con varios locales, cuánto lleva cada uno en el año.
   const porLocal = reporte.consolidado
@@ -648,14 +651,15 @@ function Acumulado({ reporte, ...m }) {
       )}
       <div className="rv-acum-filas">
         <div className="rv-fila rv-cols-3">
-          <Tarjeta k={`Inflación de ${mesNom}`} clase="rv-card-acum rv-card-inf" sub={esNum(inf.mes) ? 'IPC mensual' : sinDato}>
+          <Tarjeta k={`Inflación de ${mesInf}`} clase="rv-card-acum rv-card-inf"
+            sub={esNum(inf.mes) ? (atrasado ? `Último dato de INDEC (${mesNom} todavía no salió)` : 'IPC mensual') : sinDato}>
             {esNum(inf.mes) ? `${fmtAR(inf.mes, 1)}%` : '—'}
           </Tarjeta>
-          <Tarjeta k={`Inflación enero – ${mesNom}`} clase="rv-card-acum rv-card-inf" sub={esNum(inf.anio) ? 'Acumulada en el año' : sinDato}>
+          <Tarjeta k={`Inflación enero – ${mesInf}`} clase="rv-card-acum rv-card-inf" sub={esNum(inf.anio) ? 'Acumulada en el año' : sinDato}>
             {esNum(inf.anio) ? `${fmtAR(inf.anio, 1)}%` : '—'}
           </Tarjeta>
-          <Tarjeta k="Crecimiento real" clase="rv-card-acum rv-card-inf"
-            sub={esNum(inf.real) ? `Contra ${anio - 1} actualizado por inflación (${texto(inf.anteriorAct, { pesos: true })})` : `Falta la inflación de algún mes o el acumulado de ${anio - 1}`}>
+          <Tarjeta k={atrasado ? `Crecimiento real enero – ${mesInf}` : 'Crecimiento real'} clase="rv-card-acum rv-card-inf"
+            sub={esNum(inf.real) ? `Contra ${anio - 1} actualizado por inflación (${texto(inf.anteriorAct, { pesos: true })})` : `Falta el acumulado de ${anio - 1} para comparar`}>
             <Num v={inf.real} pct signo />
           </Tarjeta>
         </div>

@@ -34,6 +34,14 @@ test('acumulado: crecimiento real sobre la suma de 2025 actualizada', () => {
   assert.equal(r.anio, 4.04)
   assert.equal(Math.round(r.anteriorAct), Math.round(200 * 1.02 ** 12))
   assert.equal(r.real, crecimientoReal(260, 200 * 1.02 ** 12))
-  // Falta la inflación de un mes: no hay real.
-  assert.equal(inflacionDelAcumulado(ipc, [...filas, { mes: '2026-09', venta: 1, anterior: 1 }], '2026-09').real, null)
+})
+test('si el mes del reporte no tiene inflación, se usa el último mes publicado', () => {
+  const filas = []
+  for (let m = 1; m <= 9; m++) filas.push({ mes: `2026-0${m}`, venta: 130, anterior: 100 })
+  const r = inflacionDelAcumulado(ipc, filas, '2026-09')
+  assert.equal(r.hasta, '2026-08')
+  assert.equal(r.mes, 2)
+  assert.equal(r.anio, inflacionAnio(ipc, '2026-08'))
+  assert.equal(r.real, crecimientoReal(130 * 8, 100 * 8 * 1.02 ** 12))
+  assert.equal(inflacionDelAcumulado({}, filas, '2026-09').hasta, null)
 })
