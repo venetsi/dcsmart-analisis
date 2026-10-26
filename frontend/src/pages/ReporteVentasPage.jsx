@@ -33,6 +33,12 @@ const mesActual = () => moverMes(mesAnterior(), 1)
 const fecha = (iso) => (iso ? new Date(iso).toLocaleDateString('es-AR') : '')
 
 // Datos de la API → un LocalMes por local, con los canales automáticos de cada mes.
+// Tickets de cada app y la venta de las líneas que los traen, como los espera armarLocal.
+function ticketsDelMes(cantidades, reglas) {
+  const t = ticketsAuto({ cantidades, reglas })
+  return { tickets: t.tickets, ticketsBase: t.base }
+}
+
 function armarPorLocal(data) {
   const porLocal = {}
   for (const local of data.cliente.locales) {
@@ -49,7 +55,7 @@ function armarPorLocal(data) {
     // Tickets de cada app: la cantidad de cobros que trae gestión, por mes.
     const mesesAuto = { ...a.meses }
     for (const [m, cantidades] of Object.entries(a.cantidades || {})) {
-      mesesAuto[m] = { ...mesesAuto[m], tickets: ticketsAuto({ cantidades, reglas }) }
+      mesesAuto[m] = { ...mesesAuto[m], ...ticketsDelMes(cantidades, reglas) }
     }
     porLocal[local] = armarLocal({
       local, mes: data.mes, auto: { meses: mesesAuto, canales }, valores: data.valores, cierres: data.cierres,

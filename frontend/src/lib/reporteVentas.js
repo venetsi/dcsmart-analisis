@@ -126,19 +126,29 @@ export function canalDeMetodo(metodo, reglas = []) {
 }
 
 // Tickets de cada canal de delivery en el mes, sumando la cantidad de cobros que trae
-// gestión (caja_detalles.cantidad). Un canal con alguna línea sin cantidad no se cuenta:
-// queda para cargar a mano.   cantidades: [{ metodo, cantidad, filas, conCantidad }]
+// gestión (caja_detalles.cantidad). Las líneas sin cantidad (cargas a mano) quedan afuera
+// si son minoría; si son la mitad o más, el canal queda para cargar a mano.
+//   cantidades: [{ metodo, cantidad, filas, conCantidad, montoConCantidad }]
+//   → { tickets: { canal: n }, base: { canal: venta de las líneas con cantidad } }
 export function ticketsAuto({ cantidades = [], reglas = [] }) {
-  const out = {}
-  const incompletos = new Set()
+  const acum = {}
   for (const c of cantidades) {
     const canal = canalDeMetodo(c.metodo, reglas)
     if (!canal || !canal.delivery) continue
-    if (num(c.conCantidad) !== num(c.filas)) { incompletos.add(canal.nombre); continue }
-    out[canal.nombre] = (out[canal.nombre] ?? 0) + (num(c.cantidad) ?? 0)
+    const a = (acum[canal.nombre] ||= { tickets: 0, filas: 0, con: 0, base: 0 })
+    a.tickets += num(c.cantidad) ?? 0
+    a.filas += num(c.filas) ?? 0
+    a.con += num(c.conCantidad) ?? 0
+    a.base += num(c.montoConCantidad) ?? 0
   }
-  for (const n of incompletos) delete out[n]
-  return out
+  const tickets = {}
+  const base = {}
+  for (const [canal, a] of Object.entries(acum)) {
+    if (a.con * 2 <= a.filas) continue
+    tickets[canal] = a.tickets
+    if (a.con < a.filas) base[canal] = r2(a.base)
+  }
+  return { tickets, base }
 }
 
 // Datos que se corrigen aunque el mes esté cerrado (igual que en la API).
@@ -319,7 +329,9 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
       if (!c.delivery || c.valor == null) continue
       const ticketsDato = ticketsDe(m, c.nombre)
       const tickets = ticketsDato.valor
-      apps[c.nombre] = { venta: c.valor, tickets, prom: dividir(c.valor, tickets), ticketsDato }
+      // Con tickets automáticos de una parte de las líneas, el promedio usa la venta de esas líneas.
+      const base = ticketsDato.fuente === 'auto' ? num(autoMeses[m]?.ticketsBase?.[c.nombre]) : null
+      apps[c.nombre] = { venta: c.valor, tickets, prom: dividir(base ?? c.valor, tickets), ticketsDato }
       total = r2((total ?? 0) + c.valor)
     }
     return { mes: m, apps, total }

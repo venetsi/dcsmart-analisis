@@ -57,16 +57,17 @@ export default async function (fastify) {
   })
   const conLogosLocal = async (cli) => (cli ? { ...cli, logosLocal: await logosDe(cli.grupo, cli.locales) } : cli)
 
-  // { local: { 'YYYY-MM': [{ metodo, cantidad, filas, conCantidad }] } } con la cantidad de
-  // cobros de cada método (caja_detalles.cantidad en gestión). filas/conCantidad dicen si
-  // todas las líneas la traen: el motor solo la usa completa.
+  // { local: { 'YYYY-MM': [{ metodo, cantidad, filas, conCantidad, montoConCantidad }] } } con
+  // la cantidad de cobros de cada método (caja_detalles.cantidad en gestión). filas/conCantidad
+  // dicen cuántas líneas la traen y montoConCantidad cuánto vendieron esas líneas.
   const cantidadesDe = async (cajas) => {
     if (!cajas.length) return {}
     const deCaja = new Map(cajas.map((c) => [c.id, c]))
     try {
       const { rows } = await fastify.dcsmartRo.query(
         `SELECT id_caja::text AS id_caja, nombre AS metodo, SUM(cantidad)::int AS cantidad,
-                COUNT(*)::int AS filas, COUNT(cantidad)::int AS con
+                COUNT(*)::int AS filas, COUNT(cantidad)::int AS con,
+                COALESCE(SUM(monto) FILTER (WHERE cantidad IS NOT NULL), 0)::float AS monto_con
            FROM caja_detalles
           WHERE id_caja::text = ANY($1::text[]) AND tipo = 'cobro' AND monto <> 0
           GROUP BY 1, 2`, [[...deCaja.keys()]])
@@ -77,8 +78,8 @@ export default async function (fastify) {
         const lista = ((out[c.local] ||= {})[c.mes] ||= [])
         const metodo = String(r.metodo ?? '').trim()
         const prev = lista.find((x) => x.metodo === metodo)
-        if (prev) { prev.cantidad += r.cantidad ?? 0; prev.filas += r.filas; prev.conCantidad += r.con }
-        else lista.push({ metodo, cantidad: r.cantidad ?? 0, filas: r.filas, conCantidad: r.con })
+        if (prev) { prev.cantidad += r.cantidad ?? 0; prev.filas += r.filas; prev.conCantidad += r.con; prev.montoConCantidad += r.monto_con }
+        else lista.push({ metodo, cantidad: r.cantidad ?? 0, filas: r.filas, conCantidad: r.con, montoConCantidad: r.monto_con })
       }
       return out
     } catch (err) {

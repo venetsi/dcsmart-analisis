@@ -333,14 +333,15 @@ test('cubiertos: si informó menos de la mitad de las cajas queda falta', () => 
   const l = armarLocal({ local: 'X', mes: '2026-09', auto, valores: [], cierres: [] })
   assert.equal(l.cubiertos.fuente, 'falta')
 })
-test('tickets de cada app desde la cantidad de cobros; con líneas sin cantidad no se cuentan', () => {
+test('tickets de cada app desde la cantidad de cobros; las líneas sin cantidad, si son minoría, quedan afuera', () => {
   const t = ticketsAuto({ cantidades: [
-    { metodo: 'PedidosYa', cantidad: 29, filas: 20, conCantidad: 20 },
-    { metodo: 'PEDIDO YA', cantidad: 1, filas: 1, conCantidad: 1 },
-    { metodo: 'Rappi', cantidad: 21, filas: 17, conCantidad: 17 },
-    { metodo: 'RAPPI', cantidad: 0, filas: 2, conCantidad: 0 },
-    { metodo: 'MpDelivery', cantidad: 15, filas: 10, conCantidad: 10 },
-    { metodo: 'Credito', cantidad: 390, filas: 40, conCantidad: 40 },
+    { metodo: 'PedidosYa', cantidad: 12, filas: 7, conCantidad: 7, montoConCantidad: 600 },
+    { metodo: 'PEDIDO YA', cantidad: 2, filas: 3, conCantidad: 2, montoConCantidad: 100 },
+    { metodo: 'Rappi', cantidad: 1, filas: 1, conCantidad: 1, montoConCantidad: 50 },
+    { metodo: 'RAPPI', cantidad: 0, filas: 2, conCantidad: 0, montoConCantidad: 0 },
+    { metodo: 'MpDelivery', cantidad: 6, filas: 4, conCantidad: 4, montoConCantidad: 264 },
+    { metodo: 'Credito', cantidad: 390, filas: 40, conCantidad: 40, montoConCantidad: 9 },
   ] })
-  assert.deepEqual(t, { 'Pedidos Ya': 30, 'MP Delivery': 15 })
+  assert.deepEqual(t.tickets, { 'Pedidos Ya': 14, 'MP Delivery': 6 })
+  assert.deepEqual(t.base, { 'Pedidos Ya': 700 }) // MP Delivery tiene todas: usa su venta entera
 })
