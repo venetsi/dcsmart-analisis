@@ -345,3 +345,15 @@ test('tickets de cada app desde la cantidad de cobros; las líneas sin cantidad,
   assert.deepEqual(t.tickets, { 'Pedidos Ya': 14, 'MP Delivery': 6 })
   assert.deepEqual(t.base, { 'Pedidos Ya': 700 }) // MP Delivery tiene todas: usa su venta entera
 })
+
+test('mes cerrado con cubiertos guardados sin su venta: si coinciden con lo automático, el promedio usa la venta de esas cajas', () => {
+  const auto = { canales: {}, meses: { '2026-09': {
+    venta: 77298668, cubiertos: 1520, ordenes: 868, cajas: 32, sinCubiertos: 6, sinOrdenes: 6,
+    ventaConCubiertos: 46013668, ventaConOrdenes: 46013668 } } }
+  const foto = (cub, ord) => [{ mes: '2026-09', origen: 'deck', snapshot: { locales: { X: { venta: 77298668, cubiertos: cub, ordenes: ord } } } }]
+  const l = armarLocal({ local: 'X', mes: '2026-09', auto, valores: [], cierres: foto(1520, 886) })
+  assert.equal(l.cubiertos.fuente, 'cerrado')
+  assert.equal(Math.round(l.promCubierto), Math.round(46013668 / 1520))
+  // Órdenes distintas a las automáticas: no se sabe qué cajas son, va con la venta entera.
+  assert.equal(Math.round(l.promOrden), Math.round(77298668 / 886))
+})
