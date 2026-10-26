@@ -8,12 +8,10 @@ import LoginPage from './pages/LoginPage.jsx'
 import SsoPage from './pages/SsoPage.jsx'
 import GroupSelectPage from './pages/GroupSelectPage.jsx'
 import InicioPage from './pages/InicioPage.jsx'
-import DashboardPage from './pages/DashboardPage.jsx'
 import ResumenPage from './pages/ResumenPage.jsx'
 import PyLPage from './pages/PyLPage.jsx'
 import InformePage from './pages/InformePage.jsx'
 import ReporteVentasPage from './pages/ReporteVentasPage.jsx'
-import ResumenFinancieroPage from './pages/ResumenFinancieroPage.jsx'
 import AdminUsersPage from './pages/AdminUsersPage.jsx'
 
 function RequireAuth({ children }) {
@@ -78,13 +76,9 @@ export default function App() {
       >
         <Route index element={<InicioPage />} />
         <Route path="dashboard" element={<ResumenPage />} />
-        <Route path="pagos" element={<DashboardPage key="pagos" screen="pagos" />} />
-        <Route path="ventas" element={<DashboardPage key="ventas" screen="ventas" />} />
-        <Route path="cashflow" element={<DashboardPage key="cashflow" screen="cashflow" />} />
         <Route path="pyl" element={<PyLPage />} />
         <Route path="reporte-mensual" element={<InformePage />} />
         <Route path="reporte-ventas" element={<ReporteVentasPage />} />
-        <Route path="financiero" element={<ResumenFinancieroPage />} />
         <Route
           path="admin/usuarios"
           element={
