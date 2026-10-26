@@ -1,140 +1,188 @@
 /* Reporte de Ventas mensual: hojas de 1456×819 que se imprimen en PDF.
-   Fondo claro, azul noche #0f1b2d, dorado #c9a24a, Montserrat (global.css).
+   Diseño oscuro de oct-26 (referencia: "Reporte de ventas · 3 Monos · Septiembre 2026"):
+   fondo azul noche, tarjetas un tono más claro, dorado DCSMART, Montserrat (global.css).
    Los selectores van con .rv-hoja delante para ganarle a las reglas de tabla de global.css. */
 
 .rv-hoja {
+  --rv-fondo: #19232f; --rv-fondo-2: #111820; --rv-card: #1e2b3a; --rv-borde: #2a3644;
+  --rv-tx: #f0ede8; --rv-tx-2: #a6a9ab; --rv-tx-3: #7a8087;
+  --rv-oro: #c9b086; --rv-verde: #5fcb92; --rv-rojo: #f07b7b;
+  --rv-act: #dcd7ce; --rv-ant: #5b6b7d; --rv-pista: #3a4a5c; --rv-teal: #4fb3bb;
+
   position: relative; width: 1456px; height: 819px; overflow: hidden; box-sizing: border-box;
-  background: #fff; color: #0f1b2d; font-family: 'Montserrat', system-ui, sans-serif;
-  font-size: 18px; line-height: 1.3; -webkit-font-smoothing: antialiased;
+  background: var(--rv-fondo); color: var(--rv-tx); font-family: 'Montserrat', system-ui, sans-serif;
+  font-size: 20px; line-height: 1.3; -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .rv-hoja * { box-sizing: border-box; }
 .rv-mazo .rv-hoja { margin: 0 auto 28px; box-shadow: 0 4px 24px rgba(0, 0, 0, .22); }
 
-/* encabezado y pie */
-.rv-hd { display: flex; justify-content: space-between; align-items: center; height: 86px; padding: 0 48px; border-bottom: 4px solid #c9a24a; }
-.rv-hd-tit { font-size: 27px; font-weight: 800; letter-spacing: .01em; }
-.rv-gold { color: #c9a24a; }
-.rv-k { font-size: 14px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #6b7689; }
-.rv-pie {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 40px; padding: 0 48px;
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 13px; color: #8a93a6; border-top: 1px solid #eef0f4;
-}
-.rv-cuerpo { padding: 28px 48px 0; }
+.rv-pos { color: var(--rv-verde); }
+.rv-neg { color: var(--rv-rojo); }
+.rv-dorado { color: var(--rv-oro); }
+.rv-nulo { color: var(--rv-tx-3); }
 
-/* indicadores */
-.rv-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-.rv-kpis .rv-kpi { background: #f5f6f8; border-radius: 10px; padding: 20px 24px; border-top: 3px solid #0f1b2d; }
-.rv-kpis .rv-kpi:first-child { border-top-color: #c9a24a; }
-.rv-kpis-sec { margin-top: 16px; }
-.rv-kpis-sec .rv-kpi { padding: 14px 24px; border-top-width: 0; }
-.rv-big { font-size: 33px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 6px; white-space: nowrap; }
-.rv-big-chico { font-size: 26px; font-weight: 700; }
-.rv-neg { color: #b23a26; }
-.rv-nulo { color: #9aa3b2; }
-.rv-k-graf { margin-bottom: 14px; }
+/* encabezado: ceja dorada + titular */
+.rv-cab { position: relative; display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; padding: 96px 97px 0; }
+.rv-ceja { font-size: 19px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--rv-oro); }
+.rv-hoja h2.rv-tit { margin: 14px 0 0; font-size: 46px; font-weight: 800; line-height: 1.18; letter-spacing: -.01em; color: var(--rv-tx); }
+.rv-cuerpo { position: relative; padding: 32px 97px 0; }
+
+/* pie */
+.rv-pie {
+  position: absolute; left: 97px; right: 97px; bottom: 50px; display: flex; justify-content: space-between; align-items: center;
+  font-size: 18px; color: var(--rv-tx-3);
+}
+.rv-pie-izq { display: flex; align-items: center; gap: 12px; }
+/* el rombo del logo: el PNG horizontal recortado a su primer 55% */
+.rv-pie-logo { width: 26px; height: 30px; background: url('/logos/DCSMART-ANALYTICS-horizontal.png') left center / auto 100% no-repeat; opacity: .7; }
+
+/* tarjetas */
+.rv-card { background: var(--rv-card); border: 1px solid var(--rv-borde); border-radius: 10px; padding: 30px 28px; }
+.rv-card-k { font-size: 19px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--rv-tx-2); white-space: nowrap; }
+.rv-card-v { margin-top: 8px; font-size: 50px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
+.rv-card-sub { margin-top: 10px; font-size: 18px; color: var(--rv-tx-2); }
+.rv-card-oro { background: #2a2a22; border-color: #605846; }
+.rv-card-oro .rv-card-k { color: var(--rv-oro); }
+.rv-card-sec { padding: 26px 28px 30px; }
+.rv-card-sec .rv-card-k, .rv-card-acum .rv-card-k { font-size: 18px; letter-spacing: .05em; }
+.rv-card-sec .rv-card-v { font-size: 40px; }
+.rv-fila { display: grid; gap: 18px; }
+.rv-fila-sec { margin-top: 32px; }
+.rv-cols-1 { grid-template-columns: 1fr; }
+.rv-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.rv-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.rv-cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+/* síntesis */
+.rv-sint-tarjetas { position: absolute; left: 97px; right: 97px; bottom: 122px; display: grid; gap: 24px; }
+.rv-sint-card { padding: 34px 30px 32px; }
+.rv-sint-v { font-size: 58px; font-weight: 800; line-height: 1.05; white-space: nowrap; }
+.rv-sint-txt { margin-top: 14px; font-size: 21px; line-height: 1.4; color: var(--rv-tx-2); max-width: 330px; }
+
+/* participación (canales y locales) */
+.rv-part { display: grid; grid-template-columns: 1fr 783px; gap: 60px; align-items: center; min-height: 420px; }
+.rv-part-big { font-size: 128px; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: var(--rv-oro); }
+.rv-part-txt { margin-top: 18px; font-size: 25px; line-height: 1.4; color: var(--rv-tx-2); max-width: 400px; }
+.rv-part-lista { background: var(--rv-card); border: 1px solid var(--rv-borde); border-radius: 10px; padding: 14px 30px 30px; }
+.rv-part-fila { display: flex; flex-direction: column; justify-content: center; gap: 10px; border-bottom: 1px solid #23303e; padding: 18px 0; }
+.rv-part-nom { display: flex; justify-content: space-between; font-size: 28px; font-weight: 700; }
+.rv-part-pista { height: 14px; border-radius: 7px; background: var(--rv-pista); overflow: hidden; }
+.rv-part-barra { height: 100%; border-radius: 7px; background: var(--rv-teal); }
+.rv-part-barra-1 { background: var(--rv-oro); }
+.rv-part-pct { font-size: 19px; color: var(--rv-tx-2); }
+.rv-part-total { display: flex; justify-content: space-between; padding-top: 22px; border-top: 2px solid #535c66; margin-top: -1px; font-size: 28px; font-weight: 800; }
+.rv-part-muchas { padding-top: 6px; padding-bottom: 20px; }
+.rv-part-muchas .rv-part-fila { padding: 10px 0; gap: 6px; }
+.rv-part-muchas .rv-part-nom, .rv-part-muchas .rv-part-total { font-size: 22px; }
+.rv-part-muchas .rv-part-pista { height: 10px; }
+.rv-part-muchas .rv-part-pct { font-size: 16px; }
+.rv-part-muchas .rv-part-total { padding-top: 14px; }
+.rv-part-muchisimas .rv-part-fila { padding: 6px 0; gap: 4px; }
+.rv-part-muchisimas .rv-part-nom, .rv-part-muchisimas .rv-part-total { font-size: 19px; }
+.rv-part-muchisimas .rv-part-pista { height: 8px; }
+.rv-part-muchisimas .rv-part-pct { font-size: 14px; }
 
 /* tablas */
-.rv-hoja table.rv-tabla { width: 100%; border-collapse: collapse; font-size: 18px; font-variant-numeric: tabular-nums; margin-top: 18px; }
+.rv-hoja table.rv-tabla { width: 100%; border-collapse: collapse; font-size: 20px; margin: 0; border: 1px solid #363e48; }
 .rv-hoja .rv-tabla th, .rv-hoja .rv-tabla td {
-  padding: 9px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid #eef0f4;
-  color: #0f1b2d; background: none; position: static;
+  padding: 7px 12px; text-align: right; white-space: nowrap; border: 1px solid #363e48;
+  color: var(--rv-tx); background: var(--rv-fondo); position: static;
 }
-.rv-hoja .rv-tabla thead th {
-  font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #6b7689;
-  border-bottom: 2px solid #0f1b2d;
-}
-.rv-hoja .rv-tabla th:first-child, .rv-hoja .rv-tabla td:first-child { text-align: left; padding-left: 0; }
-.rv-hoja .rv-tabla tbody tr:hover { background: none; }
-.rv-hoja .rv-tabla td .rv-neg { color: #b23a26; }
-.rv-hoja .rv-tabla td .rv-nulo { color: #9aa3b2; }
-.rv-hoja .rv-tabla tr.rv-tot td { font-weight: 800; border-top: 2px solid #0f1b2d; border-bottom: 0; }
-.rv-hoja .rv-tabla tr.rv-cur td { background: #faf5e8; font-weight: 700; }
-.rv-hoja .rv-tabla td.rv-fuerte { font-weight: 700; }
-.rv-hoja .rv-tabla td.rv-tenue { color: #6b7689; }
-.rv-hoja table.rv-tabla-chica { font-size: 16px; }
-.rv-hoja .rv-tabla-chica th, .rv-hoja .rv-tabla-chica td { padding: 7px 9px; }
-.rv-hoja table.rv-tabla-mini { font-size: 14.5px; }
-.rv-hoja .rv-tabla-mini th, .rv-hoja .rv-tabla-mini td { padding: 6px 7px; }
-.rv-hoja .rv-tabla-mini thead th { font-size: 11.5px; letter-spacing: .03em; }
-.rv-hoja .rv-tabla tr.rv-grupo th { border-bottom: 0; color: #0f1b2d; font-size: 14px; text-align: center; padding-bottom: 0; }
-.rv-hoja .rv-tabla .rv-sep { border-left: 1px solid #e3e6ec; }
+.rv-hoja .rv-tabla thead th { background: var(--rv-fondo-2); color: var(--rv-oro); font-size: 19px; font-weight: 700; padding: 14px 12px; vertical-align: top; white-space: normal; text-transform: none; letter-spacing: 0; }
+.rv-hoja .rv-tabla th:first-child, .rv-hoja .rv-tabla td:first-child { text-align: left; }
+.rv-hoja .rv-tabla tbody tr:hover td { background: var(--rv-fondo); }
+.rv-hoja .rv-tabla td .rv-pos { color: var(--rv-verde); }
+.rv-hoja .rv-tabla td .rv-neg { color: var(--rv-rojo); }
+.rv-hoja .rv-tabla td .rv-nulo { color: var(--rv-tx-3); }
+.rv-hoja .rv-tabla td.rv-tenue { color: var(--rv-tx-2); }
+.rv-hoja .rv-tabla tr.rv-cur td, .rv-hoja .rv-tabla tbody tr.rv-cur:hover td { background: #332e22; }
+.rv-hoja .rv-tabla tr.rv-tot td, .rv-hoja .rv-tabla tbody tr.rv-tot:hover td { background: var(--rv-card); font-weight: 700; padding-top: 12px; padding-bottom: 12px; }
+.rv-hoja .rv-tabla tr.rv-grupo th { background: var(--rv-fondo-2); color: var(--rv-tx); text-align: center; padding: 8px 12px 0; border-bottom: 0; }
+/* 10 a 12 meses: filas más bajas para que entren con el total */
+.rv-hoja table.rv-tabla-12 { font-size: 18px; }
+.rv-hoja .rv-tabla-12 td { padding: 4px 10px; }
+.rv-hoja .rv-tabla-12 thead th { padding: 10px 10px; font-size: 17px; }
+.rv-hoja .rv-tabla-12 tr.rv-tot td { padding-top: 7px; padding-bottom: 7px; }
+/* muchas columnas (grupos con muchos locales) */
+.rv-hoja table.rv-tabla-ancha { font-size: 17px; }
+.rv-hoja .rv-tabla-ancha th, .rv-hoja .rv-tabla-ancha td { padding-left: 7px; padding-right: 7px; }
+.rv-hoja .rv-tabla-ancha thead th { font-size: 15px; }
 
-/* gráficos */
+/* columnas mes a mes */
+.rv-comp { padding-top: 56px; }
 .rv-svg { display: block; overflow: visible; font-family: 'Montserrat', system-ui, sans-serif; }
-.rv-svg-nom { font-size: 17px; font-weight: 600; fill: #0f1b2d; }
-.rv-svg-pct { font-size: 17px; font-weight: 700; fill: #0f1b2d; }
-.rv-svg-pct.rv-neg { fill: #b23a26; }
-.rv-svg-mes { font-size: 14px; font-weight: 600; fill: #6b7689; text-transform: capitalize; }
-.rv-svg-val { font-size: 14px; font-weight: 700; fill: #0f1b2d; }
-.rv-svg-ant { font-size: 14px; font-weight: 700; fill: #4d6a99; }
-.rv-svg-eje { font-size: 12px; fill: #8a93a6; }
-.rv-leyenda { display: flex; gap: 22px; font-size: 13px; color: #6b7689; margin: -6px 0 12px; }
-.rv-leyenda i { display: inline-block; vertical-align: middle; margin-right: 6px; }
-.rv-ley-act { width: 16px; height: 12px; border-radius: 2px; background: #0f1b2d; }
-.rv-ley-ant { width: 16px; height: 12px; border-radius: 2px; background: #6f8fbf; }
-.rv-leyenda-grande { font-size: 17px; font-weight: 600; margin: 0 0 14px; }
-.rv-comp { padding-top: 22px; }
-
-/* consolidado */
-.rv-consol { padding-top: 22px; }
-.rv-consol-arriba { display: grid; grid-template-columns: 330px 1fr 460px; gap: 48px; margin-bottom: 22px; align-items: start; }
-.rv-consol-arriba .rv-tabla { margin-top: 0; }
-.rv-hoja .rv-consol-arriba .rv-tabla th, .rv-hoja .rv-consol-arriba .rv-tabla td { padding-top: 6px; padding-bottom: 6px; }
-.rv-consol > .rv-tabla { margin-top: 0; }
-.rv-hoja .rv-consol > .rv-tabla td { padding-top: 5px; padding-bottom: 5px; }
-.rv-hoja .rv-consol > .rv-tabla-mini td { padding-top: 4px; padding-bottom: 4px; }
-
-/* mes */
-.rv-dos { display: grid; grid-template-columns: 1fr 600px; gap: 64px; margin-top: 36px; }
-.rv-dos > .rv-tabla { margin-top: 32px; align-self: start; }
-.rv-hoja .rv-dos > .rv-tabla { font-size: 20px; }
-.rv-hoja .rv-dos > .rv-tabla td { padding-top: 13px; padding-bottom: 13px; }
-
-/* histórico: la tabla se ensancha si suma columnas de cubiertos u órdenes */
-.rv-hist { display: grid; gap: 44px; padding-top: 22px; }
-.rv-hist-0 { grid-template-columns: 1fr 600px; }
-.rv-hist-1 { grid-template-columns: 1fr 500px; }
-.rv-hist-2 { grid-template-columns: 1fr 440px; gap: 32px; }
-.rv-hist-solo { grid-template-columns: 1fr; }
-.rv-hist > .rv-tabla { margin-top: 0; align-self: start; }
+.rv-col-act { fill: var(--rv-act); }
+.rv-col-cur { fill: var(--rv-oro); }
+.rv-col-ant { fill: var(--rv-ant); }
+.rv-col-val { font-weight: 700; fill: var(--rv-tx); }
+.rv-col-val-cur { fill: var(--rv-oro); }
+.rv-col-val-ant { font-weight: 500; fill: var(--rv-tx-2); }
+.rv-col-mes { font-size: 21px; font-weight: 500; fill: var(--rv-tx-2); }
+.rv-col-mes-cur { font-weight: 700; fill: var(--rv-oro); }
+.rv-col-base { stroke: #474f59; stroke-width: 2; }
+.rv-leyenda { display: flex; gap: 30px; font-size: 20px; color: var(--rv-tx-2); padding-bottom: 6px; }
+.rv-leyenda i { display: inline-block; vertical-align: -2px; width: 18px; height: 18px; border-radius: 4px; margin-right: 10px; }
+.rv-ley-act { background: var(--rv-act); }
+.rv-ley-ant { background: var(--rv-ant); }
 
 /* delivery */
-.rv-minis { display: grid; gap: 24px; margin-top: 26px; }
-.rv-mini { border-top: 1px solid #eef0f4; padding-top: 12px; }
-.rv-mini .rv-k { margin-bottom: 4px; }
-.rv-mini-vacia { color: #9aa3b2; font-size: 18px; padding: 20px 0; }
+.rv-minis { display: grid; gap: 18px; margin-top: 22px; }
+.rv-mini { padding: 16px 22px 10px; }
+.rv-mini .rv-card-k { font-size: 15px; margin-bottom: 4px; }
+.rv-mini-linea { stroke: var(--rv-act); }
+.rv-mini-pto { fill: var(--rv-act); }
+.rv-mini-cur { fill: var(--rv-oro); }
+.rv-mini-val { font-size: 15px; font-weight: 700; fill: var(--rv-tx); }
+.rv-mini-eje { font-size: 13px; fill: var(--rv-tx-3); }
+.rv-mini-vacia { color: var(--rv-tx-3); font-size: 18px; padding: 20px 0; }
 
-/* portada y contraportada */
-.rv-oscura { background: #0f1b2d; color: #f4efe4; }
-.rv-oscura .rv-pie { border-top-color: rgba(255, 255, 255, .08); color: rgba(244, 239, 228, .45); }
-.rv-portada-brillo { position: absolute; inset: 0; background: radial-gradient(circle at 88% 18%, rgba(201, 162, 74, .16), rgba(201, 162, 74, 0) 40%); }
-.rv-brillo-centro { background: radial-gradient(circle at 50% 45%, rgba(201, 162, 74, .12), rgba(201, 162, 74, 0) 45%); }
-.rv-portada-logo { position: absolute; left: 70px; top: 56px; width: 380px; height: auto; }
-.rv-portada-txt { position: absolute; left: 80px; top: 50%; transform: translateY(-38%); max-width: 760px; }
+/* acumulado */
+.rv-acum, .rv-portada, .rv-contra { background: linear-gradient(135deg, #111820 0%, #151d28 45%, #19232f 100%); }
+.rv-brillo, .rv-portada-brillo { position: absolute; inset: 0; background: radial-gradient(ellipse 620px 480px at 82% 20%, rgba(201, 176, 134, .09), rgba(201, 176, 134, 0) 70%); }
+.rv-acum-big { position: relative; padding: 18px 97px 0; font-size: 122px; font-weight: 800; line-height: 1.05; letter-spacing: -.02em; white-space: nowrap; }
+.rv-acum-sub { position: relative; padding: 14px 97px 0; font-size: 31px; color: var(--rv-tx-2); }
+.rv-acum-locales { position: relative; display: flex; flex-wrap: wrap; gap: 10px 40px; padding: 30px 97px 0; }
+.rv-acum-local { display: flex; align-items: baseline; gap: 12px; font-size: 21px; }
+.rv-acum-local-nom { color: var(--rv-tx-2); }
+.rv-acum-local-v { font-weight: 700; }
+.rv-acum-local-var { font-size: 18px; }
+.rv-acum-tarjetas { position: absolute; left: 97px; right: 97px; bottom: 122px; display: grid; gap: 18px; }
+.rv-card-acum { background: rgba(255, 255, 255, .03); border-color: #2c333b; padding: 30px 28px; }
+.rv-card-acum .rv-card-k { color: var(--rv-oro); }
+.rv-card-acum .rv-card-v { font-size: 40px; }
+
+/* portada */
+.rv-portada-logo { position: absolute; left: 147px; top: 97px; width: 189px; height: auto; }
+.rv-portada-txt { position: absolute; left: 97px; top: 218px; max-width: 900px; }
+.rv-portada-txt-angosto { max-width: 780px; }
+.rv-portada-ceja { font-size: 22px; letter-spacing: .16em; }
+.rv-hoja h1.rv-portada-tit { margin: 22px 0 0; font-size: 116px; font-weight: 800; line-height: 1.05; letter-spacing: -.02em; color: var(--rv-tx); }
+.rv-hoja h1.rv-portada-tit-largo { font-size: 84px; }
+.rv-portada-mes { margin-top: 30px; font-size: 40px; font-weight: 400; color: #c9c7c2; }
+.rv-portada-locales { margin-top: 26px; font-size: 21px; color: var(--rv-tx-2); letter-spacing: .02em; }
+.rv-portada-pie { position: absolute; left: 97px; right: 97px; bottom: 50px; display: flex; justify-content: space-between; font-size: 19px; color: #8b9097; }
 /* logos de los locales: sobre blanco para que se vean sea cual sea su color */
-.rv-portada-logos { position: absolute; right: 80px; top: 50%; transform: translateY(-50%); max-width: 520px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px 32px; padding: 32px 36px; background: #fff; border-radius: 18px; }
+.rv-portada-logos { position: absolute; right: 97px; top: 50%; transform: translateY(-50%); max-width: 460px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 22px 28px; padding: 30px 34px; background: #f4f1ea; border-radius: 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); }
 .rv-portada-logos img { display: block; object-fit: contain; max-width: 100%; }
-.rv-logos-1 img { max-height: 240px; max-width: 440px; }
-.rv-logos-2 img { max-height: 150px; max-width: 400px; }
-.rv-logos-3 img, .rv-logos-4 img { max-height: 110px; max-width: 200px; }
-.rv-logos-5 img, .rv-logos-6 img { max-height: 80px; max-width: 150px; }
-.rv-portada-tit { font-size: 72px; font-weight: 800; line-height: 1.05; }
-.rv-portada-sub { font-size: 36px; font-weight: 600; color: #c9a24a; margin-top: 14px; }
-.rv-portada-locales { margin-top: 36px; font-size: 20px; color: #b9c1d0; letter-spacing: .02em; }
-.rv-portada-lema { position: absolute; right: 80px; bottom: 76px; font-size: 20px; color: #b9c1d0; }
-.rv-contra { position: absolute; inset: 0 0 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; }
-.rv-contra-logo { width: 560px; height: auto; }
-.rv-contra-lema { font-size: 40px; font-weight: 600; color: #c9a24a; letter-spacing: .01em; }
+.rv-logos-1 img { max-height: 220px; max-width: 380px; }
+.rv-logos-2 img { max-height: 140px; max-width: 360px; }
+.rv-logos-3 img, .rv-logos-4 img { max-height: 100px; max-width: 180px; }
+.rv-logos-5 img, .rv-logos-6 img { max-height: 74px; max-width: 136px; }
+
+/* contraportada */
+.rv-contra-brillo { position: absolute; inset: 0; background: radial-gradient(ellipse 560px 420px at 50% 44%, rgba(201, 176, 134, .1), rgba(201, 176, 134, 0) 70%), radial-gradient(ellipse 900px 600px at 50% 50%, rgba(30, 43, 58, .9), rgba(30, 43, 58, 0) 80%); }
+.rv-contra-cuerpo { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 56px; padding-top: 30px; }
+.rv-contra-logo { width: 435px; height: auto; }
+.rv-contra-lema { font-size: 56px; font-weight: 800; color: var(--rv-oro); letter-spacing: -.005em; }
 
 /* marca de agua del borrador */
 .rv-marca {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-28deg);
-  font-size: 176px; font-weight: 800; letter-spacing: .12em; color: rgba(178, 58, 38, .10);
+  font-size: 176px; font-weight: 800; letter-spacing: .12em; color: rgba(240, 237, 232, .07);
   pointer-events: none; white-space: nowrap; user-select: none;
 }
-.rv-oscura .rv-marca { color: rgba(244, 239, 228, .08); }
 
 /* ═══════════════════════ PDF ═══════════════════════
    Mismo patrón que informe.css: en pantalla el mazo de impresión no se ve; al imprimir
@@ -145,7 +193,7 @@
   @page rv { size: 1456px 819px !important; margin: 0 !important; }
   body.imprimiendo-rv #root { display: none !important; }
   body.imprimiendo-rv .rv-print { display: block !important; }
-  body.imprimiendo-rv { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  body.imprimiendo-rv { background: #19232f !important; margin: 0 !important; padding: 0 !important; }
   body.imprimiendo-rv::before { display: none !important; }
   .rv-print .rv-hoja { page: rv; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
   .rv-print .rv-hoja:last-child { page-break-after: auto; break-after: auto; }
