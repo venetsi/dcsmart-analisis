@@ -259,8 +259,11 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     const ordenes = datoBase(m, 'ordenes')
     const previo = datoBase(mesPrevio(m), 'venta').valor
     const anterior = datoBase(mesAnioAnterior(m), 'venta').valor
+    // Cubiertos y órdenes del mismo mes del año anterior, para las flechas de la hoja histórico.
+    const cubiertosAnt = datoBase(mesAnioAnterior(m), 'cubiertos').valor
+    const ordenesAnt = datoBase(mesAnioAnterior(m), 'ordenes').valor
     return {
-      mes: m, venta, anterior, previo,
+      mes: m, venta, anterior, previo, cubiertosAnt, ordenesAnt,
       varPesos: venta.valor != null && previo != null ? r2(venta.valor - previo) : null,
       varPct: variacion(venta.valor, previo),
       varAnual: variacion(venta.valor, anterior),

@@ -302,3 +302,11 @@ test('cubiertos, órdenes y tickets libres: lo cargado a mano le gana al mes cer
   const ago = l.delivery.find((d) => d.mes === '2026-08')
   assert.deepEqual([ago.apps.Rappi.tickets, ago.apps.Rappi.ticketsDato.fuente], [7, 'mano'])
 })
+
+test('histórico: cubiertos y órdenes del mismo mes del año anterior', () => {
+  const cierres = [{ mes: '2025-09', origen: 'deck', snapshot: { locales: { X: { venta: 100, cubiertos: 40, ordenes: 20 } } } }]
+  const l = armarLocal({ local: 'X', mes: '2026-09', valores: [], cierres, auto: { canales: {}, meses: { '2026-09': { venta: 150, cubiertos: 50, ordenes: 18 } } } })
+  const sep = l.historico.find((h) => h.mes === '2026-09')
+  assert.deepEqual([sep.cubiertosAnt, sep.ordenesAnt], [40, 20])
+  assert.equal(l.historico.find((h) => h.mes === '2026-01').cubiertosAnt, null)
+})

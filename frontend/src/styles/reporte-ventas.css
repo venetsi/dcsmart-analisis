@@ -269,3 +269,9 @@
 .rv-leyenda i.rv-ley-d3-ref { border-top: 3px solid var(--rv-teal); }
 .rv-leyenda i.rv-ley-d3-nom { border-top: 3px dashed #7d8da0; }
 .rv-leyenda-lee { color: #d6d2ca; margin-left: 8px; }
+
+/* histórico: flecha de cada dato de este año contra el mismo mes del año anterior */
+.rv-con-flecha { display: inline-flex; align-items: center; gap: 8px; }
+.rv-flecha { display: inline-block; width: 11px; height: 10px; flex: none; }
+.rv-flecha-sube { fill: var(--rv-verde); }
+.rv-flecha-baja { fill: var(--rv-rojo); }

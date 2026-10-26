@@ -543,6 +543,28 @@ function TablaMensual({ filas, cols, mesActual, total, apretada = false }) {
   )
 }
 
+// Importe en millones con un decimal: 68.792.284 → '68,8M'.
+function Mill({ v }) {
+  if (!esNum(v)) return <span className="rv-nulo">—</span>
+  return <span className={v < 0 ? 'rv-neg' : undefined}>{v < 0 ? MENOS : ''}{fmtAR(Math.abs(v) / 1e6, 1)}M</span>
+}
+
+// Flecha contra el año anterior: verde para arriba si subió, roja para abajo si bajó.
+// Sin dato del año anterior no hay flecha (queda el lugar para que la columna no baile).
+function Flecha({ act, ant }) {
+  if (!esNum(act) || !esNum(ant) || act === ant) return <span className="rv-flecha" />
+  const sube = act > ant
+  return (
+    <svg className={sube ? 'rv-flecha rv-flecha-sube' : 'rv-flecha rv-flecha-baja'} width="11" height="10" viewBox="0 0 11 10"
+      role="img" aria-label={sube ? 'subió contra el año anterior' : 'bajó contra el año anterior'}>
+      <path d={sube ? 'M5.5 0 L11 10 L0 10 Z' : 'M0 0 L11 0 L5.5 10 Z'} />
+    </svg>
+  )
+}
+
+// Dato de este año con su flecha contra el año anterior.
+const ConFlecha = ({ act, ant, children }) => <span className="rv-con-flecha"><Flecha act={act} ant={ant} />{children}</span>
+
 function Historico({ reporte, local: l, ...m }) {
   const anio = Number(reporte.mes.slice(0, 4))
   const hist = l.historico
@@ -550,22 +572,37 @@ function Historico({ reporte, local: l, ...m }) {
   const hayOrd = hist.some((h) => esNum(h.ordenes.valor))
   const hayAnt = hist.some((h) => esNum(h.anterior))
   const a = l.acumulado
+  // Totales del año anterior (estrictos: si falta un mes, el total no lleva flecha).
+  const cubAnt = suma(hist.map((h) => h.cubiertosAnt))
+  const ordAnt = suma(hist.map((h) => h.ordenesAnt))
+  const totCub = suma(hist.map((h) => h.cubiertos.valor))
+  const totOrd = suma(hist.map((h) => h.ordenes.valor))
+  const prom = (v, n) => (esNum(v) && esNum(n) && n !== 0 ? v / n : null)
   const cols = [
-    { k: 'v', th: 'Venta', td: (h) => <Num v={h.venta.valor} />, tot: <Num v={a.venta} />, clase: 'rv-fuerte' },
-    hayAnt && { k: 'a', th: String(anio - 1), td: (h) => <Num v={h.anterior} />, tot: <Num v={a.anterior} />, clase: 'rv-tenue' },
-    { k: 'vp', th: 'Var. $ vs MA', td: (h) => <Num v={h.varPesos} signo /> },
+    { k: 'v', th: 'Venta', clase: 'rv-fuerte',
+      td: (h) => <ConFlecha act={h.venta.valor} ant={h.anterior}><Mill v={h.venta.valor} /></ConFlecha>,
+      tot: <ConFlecha act={a.venta} ant={a.anterior}><Mill v={a.venta} /></ConFlecha> },
+    hayAnt && { k: 'a', th: String(anio - 1), td: (h) => <Mill v={h.anterior} />, tot: <Mill v={a.anterior} />, clase: 'rv-tenue' },
     { k: 'vpc', th: 'Var. % MA', td: (h) => <Num v={h.varPct} pct signo /> },
     hayAnt && { k: 'va', th: `Vs ${anio - 1}`, td: (h) => <Num v={h.varAnual} pct signo />, tot: <Num v={a.varAnual} pct signo /> },
-    hayCub && { k: 'c', th: 'Cubiertos', td: (h) => <Num v={h.cubiertos.valor} />, tot: <Num v={suma(hist.map((h) => h.cubiertos.valor))} /> },
-    hayCub && { k: 'pc', th: 'Prom. cub.', td: (h) => <Num v={h.promCubierto} />, tot: <Num v={a.promCubierto} /> },
-    hayOrd && { k: 'o', th: 'Órdenes', td: (h) => <Num v={h.ordenes.valor} />, tot: <Num v={suma(hist.map((h) => h.ordenes.valor))} /> },
-    hayOrd && { k: 'po', th: 'Prom. orden', td: (h) => <Num v={h.promOrden} />, tot: <Num v={a.promOrden} /> },
+    hayCub && { k: 'c', th: 'Cubiertos',
+      td: (h) => <ConFlecha act={h.cubiertos.valor} ant={h.cubiertosAnt}><Num v={h.cubiertos.valor} /></ConFlecha>,
+      tot: <ConFlecha act={totCub} ant={cubAnt}><Num v={totCub} /></ConFlecha> },
+    hayCub && { k: 'pc', th: 'Prom. cub.',
+      td: (h) => <ConFlecha act={h.promCubierto} ant={prom(h.anterior, h.cubiertosAnt)}><Num v={h.promCubierto} /></ConFlecha>,
+      tot: <ConFlecha act={a.promCubierto} ant={prom(a.anterior, cubAnt)}><Num v={a.promCubierto} /></ConFlecha> },
+    hayOrd && { k: 'o', th: 'Órdenes',
+      td: (h) => <ConFlecha act={h.ordenes.valor} ant={h.ordenesAnt}><Num v={h.ordenes.valor} /></ConFlecha>,
+      tot: <ConFlecha act={totOrd} ant={ordAnt}><Num v={totOrd} /></ConFlecha> },
+    hayOrd && { k: 'po', th: 'Prom. orden',
+      td: (h) => <ConFlecha act={h.promOrden} ant={prom(h.anterior, h.ordenesAnt)}><Num v={h.promOrden} /></ConFlecha>,
+      tot: <ConFlecha act={a.promOrden} ant={prom(a.anterior, ordAnt)}><Num v={a.promOrden} /></ConFlecha> },
   ].filter(Boolean)
   return (
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Histórico ${anio}`)} titulo="Detalle mensual de ventas y operación"
-      notaPie="MA = mes anterior">
+      notaPie={`MA = mes anterior · Flechas: contra el mismo mes de ${anio - 1}`}>
       <div className="rv-cuerpo">
-        <TablaMensual filas={hist.map((h) => ({ ...h, mes: h.mes }))} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
+        <TablaMensual filas={hist} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
       </div>
     </Marco>
   )
@@ -577,15 +614,18 @@ function ConsolidadoHist({ reporte, ...m }) {
   const locales = c.filas.map((f) => f.local)
   const hayAnt = c.historico.some((h) => esNum(h.anterior))
   const cols = [
-    ...locales.map((l) => ({ k: `l:${l}`, th: nom(reporte, l), td: (h) => <Num v={h.porLocal[l]} />,
-      tot: <Num v={suma(c.historico.map((h) => h.porLocal[l]))} /> })),
-    { k: 't', th: 'Total', td: (h) => <Num v={h.total} />, tot: <Num v={c.acumulado.venta} />, clase: 'rv-fuerte' },
+    ...locales.map((l) => ({ k: `l:${l}`, th: nom(reporte, l), td: (h) => <Mill v={h.porLocal[l]} />,
+      tot: <Mill v={suma(c.historico.map((h) => h.porLocal[l]))} /> })),
+    { k: 't', th: 'Total', clase: 'rv-fuerte',
+      td: (h) => <ConFlecha act={h.total} ant={h.anterior}><Mill v={h.total} /></ConFlecha>,
+      tot: <ConFlecha act={c.acumulado.venta} ant={c.acumulado.anterior}><Mill v={c.acumulado.venta} /></ConFlecha> },
     { k: 'vpc', th: 'Var. % MA', td: (h) => <Num v={h.varPct} pct signo /> },
-    hayAnt && { k: 'a', th: String(anio - 1), td: (h) => <Num v={h.anterior} />, tot: <Num v={c.acumulado.anterior} />, clase: 'rv-tenue' },
+    hayAnt && { k: 'a', th: String(anio - 1), td: (h) => <Mill v={h.anterior} />, tot: <Mill v={c.acumulado.anterior} />, clase: 'rv-tenue' },
     hayAnt && { k: 'va', th: `Vs ${anio - 1}`, td: (h) => <Num v={h.varAnual} pct signo />, tot: <Num v={c.acumulado.varAnual} pct signo /> },
   ].filter(Boolean)
   return (
-    <Marco m={{ reporte, ...m }} ceja={`Histórico ${anio} · todos los locales`} titulo="Venta mensual del grupo" notaPie="MA = mes anterior">
+    <Marco m={{ reporte, ...m }} ceja={`Histórico ${anio} · todos los locales`} titulo="Venta mensual del grupo"
+      notaPie={`MA = mes anterior · Flechas: contra el mismo mes de ${anio - 1}`}>
       <div className="rv-cuerpo">
         <TablaMensual filas={c.historico} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
       </div>
