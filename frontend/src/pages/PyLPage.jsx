@@ -7,6 +7,7 @@ import { fmtNum, fmtMesLargo, fmtPesos, fmtPesosCorto, fmtPct } from '../lib/for
 import { buildPyl, waterfallSteps, repartoVentas, variacion, mesAnterior } from '../lib/pyl.js'
 import { useGroup } from '../context/GroupContext.jsx'
 import PageHeader from '../components/PageHeader.jsx'
+import SelectorMes, { mesActual } from '../components/SelectorMes.jsx'
 import '../styles/pyl.css'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
@@ -19,25 +20,6 @@ const C_GASTO = '#E0938C'
 const C_SUBTOTAL = '#C9B086'
 const C_OK = '#4CAF7D'
 const C_MAL = '#E05C5C'
-
-const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-
-function mesActual() {
-  return new Date().toISOString().slice(0, 7)
-}
-
-// Los últimos seis meses para elegir con un clic (el actual primero, que está en curso).
-function ultimosMeses(n = 6) {
-  const out = []
-  let m = mesActual()
-  for (let i = 0; i < n; i++) { out.push(m); m = mesAnterior(m) }
-  return out
-}
-
-function etiquetaMes(mes) {
-  const [y, m] = mes.split('-')
-  return `${MESES_CORTOS[Number(m) - 1]} ${y.slice(2)}`
-}
 
 /* ── íconos de las tarjetas (mismo trazo que el menú) ── */
 const Ico = ({ children }) => (
@@ -211,7 +193,6 @@ export default function PyLPage() {
   const ticketProm = pyl?.ventas.tickets ? t.ventas / pyl.ventas.tickets : null
   const cubiertoProm = pyl?.ventas.comensales ? t.ventas / pyl.ventas.comensales : null
   const labor = pyl?.secciones.find(s => s.labor)?.total || 0
-  const meses = ultimosMeses()
 
   return (
     <div className="page pyl">
@@ -227,26 +208,7 @@ export default function PyLPage() {
       />
 
       <section className="pyl-filtros pyl-noprint">
-        <div className="pyl-filtro">
-          <div className="pyl-filtro-label">Mes</div>
-          <div className="pyl-meses">
-            {meses.map((m, i) => (
-              <button
-                key={m}
-                type="button"
-                className={'pyl-mes' + (m === mes ? ' active' : '')}
-                onClick={() => setParam('mes', m)}
-                title={i === 0 ? 'Mes en curso: todavía faltan días' : fmtMesLargo(m)}
-              >
-                {etiquetaMes(m)}{i === 0 && <small>en curso</small>}
-              </button>
-            ))}
-            <label className="pyl-mes-otro" title="Elegir otro mes">
-              <span>Otro</span>
-              <input type="month" value={mes} max={mesActual()} onChange={(e) => e.target.value && setParam('mes', e.target.value)} />
-            </label>
-          </div>
-        </div>
+        <SelectorMes mes={mes} onChange={(m) => setParam('mes', m)} />
         <div className="pyl-filtro pyl-filtro-local">
           <div className="pyl-filtro-label">Local</div>
           <select value={local} onChange={(e) => setParam('local', e.target.value)}>
