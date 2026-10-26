@@ -111,6 +111,9 @@ function Fuente({ d, nota }) {
         <small>{d.por ? `por ${d.por}` : ''}{d.at ? ` el ${fechaCorta(d.at)}` : ''}</small>
       )}
       {d.fuente === 'falta' && d.parcial && <small className="rve-parcial">{textoParcial(d.parcial)}</small>}
+      {d.fuente === 'auto' && d.sinInformar > 0 && (
+        <small>sin {fmtAR(d.sinInformar)} {d.sinInformar === 1 ? 'caja que no lo informó' : 'cajas que no lo informaron'}; el promedio usa la venta de las demás</small>
+      )}
       {nota && <small>{nota}</small>}
     </div>
   )

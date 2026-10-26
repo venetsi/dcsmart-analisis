@@ -11,7 +11,7 @@ import { Hoja, Mazo, mesEnPalabras } from '../components/reporteVentas/Paginas.j
 import { msgError } from '../components/reporteVentas/errores.js'
 import PanelDatos from '../components/reporteVentas/PanelDatos.jsx'
 import ConfigCliente from '../components/reporteVentas/ConfigCliente.jsx'
-import { armarLocal, armarReporte, canalesAuto, snapshotDe } from '../lib/reporteVentas.js'
+import { armarLocal, armarReporte, canalesAuto, snapshotDe, ticketsAuto } from '../lib/reporteVentas.js'
 import '../styles/reporte-editor.css'
 
 const ANCHO = 1456
@@ -46,8 +46,13 @@ function armarPorLocal(data) {
       canales[m] = canalesAuto({ detalles: a.detalles[m], cajasOrigen: a.cajasOrigen[m], reglas })
         .sort((x, y) => (y.valor ?? 0) - (x.valor ?? 0) || x.nombre.localeCompare(y.nombre))
     }
+    // Tickets de cada app: la cantidad de cobros que trae gestión, por mes.
+    const mesesAuto = { ...a.meses }
+    for (const [m, cantidades] of Object.entries(a.cantidades || {})) {
+      mesesAuto[m] = { ...mesesAuto[m], tickets: ticketsAuto({ cantidades, reglas }) }
+    }
     porLocal[local] = armarLocal({
-      local, mes: data.mes, auto: { meses: a.meses, canales }, valores: data.valores, cierres: data.cierres,
+      local, mes: data.mes, auto: { meses: mesesAuto, canales }, valores: data.valores, cierres: data.cierres,
     })
   }
   return porLocal

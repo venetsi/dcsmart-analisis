@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNumeroAR, fmtAR, canalesAuto, armarLocal, armarReporte, snapshotDe } from './reporteVentas.js'
+import { parseNumeroAR, fmtAR, canalesAuto, armarLocal, armarReporte, snapshotDe, ticketsAuto } from './reporteVentas.js'
 
 test('parseNumeroAR lee los formatos de los decks', () => {
   assert.equal(parseNumeroAR('55.114.440'), 55114440)
@@ -267,7 +267,8 @@ test('acumulado del año: sumas estrictas, promedios y variación contra el año
   ]
   const l = armarLocal({ local: 'P', mes: '2026-02', cierres, valores: [], auto: { canales: {}, meses: {
     '2026-01': { venta: 150, cubiertos: 10, ordenes: 5 }, '2026-02': { venta: 150, cubiertos: 20 } } } })
-  assert.deepEqual(l.acumulado, { venta: 300, anterior: 200, varAnual: 50, cubiertos: 30, ordenes: null, promCubierto: 10, promOrden: null })
+  assert.deepEqual(l.acumulado, { venta: 300, anterior: 200, varAnual: 50, cubiertos: 30, ordenes: null,
+    baseCubiertos: 300, baseOrdenes: 300, promCubierto: 10, promOrden: null })
   const q = armarLocal({ local: 'Q', mes: '2026-02', cierres: [], valores: [], auto: { canales: {}, meses: {
     '2026-01': { venta: 50, cubiertos: 5 }, '2026-02': { venta: 50, cubiertos: 5 } } } })
   const r = armarReporte({ cliente: { nombre: 'G', locales: ['P', 'Q'] }, mes: '2026-02', porLocal: { P: l, Q: q }, hoy: HOY })
@@ -309,4 +310,37 @@ test('histórico: cubiertos y órdenes del mismo mes del año anterior', () => {
   const sep = l.historico.find((h) => h.mes === '2026-09')
   assert.deepEqual([sep.cubiertosAnt, sep.ordenesAnt], [40, 20])
   assert.equal(l.historico.find((h) => h.mes === '2026-01').cubiertosAnt, null)
+})
+
+test('cubiertos: suma de las cajas que informan y promedio con la venta de esas cajas (878 sep-26)', () => {
+  const auto = { canales: {}, meses: { '2026-09': {
+    venta: 77298668, cubiertos: 1520, ordenes: 868, cajas: 32, sinCubiertos: 6, sinOrdenes: 6,
+    ventaConCubiertos: 46018668, ventaConOrdenes: 46018668 } } }
+  const l = armarLocal({ local: 'X', mes: '2026-09', auto, valores: [], cierres: [] })
+  assert.deepEqual([l.cubiertos.valor, l.cubiertos.fuente, l.cubiertos.sinInformar], [1520, 'auto', 6])
+  assert.equal(Math.round(l.promCubierto), Math.round(46018668 / 1520))
+  assert.equal(Math.round(l.promOrden), Math.round(46018668 / 868))
+  // Mes cerrado sin cubiertos en la foto: los toma de lo automático.
+  const cierres = [{ mes: '2026-09', origen: 'reporte', snapshot: { locales: { X: { venta: 77298668, cubiertos: null } } } }]
+  const c = armarLocal({ local: 'X', mes: '2026-09', auto, valores: [], cierres })
+  assert.deepEqual([c.venta.fuente, c.cubiertos.valor, c.cubiertos.fuente], ['cerrado', 1520, 'auto'])
+  // La foto de un cierre nuevo guarda la venta de los promedios.
+  const r = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: l }, hoy: HOY })
+  assert.equal(snapshotDe(r).locales.X.ventaConCubiertos, 46018668)
+})
+test('cubiertos: si informó menos de la mitad de las cajas queda falta', () => {
+  const auto = { canales: {}, meses: { '2026-09': { venta: 1000, cubiertos: 3, cajas: 66, sinCubiertos: 59 } } }
+  const l = armarLocal({ local: 'X', mes: '2026-09', auto, valores: [], cierres: [] })
+  assert.equal(l.cubiertos.fuente, 'falta')
+})
+test('tickets de cada app desde la cantidad de cobros; con líneas sin cantidad no se cuentan', () => {
+  const t = ticketsAuto({ cantidades: [
+    { metodo: 'PedidosYa', cantidad: 29, filas: 20, conCantidad: 20 },
+    { metodo: 'PEDIDO YA', cantidad: 1, filas: 1, conCantidad: 1 },
+    { metodo: 'Rappi', cantidad: 21, filas: 17, conCantidad: 17 },
+    { metodo: 'RAPPI', cantidad: 0, filas: 2, conCantidad: 0 },
+    { metodo: 'MpDelivery', cantidad: 15, filas: 10, conCantidad: 10 },
+    { metodo: 'Credito', cantidad: 390, filas: 40, conCantidad: 40 },
+  ] })
+  assert.deepEqual(t, { 'Pedidos Ya': 30, 'MP Delivery': 15 })
 })

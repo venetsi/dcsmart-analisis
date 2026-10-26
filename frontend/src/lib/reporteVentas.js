@@ -116,6 +116,31 @@ export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [] }) {
   return [...out.values()]
 }
 
+// Canal al que va un método de cobro: el de su regla, o la app si es una. null = Local.
+export function canalDeMetodo(metodo, reglas = []) {
+  const m = String(metodo ?? '').trim()
+  const regla = reglas.find((r) => r.match === 'metodo' && mismoTexto(r.valor, m))
+  if (regla) return { nombre: regla.canal, delivery: !!regla.delivery }
+  if (esApp(m)) return { nombre: nombreApp(m), delivery: true }
+  return null
+}
+
+// Tickets de cada canal de delivery en el mes, sumando la cantidad de cobros que trae
+// gestión (caja_detalles.cantidad). Un canal con alguna línea sin cantidad no se cuenta:
+// queda para cargar a mano.   cantidades: [{ metodo, cantidad, filas, conCantidad }]
+export function ticketsAuto({ cantidades = [], reglas = [] }) {
+  const out = {}
+  const incompletos = new Set()
+  for (const c of cantidades) {
+    const canal = canalDeMetodo(c.metodo, reglas)
+    if (!canal || !canal.delivery) continue
+    if (num(c.conCantidad) !== num(c.filas)) { incompletos.add(canal.nombre); continue }
+    out[canal.nombre] = (out[canal.nombre] ?? 0) + (num(c.cantidad) ?? 0)
+  }
+  for (const n of incompletos) delete out[n]
+  return out
+}
+
 // Datos que se corrigen aunque el mes esté cerrado (igual que en la API).
 export const datoLibre = (dato) => dato === 'cubiertos' || dato === 'ordenes' || String(dato).startsWith('tickets:')
 
@@ -168,17 +193,21 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     if (cerrado != null) return { valor: cerrado, fuente: 'cerrado' }
     const row = mano(m, dato)
     if (row) return datoMano(row, s !== undefined ? null : autoValor)
-    if (s === undefined && autoValor != null) return { valor: autoValor, fuente: 'auto' }
-    if (s === undefined && parcial) return { valor: null, fuente: 'falta', parcial }
+    // Cubiertos, órdenes y tickets que la foto del cierre no trae se toman de lo automático.
+    const usaAuto = s === undefined || datoLibre(dato)
+    if (usaAuto && autoValor != null) return { valor: autoValor, fuente: 'auto' }
+    if (usaAuto && parcial) return { valor: null, fuente: 'falta', parcial }
     return { valor: null, fuente: 'falta' }
   }
 
-  // Lo automático de venta, cubiertos u órdenes. Un total que no informaron
-  // todas las cajas no es un dato: queda falta, con la suma parcial como pista.
+  // Lo automático de venta, cubiertos u órdenes.
   //   venta 0 con cajas → falta (una caja abierta no vende 0).
-  //   cubiertos/órdenes: falta si alguna caja no informó (null o 0) o si la
-  //   suma es 0 con venta > 0 (TapTap manda 0 cuando no informa).
+  //   cubiertos/órdenes: la suma de las cajas que los informan; las que no (eventos,
+  //   Big Box, cargas a mano) quedan afuera, y `base` es la venta de las que sí, para
+  //   que el promedio no las mezcle. Suma 0 con venta > 0 es falta (TapTap manda 0
+  //   cuando no informa).
   const SIN = { cubiertos: 'sinCubiertos', ordenes: 'sinOrdenes' }
+  const BASE = { cubiertos: 'ventaConCubiertos', ordenes: 'ventaConOrdenes' }
   const autoDe = (m, campo) => {
     const a = autoMeses[m]
     const v = num(a?.[campo])
@@ -188,15 +217,23 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     if (!SIN[campo]) return { valor: v }
     const sin = num(a[SIN[campo]])
     const venta = num(a.venta)
-    if ((sin != null && sin > 0) || (v === 0 && venta != null && venta > 0)) {
-      return { valor: null, parcial: { valor: v, cajas, sin } }
-    }
+    if (v === 0 && venta != null && venta > 0) return { valor: null, parcial: { valor: v, cajas, sin } }
+    // Si informó menos de la mitad de las cajas, la suma no representa el mes: queda a mano.
+    if (sin != null && cajas != null && (cajas - sin) * 2 < cajas) return { valor: null, parcial: { valor: v, cajas, sin } }
+    if (sin != null && sin > 0) return { valor: v, base: num(a[BASE[campo]]), sin }
     return { valor: v }
   }
 
   const datoBase = (m, campo) => {
     const a = autoDe(m, campo)
-    return resolver(m, campo, snap(m)?.[campo], a.valor, a.parcial)
+    const d = resolver(m, campo, snap(m)?.[campo], a.valor, a.parcial)
+    if (!SIN[campo]) return d
+    // Venta sobre la que se calcula el promedio: la de las cajas que informaron (si no
+    // informaron todas) o, en un mes cerrado, la que quedó guardada en la foto.
+    if (d.fuente === 'auto' && a.base != null) return { ...d, base: a.base, sinInformar: a.sin }
+    const baseFoto = num(snap(m)?.[BASE[campo]])
+    if (d.fuente === 'cerrado' && baseFoto != null) return { ...d, base: baseFoto }
+    return d
   }
 
   // Delivery de un canal sin bandera propia: el de algún mes automático, o si es app.
@@ -268,8 +305,8 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
       varPct: variacion(venta.valor, previo),
       varAnual: variacion(venta.valor, anterior),
       cubiertos, ordenes,
-      promCubierto: dividir(venta.valor, cubiertos.valor),
-      promOrden: dividir(venta.valor, ordenes.valor),
+      promCubierto: dividir(cubiertos.base ?? venta.valor, cubiertos.valor),
+      promOrden: dividir(ordenes.base ?? venta.valor, ordenes.valor),
     }
   })
   const actual = historico[historico.length - 1]
@@ -298,6 +335,7 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
   const canales = canalesDe(mes, actual.venta)
   const acumulado = acumuladoDe(historico.map((h) => ({
     venta: h.venta.valor, anterior: h.anterior, cubiertos: h.cubiertos.valor, ordenes: h.ordenes.valor,
+    baseCubiertos: h.cubiertos.base ?? h.venta.valor, baseOrdenes: h.ordenes.base ?? h.venta.valor,
   })))
   const alertas = []
   if (actual.venta.valor == null) alertas.push(`${local}: falta la venta del mes`)
@@ -314,14 +352,17 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
 
 // Acumulado del año hasta el mes: sumas estrictas (si falta un mes, el total falta).
 //   filas: [{ venta, anterior, cubiertos, ordenes }]
+//   baseCubiertos / baseOrdenes (opcionales): la venta sobre la que va cada promedio.
 export function acumuladoDe(filas) {
   const venta = sumaEstricta(filas.map((f) => f.venta))
   const anterior = sumaEstricta(filas.map((f) => f.anterior))
   const cubiertos = sumaEstricta(filas.map((f) => f.cubiertos))
   const ordenes = sumaEstricta(filas.map((f) => f.ordenes))
+  const baseCubiertos = sumaEstricta(filas.map((f) => f.baseCubiertos ?? f.venta))
+  const baseOrdenes = sumaEstricta(filas.map((f) => f.baseOrdenes ?? f.venta))
   return {
-    venta, anterior, varAnual: variacion(venta, anterior), cubiertos, ordenes,
-    promCubierto: dividir(venta, cubiertos), promOrden: dividir(venta, ordenes),
+    venta, anterior, varAnual: variacion(venta, anterior), cubiertos, ordenes, baseCubiertos, baseOrdenes,
+    promCubierto: dividir(baseCubiertos, cubiertos), promOrden: dividir(baseOrdenes, ordenes),
   }
 }
 
@@ -410,6 +451,8 @@ export function snapshotDe(reporte) {
     const conValor = l.canales.filter((c) => c.valor != null)
     locales[l.local] = {
       venta: l.venta.valor, cubiertos: l.cubiertos.valor, ordenes: l.ordenes.valor,
+      ...(l.cubiertos.base != null ? { ventaConCubiertos: l.cubiertos.base } : {}),
+      ...(l.ordenes.base != null ? { ventaConOrdenes: l.ordenes.base } : {}),
       canales: Object.fromEntries(conValor.map((c) => [c.nombre, c.valor])),
       tickets,
       // Qué canales eran delivery al cerrar (la hoja de delivery de un mes cerrado sale de acá).

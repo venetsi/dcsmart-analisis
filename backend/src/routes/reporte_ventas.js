@@ -56,6 +56,36 @@ export default async function (fastify) {
     log: fastify.log,
   })
   const conLogosLocal = async (cli) => (cli ? { ...cli, logosLocal: await logosDe(cli.grupo, cli.locales) } : cli)
+
+  // { local: { 'YYYY-MM': [{ metodo, cantidad, filas, conCantidad }] } } con la cantidad de
+  // cobros de cada método (caja_detalles.cantidad en gestión). filas/conCantidad dicen si
+  // todas las líneas la traen: el motor solo la usa completa.
+  const cantidadesDe = async (cajas) => {
+    if (!cajas.length) return {}
+    const deCaja = new Map(cajas.map((c) => [c.id, c]))
+    try {
+      const { rows } = await fastify.dcsmartRo.query(
+        `SELECT id_caja::text AS id_caja, nombre AS metodo, SUM(cantidad)::int AS cantidad,
+                COUNT(*)::int AS filas, COUNT(cantidad)::int AS con
+           FROM caja_detalles
+          WHERE id_caja::text = ANY($1::text[]) AND tipo = 'cobro' AND monto <> 0
+          GROUP BY 1, 2`, [[...deCaja.keys()]])
+      const out = {}
+      for (const r of rows) {
+        const c = deCaja.get(r.id_caja)
+        if (!c) continue
+        const lista = ((out[c.local] ||= {})[c.mes] ||= [])
+        const metodo = String(r.metodo ?? '').trim()
+        const prev = lista.find((x) => x.metodo === metodo)
+        if (prev) { prev.cantidad += r.cantidad ?? 0; prev.filas += r.filas; prev.conCantidad += r.con }
+        else lista.push({ metodo, cantidad: r.cantidad ?? 0, filas: r.filas, conCantidad: r.con })
+      }
+      return out
+    } catch (err) {
+      fastify.log.warn({ err }, 'reporte-ventas: no se pudo leer la cantidad de cobros de gestión')
+      return {}
+    }
+  }
   // Inflación mensual (IPC de INDEC) para el acumulado; si falla, el reporte sale igual sin ella.
   const ipc = crearIpc({ db, log: fastify.log })
   const ipcDe = async (desde, hasta) => {
@@ -90,13 +120,16 @@ export default async function (fastify) {
 
     // BigQuery no acepta un arreglo vacío como parámetro: sin locales no hay nada que consultar.
     const bq = cli.locales.length ? (q) => fastify.bq.query(q) : async () => [[]]
-    const [[ventasRows], [detRows], [origRows], valores, cierres, reglas, historial, observaciones, inflacion] = await Promise.all([
+    const [[ventasRows], [detRows], [origRows], [idsRows], valores, cierres, reglas, historial, observaciones, inflacion] = await Promise.all([
       // SUM sin COALESCE: si todo es NULL el dato no existe (null, no 0).
       // cajas / sinCubiertos / sinOrdenes: cuántas cajas hubo y cuántas no informaron
-      // (NULL o 0). Con alguna sin informar, el motor no toma la suma como dato.
+      // (NULL o 0). ventaConCubiertos / ventaConOrdenes: la venta de las cajas que sí
+      // informaron, para que el promedio no mezcle ventas sin cubiertos (eventos, Big Box).
       bq({
         query: `SELECT local, FORMAT_DATE('%Y-%m', fecha_dia) mes,
                        CAST(ROUND(SUM(total)) AS INT64) venta, SUM(comensales) cubiertos, SUM(tickets) ordenes,
+                       CAST(ROUND(SUM(IF(comensales > 0, total, 0))) AS INT64) ventaConCubiertos,
+                       CAST(ROUND(SUM(IF(tickets > 0, total, 0))) AS INT64) ventaConOrdenes,
                        COUNT(*) cajas,
                        COUNTIF(comensales IS NULL OR comensales = 0) sinCubiertos,
                        COUNTIF(tickets IS NULL OR tickets = 0) sinOrdenes
@@ -112,6 +145,10 @@ export default async function (fastify) {
       bq({
         query: `SELECT local, FORMAT_DATE('%Y-%m', fecha_dia) mes, origin, SUM(total) total
                   FROM ${DS}.vw_cajas WHERE ${where} GROUP BY 1, 2, 3`,
+        params
+      }),
+      bq({
+        query: `SELECT id, local, FORMAT_DATE('%Y-%m', fecha_dia) mes FROM ${DS}.vw_cajas WHERE ${where}`,
         params
       }),
       db.query(`SELECT local, mes, dato, valor, original, actualizado_por, actualizado_at
@@ -135,6 +172,7 @@ export default async function (fastify) {
       if (!auto[r.local]) continue
       auto[r.local].meses[r.mes] = {
         venta: numOrNull(r.venta), cubiertos: numOrNull(r.cubiertos), ordenes: numOrNull(r.ordenes),
+        ventaConCubiertos: numOrNull(r.ventaConCubiertos), ventaConOrdenes: numOrNull(r.ventaConOrdenes),
         cajas: numOrNull(r.cajas), sinCubiertos: numOrNull(r.sinCubiertos), sinOrdenes: numOrNull(r.sinOrdenes),
       }
     }
@@ -145,6 +183,11 @@ export default async function (fastify) {
     for (const r of plainRows(origRows)) {
       if (!auto[r.local]) continue
       ;(auto[r.local].cajasOrigen[r.mes] ||= []).push({ origin: r.origin, total: numOrNull(r.total) })
+    }
+    // Cantidad de cobros por método y mes (los tickets de cada app). No está en BigQuery:
+    // se lee de gestión por id de caja. Si no se puede, el reporte sale igual sin ellos.
+    for (const [local, porMes] of Object.entries(await cantidadesDe(plainRows(idsRows)))) {
+      if (auto[local]) auto[local].cantidades = porMes
     }
 
     return {
