@@ -137,7 +137,10 @@ export default function ReporteVentasPage() {
 
   const reporte = useMemo(() => {
     if (!data) return null
-    return armarReporte({ cliente: data.cliente, mes: data.mes, porLocal: armarPorLocal(data), hoy: new Date() })
+    return armarReporte({
+      cliente: data.cliente, mes: data.mes, porLocal: armarPorLocal(data), hoy: new Date(),
+      ipc: data.ipc || {}, observaciones: data.observaciones || {},
+    })
   }, [data])
 
   const pagina = useMemo(() => {
@@ -176,6 +179,22 @@ export default function ReporteVentasPage() {
       return true
     } catch (e) { setError(msgError(e)); return false } finally { setOcupado(false) }
   }, [clienteId, recargar])
+
+  // ── observación de una hoja ('' la borra) ──
+  const guardarObs = useCallback(async (paginaObs, texto) => {
+    setError('')
+    setOcupado(true)
+    try { await api.rvPutObs(clienteId, { mes, pagina: paginaObs, texto }); await recargar() }
+    catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
+  }, [clienteId, mes, recargar])
+
+  // ── inflación de un mes (null = volver a la de INDEC) ──
+  const guardarIpc = useCallback(async (mesIpc, variacion) => {
+    setError('')
+    setOcupado(true)
+    try { await api.rvPutIpc({ mes: mesIpc, variacion }); await recargar() }
+    catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
+  }, [recargar])
 
   const restaurar = async () => {
     setConfirmar(null)
@@ -345,7 +364,8 @@ export default function ReporteVentasPage() {
               </div>
               <aside className="rve-panel">
                 <PanelDatos reporte={reporte} pagina={pagina} data={data} interno={interno} cerradoMes={cerrado}
-                  ocupado={ocupado} onGuardar={guardar} onError={setError} nombreLocal={nombreLocal} />
+                  ocupado={ocupado} onGuardar={guardar} onError={setError} nombreLocal={nombreLocal}
+                  onGuardarObs={guardarObs} onGuardarIpc={guardarIpc} />
               </aside>
             </div>
           )}

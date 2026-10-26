@@ -4,10 +4,11 @@
 // lib/titularesReporte.js y solo repiten los números de la hoja.
 // Diseño oscuro de oct-26 (referencia: "Reporte de ventas · 3 Monos · Septiembre 2026").
 // Cada hoja es un div.rv-hoja de 1456×819 px; los gráficos son SVG o divs para que impriman nítidos.
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { fmtAR } from '../../lib/reporteVentas.js'
 import { recortarLogo } from '../../lib/recorteLogo.js'
-import { titularCanales, titularComparativo, titularConsolidado, titularSintesis } from '../../lib/titularesReporte.js'
+import { enMillones, titularCanales, titularConsolidado, titularSintesis } from '../../lib/titularesReporte.js'
+import { anteriorActualizado, inflacionDelAcumulado } from '../../lib/inflacion.js'
 import '../../styles/reporte-ventas.css'
 
 const LOGO = '/logos/DCSMART-ANALYTICS-horizontal.png'
@@ -35,7 +36,6 @@ function mesPrevio(mes) {
 const nom = (reporte, l) => reporte.cliente?.nombres?.[l] || l
 
 const esNum = (v) => v != null && Number.isFinite(v)
-const dividir = (a, b) => (esNum(a) && esNum(b) && b !== 0 ? a / b : null)
 // Suma que no inventa: si falta un sumando, el total falta.
 function suma(vals) {
   return vals.length && vals.every(esNum) ? vals.reduce((t, v) => t + v, 0) : null
@@ -73,20 +73,27 @@ function Pie({ reporte, numero, total, nota }) {
   )
 }
 
-function Marco({ ceja, titulo, derecha, children, clase = '', brillo = false, pie = true, notaPie, m }) {
+function Marco({ ceja, titulo, derecha, children, clase = '', brillo = false, pie = true, notaPie, m, tituloChico = false }) {
+  const obs = m.obs
   return (
-    <div className={`rv-hoja ${clase}`}>
+    <div className={`rv-hoja ${clase}${obs ? ' rv-con-obs' : ''}`}>
       {brillo && <div className="rv-brillo" />}
       {(ceja || titulo) && (
         <div className="rv-cab">
           <div>
             {ceja && <div className="rv-ceja">{ceja}</div>}
-            {titulo && <h2 className="rv-tit">{titulo}</h2>}
+            {titulo && <h2 className={`rv-tit${tituloChico ? ' rv-tit-chico' : ''}`}>{titulo}</h2>}
           </div>
           {derecha}
         </div>
       )}
       {children}
+      {obs && (
+        <div className="rv-obs">
+          <span className="rv-obs-k">Observaciones</span>
+          <p>{obs}</p>
+        </div>
+      )}
       {pie && <Pie reporte={m.reporte} numero={m.numero} total={m.total} nota={notaPie} />}
       {m.borrador && <div className="rv-marca" aria-hidden="true">BORRADOR</div>}
     </div>
@@ -111,93 +118,138 @@ function Tarjeta({ k, children, sub, clase = '' }) {
 // ---------------------------------------------------------------------------
 // Gráficos
 
-// Columnas mes a mes: el año (claro) contra el anterior (gris azulado). El mes del reporte en dorado.
-// Los importes van en millones con un decimal.
-function Columnas({ filas, ancho = 1262, alto = 400, conAnterior }) {
-  const n = Math.max(filas.length, 1)
-  const grupo = ancho / n
-  const arriba = 40
-  const max = Math.max(0, ...filas.flatMap((f) => [f.venta, conAnterior ? f.anterior : null]).filter(esNum))
-  const h = (v) => (max > 0 && esNum(v) && v > 0 ? ((alto - arriba) * v) / max : 0)
-  const wAct = conAnterior ? Math.min(54, grupo * 0.38) : Math.min(84, grupo * 0.56)
-  const wAnt = Math.min(42, grupo * 0.3)
-  const hueco = conAnterior ? Math.min(22, grupo * 0.12) : 0
-  const fuente = n > 9 ? 16 : 19
-  const mill = (v) => (esNum(v) ? fmtAR(v / 1e6, 1) : '—')
-  return (
-    <svg className="rv-svg" width={ancho} height={alto + 44} viewBox={`0 0 ${ancho} ${alto + 44}`}>
+// Líneas mes a mes: el año (claro), el anterior (gris, punteado) y el anterior
+// actualizado por inflación (turquesa). Debajo, por mes, la variación nominal y la
+// real (descontada la inflación). Los importes van en millones con un decimal.
+//   filas: [{ mes, venta, anterior, anteriorAct }]
+function Lineas({ filas, ancho = 1262, alto = 300 }) {
+  const conAnterior = filas.some((f) => esNum(f.anterior))
+  const conReal = filas.some((f) => esNum(f.anteriorAct))
+  const izq = conAnterior ? 150 : 60
+  const der = ancho - 34
+  const n = filas.length
+  const x = (i) => (n > 1 ? izq + (i * (der - izq)) / (n - 1) : (izq + der) / 2)
+  const tope = Math.max(0, ...filas.flatMap((f) => [f.venta, f.anterior, f.anteriorAct]).filter(esNum))
+  // Guías en números redondos (10, 20, 50... millones) hasta pasar el máximo.
+  const paso = tope > 0 ? pasoRedondo(tope / 4) : 0
+  const guias = paso ? Array.from({ length: Math.ceil(tope / paso) }, (_, i) => (i + 1) * paso) : []
+  const max = Math.max(tope * 1.06, guias[guias.length - 1] || 0) || 1
+  const arriba = 44
+  const y = (v) => arriba + (alto - arriba) * (1 - v / max)
+  const mill = (v) => fmtAR(v / 1e6, 1)
+  // Tramos de puntos consecutivos con dato: un mes sin dato corta la línea.
+  const tramos = (campo) => {
+    const out = []
+    let t = []
+    filas.forEach((f, i) => {
+      if (esNum(f[campo])) t.push([x(i), y(f[campo])])
+      else if (t.length) { out.push(t); t = [] }
+    })
+    if (t.length) out.push(t)
+    return out
+  }
+  const puntos = (t) => t.map((p) => p.join(',')).join(' ')
+  const linea = (campo, clase) => tramos(campo).map((t, i) => (t.length > 1
+    ? <polyline key={`${campo}${i}`} points={puntos(t)} className={clase} fill="none" /> : null))
+  const area = tramos('venta').map((t, i) => (t.length > 1
+    ? <polygon key={`a${i}`} className="rv-lin-area" points={puntos([...t, [t[t.length - 1][0], alto], [t[0][0], alto]])} /> : null))
+  const fuente = n > 9 ? 16 : 18
+  const variacionDe = (a, b) => (esNum(a) && esNum(b) && b !== 0 ? (a / b - 1) * 100 : null)
+  // Fila de porcentajes por mes, debajo de los meses. Con 1 decimal para que entre.
+  const filaPct = (yy, etiqueta, valor, conColor) => (
+    <g>
+      <text x={0} y={yy} className="rv-lin-fila">{etiqueta}</text>
       {filas.map((f, i) => {
-        const cur = i === filas.length - 1
-        const x0 = i * grupo + (grupo - (conAnterior ? wAct + hueco + wAnt : wAct)) / 2
-        const x1 = x0 + wAct + hueco
+        const v = valor(f)
+        const clase = !esNum(v) ? 'rv-lin-nulo' : conColor ? (v >= 0 ? 'rv-lin-pos' : 'rv-lin-neg') : 'rv-lin-nom'
         return (
-          <g key={f.mes}>
-            {h(f.venta) > 0 && <rect x={x0} y={alto - h(f.venta)} width={wAct} height={h(f.venta)} rx={4} className={cur ? 'rv-col-cur' : 'rv-col-act'} />}
-            <text x={x0 + wAct / 2} y={alto - h(f.venta) - 12} textAnchor="middle" fontSize={fuente}
-              className={cur ? 'rv-col-val rv-col-val-cur' : 'rv-col-val'}>{mill(f.venta)}</text>
-            {conAnterior && (
-              <>
-                {h(f.anterior) > 0 && <rect x={x1} y={alto - h(f.anterior)} width={wAnt} height={h(f.anterior)} rx={4} className="rv-col-ant" />}
-                <text x={x1 + wAnt / 2} y={alto - h(f.anterior) - 12} textAnchor="middle" fontSize={fuente} className="rv-col-val-ant">{mill(f.anterior)}</text>
-              </>
-            )}
-            <text x={i * grupo + grupo / 2} y={alto + 34} textAnchor="middle" className={cur ? 'rv-col-mes rv-col-mes-cur' : 'rv-col-mes'}>{mes3(f.mes)}</text>
-          </g>
+          <text key={f.mes} x={x(i)} y={yy} textAnchor="middle" fontSize={fuente - 1} className={clase}>
+            {esNum(v) ? `${v > 0 ? '+' : v < 0 ? MENOS : ''}${fmtAR(Math.abs(v), 1)}%` : '—'}
+          </text>
         )
       })}
-      <line x1={0} x2={ancho} y1={alto + 0.5} y2={alto + 0.5} className="rv-col-base" />
+    </g>
+  )
+  const altoTotal = alto + (conAnterior ? (conReal ? 118 : 86) : 46)
+  return (
+    <svg className="rv-svg" width={ancho} height={altoTotal} viewBox={`0 0 ${ancho} ${altoTotal}`}>
+      {guias.map((g) => (
+        <g key={g}>
+          <line x1={izq - 24} x2={ancho} y1={y(g)} y2={y(g)} className="rv-lin-guia" />
+          <text x={izq - 34} y={y(g) + 5} textAnchor="end" className="rv-lin-eje">{fmtAR(g / 1e6, 0)}</text>
+        </g>
+      ))}
+      {area}
+      {linea('anterior', 'rv-lin-ant')}
+      {linea('anteriorAct', 'rv-lin-act')}
+      {linea('venta', 'rv-lin-venta')}
+      {filas.map((f, i) => (
+        <g key={f.mes}>
+          {esNum(f.anterior) && <circle cx={x(i)} cy={y(f.anterior)} r={5} className="rv-lin-pto-ant" />}
+          {esNum(f.anteriorAct) && <circle cx={x(i)} cy={y(f.anteriorAct)} r={5} className="rv-lin-pto-act" />}
+          {esNum(f.anterior) && (
+            <text x={x(i)} y={y(f.anterior) + 28} textAnchor="middle" fontSize={fuente - 2} className="rv-lin-val-ant">{mill(f.anterior)}</text>
+          )}
+          {esNum(f.venta) && (
+            <>
+              <circle cx={x(i)} cy={y(f.venta)} r={i === n - 1 ? 9 : 7} className={i === n - 1 ? 'rv-lin-pto-cur' : 'rv-lin-pto'} />
+              <text x={x(i)} y={y(f.venta) - 18} textAnchor="middle" fontSize={fuente}
+                className={i === n - 1 ? 'rv-lin-val rv-lin-val-cur' : 'rv-lin-val'}>{mill(f.venta)}</text>
+            </>
+          )}
+          <text x={x(i)} y={alto + 34} textAnchor="middle" className={i === n - 1 ? 'rv-col-mes rv-col-mes-cur' : 'rv-col-mes'}>{mes3(f.mes)}</text>
+        </g>
+      ))}
+      <line x1={izq - 24} x2={ancho} y1={alto + 0.5} y2={alto + 0.5} className="rv-col-base" />
+      {conAnterior && filaPct(alto + 78, 'Vs año ant.', (f) => variacionDe(f.venta, f.anterior), false)}
+      {conReal && filaPct(alto + 110, 'Real', (f) => variacionDe(f.venta, f.anteriorAct), true)}
     </svg>
   )
 }
 
-// Tendencia chica de una serie mensual; los meses sin dato cortan la línea.
-function MiniTendencia({ serie, ancho = 400, alto = 110 }) {
-  const vals = serie.map((p) => p.valor).filter(esNum)
-  if (!vals.length) return <div className="rv-mini-vacia">—</div>
-  const max = Math.max(...vals)
-  const min = Math.min(0, ...vals)
-  const pad = 8
-  const x = (i) => pad + (serie.length > 1 ? (i * (ancho - 2 * pad)) / (serie.length - 1) : (ancho - 2 * pad) / 2)
-  const y = (v) => alto - 24 - ((v - min) / (max - min || 1)) * (alto - 58)
-  const tramos = []
-  let tramo = []
-  serie.forEach((p, i) => {
-    if (esNum(p.valor)) tramo.push(`${x(i)},${y(p.valor)}`)
-    else if (tramo.length) { tramos.push(tramo); tramo = [] }
-  })
-  if (tramo.length) tramos.push(tramo)
-  const ultimo = serie.reduce((u, p, i) => (esNum(p.valor) ? i : u), null)
+// 1, 2, 2,5 o 5 por una potencia de 10, el primero que no sea menor que x.
+function pasoRedondo(x) {
+  const p = 10 ** Math.floor(Math.log10(x))
+  return [1, 2, 2.5, 5, 10].map((k) => k * p).find((v) => v >= x)
+}
+
+// Columnas chicas de una serie mensual (millones), el último mes en dorado.
+function MiniColumnas({ serie, ancho = 420, alto = 120 }) {
+  const max = Math.max(0, ...serie.map((p) => p.valor).filter(esNum)) || 1
+  const paso = ancho / Math.max(serie.length, 1)
+  const w = Math.min(34, paso * 0.6)
+  const h = (v) => (esNum(v) && v > 0 ? ((alto - 50) * v) / max : 0)
   return (
     <svg className="rv-svg" width={ancho} height={alto} viewBox={`0 0 ${ancho} ${alto}`}>
-      <line x1={pad} x2={ancho - pad} y1={alto - 20} y2={alto - 20} className="rv-col-base" />
-      {tramos.map((t, i) => (t.length > 1
-        ? <polyline key={i} points={t.join(' ')} fill="none" className="rv-mini-linea" strokeWidth={2.5} strokeLinejoin="round" />
-        : null))}
-      {serie.map((p, i) => (esNum(p.valor)
-        ? <circle key={p.mes} cx={x(i)} cy={y(p.valor)} r={i === serie.length - 1 ? 5 : 3} className={i === serie.length - 1 ? 'rv-mini-cur' : 'rv-mini-pto'} />
-        : null))}
-      {ultimo != null && (
-        <text x={x(ultimo)} y={y(serie[ultimo].valor) - 12} textAnchor={serie.length > 1 && ultimo === 0 ? 'start' : 'end'}
-          className="rv-mini-val">{fmtAR(serie[ultimo].valor)}</text>
-      )}
-      <text x={pad} y={alto - 2} className="rv-mini-eje">{mes3(serie[0].mes)}</text>
-      <text x={ancho - pad} y={alto - 2} textAnchor="end" className="rv-mini-eje">{mes3(serie[serie.length - 1].mes)}</text>
+      {serie.map((p, i) => {
+        const cx = i * paso + paso / 2
+        const cur = i === serie.length - 1
+        return (
+          <g key={p.mes}>
+            {h(p.valor) > 0 && <rect x={cx - w / 2} y={alto - 24 - h(p.valor)} width={w} height={h(p.valor)} rx={3} className={cur ? 'rv-col-cur' : 'rv-col-ant'} />}
+            <text x={cx} y={alto - 30 - h(p.valor)} textAnchor="middle" className="rv-mini-val">{esNum(p.valor) ? fmtAR(p.valor / 1e6, 1) : '—'}</text>
+            <text x={cx} y={alto - 4} textAnchor="middle" className={cur ? 'rv-mini-eje rv-mini-eje-cur' : 'rv-mini-eje'}>{mes3(p.mes)}</text>
+          </g>
+        )
+      })}
     </svg>
   )
 }
 
 // Participación: cifra grande a la izquierda y lista con barras a la derecha.
-//   filas: [{ nombre, valor, inc }] en el orden en que se muestran (la primera en dorado).
-function Participacion({ filas, total, frase }) {
+//   filas: [{ nombre, valor, inc, pie?, extra? }] en el orden en que se muestran (la primera en dorado).
+//   grande: la cifra de la izquierda (si no, el % de la primera fila); abajo: algo debajo de la frase.
+function Participacion({ filas, total, frase, grande, abajo, totalNombre = 'Total', compacto = false }) {
   const max = Math.max(0, ...filas.map((f) => f.valor).filter(esNum))
   const prim = filas[0]
-  const alto = filas.length > 3 ? 0 : Math.min(152, 300 / Math.max(filas.length, 1))
-  const densidad = filas.length > 6 ? ' rv-part-muchas rv-part-muchisimas' : filas.length > 3 ? ' rv-part-muchas' : ''
+  const alto = filas.length > 3 ? 0 : Math.min(compacto ? 110 : 152, (compacto ? 230 : 300) / Math.max(filas.length, 1))
+  const densidad = filas.length > 6 ? ' rv-part-muchas rv-part-muchisimas' : filas.length > 3 || compacto ? ' rv-part-muchas' : ''
   return (
-    <div className="rv-part">
+    <div className={`rv-part${compacto ? ' rv-part-compacto' : ''}`}>
       <div className="rv-part-izq">
-        <div className="rv-part-big">{esNum(prim?.inc) ? `${fmtAR(prim.inc, 1)}%` : '—'}</div>
+        <div className="rv-part-big">{grande ?? (esNum(prim?.inc) ? `${fmtAR(prim.inc, 1)}%` : '—')}</div>
         <div className="rv-part-txt">{frase}</div>
+        {abajo}
       </div>
       <div className={`rv-part-lista${densidad}`}>
         {filas.map((f, i) => (
@@ -208,10 +260,13 @@ function Participacion({ filas, total, frase }) {
                 <div className={i === 0 ? 'rv-part-barra rv-part-barra-1' : 'rv-part-barra'} style={{ width: `${Math.max(0.6, (100 * f.valor) / max)}%` }} />
               )}
             </div>
-            <div className="rv-part-pct">{esNum(f.inc) ? `${fmtAR(f.inc, 2)}% del total` : '—'}</div>
+            <div className="rv-part-pct">
+              <span>{f.pie ?? (esNum(f.inc) ? `${fmtAR(f.inc, 2)}% del total` : '—')}</span>
+              {f.extra && <span>{f.extra}</span>}
+            </div>
           </div>
         ))}
-        <div className="rv-part-total"><span>Total</span><span><Num v={total} pesos /></span></div>
+        <div className="rv-part-total"><span>{totalNombre}</span><span><Num v={total} pesos /></span></div>
       </div>
     </div>
   )
@@ -390,7 +445,7 @@ function Canales({ reporte, local: l, ...m }) {
   return (
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, 'Ventas por canal')} titulo={titularCanales(filas)}>
       <div className="rv-cuerpo">
-        <Participacion filas={filas} total={l.venta.valor}
+        <Participacion filas={filas} total={l.venta.valor} compacto={!!m.obs}
           frase={<>de los {esNum(l.venta.valor) ? texto(l.venta.valor, { pesos: true }) : '—'} del mes se vendió por el canal {top?.nombre}.</>} />
       </div>
     </Marco>
@@ -404,7 +459,7 @@ function Consolidado({ reporte, ...m }) {
   return (
     <Marco m={{ reporte, ...m }} ceja={`Venta por local · ${mesEnPalabras(reporte.mes)}`} titulo={titularConsolidado(filas)}>
       <div className="rv-cuerpo">
-        <Participacion filas={filas} total={c.total}
+        <Participacion filas={filas} total={c.total} compacto={!!m.obs}
           frase={<>de los {esNum(c.total) ? texto(c.total, { pesos: true }) : '—'} del grupo los vendió {filas[0]?.nombre}.</>} />
       </div>
     </Marco>
@@ -412,10 +467,12 @@ function Consolidado({ reporte, ...m }) {
 }
 
 // Tabla mensual (histórico de un local o del grupo). `cols`: [{ k, th, td(fila), tot, clase }]
-function TablaMensual({ filas, cols, mesActual, total }) {
+// apretada: hay observación abajo y la tabla tiene que dejarle lugar.
+function TablaMensual({ filas, cols, mesActual, total, apretada = false }) {
   const n = filas.length
+  const clases = [n > 9 || apretada ? ' rv-tabla-12' : '', apretada && n > 9 ? ' rv-tabla-apretada' : '', cols.length > 10 ? ' rv-tabla-ancha' : '']
   return (
-    <table className={`rv-tabla${n > 9 ? ' rv-tabla-12' : ''}${cols.length > 10 ? ' rv-tabla-ancha' : ''}`}>
+    <table className={`rv-tabla${clases.join('')}`}>
       <thead><tr><th>Mes</th>{cols.map((c) => <th key={c.k}>{c.th}</th>)}</tr></thead>
       <tbody>
         {filas.map((f) => (
@@ -454,7 +511,7 @@ function Historico({ reporte, local: l, ...m }) {
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Histórico ${anio}`)} titulo="Detalle mensual de ventas y operación"
       notaPie="MA = mes anterior">
       <div className="rv-cuerpo">
-        <TablaMensual filas={hist.map((h) => ({ ...h, mes: h.mes }))} cols={cols} mesActual={reporte.mes} total />
+        <TablaMensual filas={hist.map((h) => ({ ...h, mes: h.mes }))} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
       </div>
     </Marco>
   )
@@ -476,121 +533,102 @@ function ConsolidadoHist({ reporte, ...m }) {
   return (
     <Marco m={{ reporte, ...m }} ceja={`Histórico ${anio} · todos los locales`} titulo="Venta mensual del grupo" notaPie="MA = mes anterior">
       <div className="rv-cuerpo">
-        <TablaMensual filas={c.historico} cols={cols} mesActual={reporte.mes} total />
+        <TablaMensual filas={c.historico} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
       </div>
     </Marco>
   )
 }
 
-// Venta del año mes a mes, contra el año anterior si hay datos.
+// Venta del año mes a mes, contra el año anterior y su versión actualizada por inflación.
 function Comparativo({ reporte, local: l, ...m }) {
-  const anio = Number(reporte.mes.slice(0, 4))
-  const filas = l.historico.map((h) => ({ mes: h.mes, venta: h.venta.valor, anterior: h.anterior }))
+  const filas = l.historico.map((h) => ({
+    mes: h.mes, venta: h.venta.valor, anterior: h.anterior, anteriorAct: anteriorActualizado(reporte.ipc, h.mes, h.anterior),
+  }))
   const conAnterior = filas.some((f) => esNum(f.anterior))
+  const conReal = filas.some((f) => esNum(f.anteriorAct))
+  const anio = Number(reporte.mes.slice(0, 4))
   const rango = filas.length > 1 ? `Enero – ${nombreMes(reporte.mes).toLowerCase()}` : nombreMes(reporte.mes)
   return (
-    <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `${rango} · millones de $`)}
-      titulo={titularComparativo(filas, anio)}
-      derecha={conAnterior && (
-        <div className="rv-leyenda">
-          <span><i className="rv-ley-act" /> {anio}</span>
-          <span><i className="rv-ley-ant" /> {anio - 1}</span>
-        </div>
-      )}>
+    <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `${rango} · millones de $`)} tituloChico
+      titulo={conAnterior ? 'Total de ventas por mes comparado con el año anterior' : 'Total de ventas por mes'}
+      notaPie={conReal ? 'Real = descontada la inflación (IPC de INDEC)' : undefined}>
       <div className="rv-cuerpo rv-comp">
-        <Columnas filas={filas} conAnterior={conAnterior} />
-      </div>
-    </Marco>
-  )
-}
-
-function Delivery({ reporte, local: l, ...m }) {
-  const anio = Number(reporte.mes.slice(0, 4))
-  // Solo los meses con algún dato de app: nada de filas enteras en "—".
-  const filas = l.delivery.filter((d) => Object.values(d.apps).some((a) => esNum(a.venta)))
-  const apps = []
-  for (const d of filas) for (const a of Object.keys(d.apps)) if (!apps.includes(a)) apps.push(a)
-  const muchas = filas.length > 9
-  const minis = filas.length <= 6 || apps.length === 1
-  return (
-    <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Delivery ${anio}`)} titulo="Venta por aplicación" notaPie="MA = mes anterior">
-      <div className="rv-cuerpo">
-        <table className={`rv-tabla${muchas ? ' rv-tabla-12' : ''}${apps.length > 2 ? ' rv-tabla-ancha' : ''}`} style={{ width: Math.min(1262, 460 + apps.length * 330) }}>
-          <thead>
-            <tr className="rv-grupo">
-              <th colSpan={3} />
-              {apps.map((a) => <th key={a} colSpan={3}>{a}</th>)}
-            </tr>
-            <tr>
-              <th>Mes</th><th>Delivery</th><th>Var. % MA</th>
-              {apps.map((a) => <Fragment key={a}><th>Venta</th><th>Tickets</th><th>Prom.</th></Fragment>)}
-            </tr>
-          </thead>
-          <tbody>
-            {filas.map((d) => (
-              <tr key={d.mes} className={d.mes === reporte.mes ? 'rv-cur' : undefined}>
-                <td>{mes3(d.mes)}</td>
-                <td className="rv-fuerte"><Num v={d.total} /></td>
-                <td><Num v={d.varPct} pct signo /></td>
-                {apps.map((a) => {
-                  const x = d.apps[a]
-                  return (
-                    <Fragment key={a}>
-                      <td><Num v={x?.venta} /></td><td><Num v={x?.tickets} /></td><td><Num v={x?.prom} /></td>
-                    </Fragment>
-                  )
-                })}
-              </tr>
-            ))}
-            <tr className="rv-tot">
-              <td>Total</td><td><Num v={suma(filas.map((d) => d.total).filter(esNum))} /></td><td />
-              {apps.map((a) => {
-                // Meses en que la app vendió: la venta se suma; los tickets solo si están todos.
-                const conVenta = filas.map((d) => d.apps[a]).filter((x) => esNum(x?.venta))
-                return (
-                  <Fragment key={a}>
-                    <td><Num v={suma(conVenta.map((x) => x.venta))} /></td>
-                    <td><Num v={suma(conVenta.map((x) => x.tickets))} /></td><td />
-                  </Fragment>
-                )
-              })}
-            </tr>
-          </tbody>
-        </table>
-        {minis && (
-          <div className="rv-minis" style={{ gridTemplateColumns: `repeat(${Math.min(apps.length, 4)}, 1fr)` }}>
-            {apps.slice(0, 4).map((a) => (
-              <div key={a} className="rv-card rv-mini">
-                <div className="rv-card-k">{a} · venta por mes</div>
-                <MiniTendencia serie={filas.map((d) => ({ mes: d.mes, valor: d.apps[a]?.venta ?? null }))}
-                  ancho={Math.floor(1262 / Math.min(apps.length, 4)) - 66} alto={110} />
-              </div>
-            ))}
+        {conAnterior && (
+          <div className="rv-leyenda">
+            <span><i className="rv-ley-venta" /> {anio}</span>
+            <span><i className="rv-ley-ant" /> {anio - 1}</span>
+            {conReal && <span><i className="rv-ley-act" /> {anio - 1} actualizado por inflación</span>}
           </div>
         )}
+        <Lineas filas={filas} alto={m.obs ? 240 : 320} />
       </div>
     </Marco>
   )
 }
 
-// Acumulado del año: del grupo si hay más de un local, si no del local.
+// Delivery del mes: cuánto pesan las apps sobre la venta y cómo se reparten.
+function Delivery({ reporte, local: l, ...m }) {
+  const d = l.delivery.find((x) => x.mes === reporte.mes)
+  const total = d?.total ?? null
+  const venta = l.venta.valor
+  const apps = Object.entries(d?.apps || {}).filter(([, a]) => esNum(a.venta)).sort((a, b) => b[1].venta - a[1].venta)
+  const pct = (a, b) => (esNum(a) && esNum(b) && b !== 0 ? (100 * a) / b : null)
+  const filas = apps.map(([nombre, a]) => {
+    const delDelivery = pct(a.venta, total)
+    const deLaVenta = pct(a.venta, venta)
+    return {
+      nombre, valor: a.venta, inc: delDelivery,
+      pie: [esNum(delDelivery) && `${fmtAR(delDelivery, 2)}% del delivery`, esNum(deLaVenta) && `${fmtAR(deLaVenta, 2)}% de la venta`].filter(Boolean).join(' · '),
+      // Tickets y promedio solo si están cargados: en el PDF del cliente no va "falta".
+      extra: esNum(a.tickets) ? `${fmtAR(a.tickets)} tickets · prom. ${texto(a.prom, { pesos: true })}` : null,
+    }
+  })
+  const meses = l.delivery.filter((x) => esNum(x.total))
+  return (
+    <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Delivery · ${mesEnPalabras(reporte.mes)}`)}
+      titulo={esNum(total) ? `Las apps de delivery sumaron ${enMillones(total)}` : 'Venta por aplicación'}>
+      <div className="rv-cuerpo">
+        <Participacion filas={filas} total={total} totalNombre="Total delivery" compacto={!!m.obs}
+          grande={esNum(pct(total, venta)) ? `${fmtAR(pct(total, venta), 2)}%` : '—'}
+          frase={esNum(total)
+            ? <>de los {esNum(venta) ? texto(venta, { pesos: true }) : '—'} del mes entró por aplicaciones de delivery.</>
+            : <>Sin ventas por aplicaciones en {nombreMes(reporte.mes).toLowerCase()}.</>}
+          abajo={meses.length > 1 && !m.obs && (
+            <div className="rv-part-mini">
+              <div className="rv-card-k">Delivery por mes · millones de $</div>
+              <MiniColumnas serie={meses.slice(-6).map((x) => ({ mes: x.mes, valor: x.total }))} />
+            </div>
+          )} />
+      </div>
+    </Marco>
+  )
+}
+
+// Acumulado del año: del grupo si hay más de un local, si no del local. Con la
+// inflación de INDEC para comparar: la del mes, la del año y el crecimiento real.
 function Acumulado({ reporte, ...m }) {
   if (!reporte.locales.length) return null
   const a = reporte.consolidado?.acumulado ?? reporte.locales[0].acumulado
   const anio = Number(reporte.mes.slice(0, 4))
-  const tarjetas = [
+  const mesNom = nombreMes(reporte.mes).toLowerCase()
+  const filasInf = reporte.consolidado
+    ? reporte.consolidado.historico.map((h) => ({ mes: h.mes, venta: h.total, anterior: h.anterior }))
+    : reporte.locales[0].historico.map((h) => ({ mes: h.mes, venta: h.venta.valor, anterior: h.anterior }))
+  const inf = inflacionDelAcumulado(reporte.ipc, filasInf, reporte.mes)
+  const ops = [
     esNum(a.cubiertos) && <Tarjeta key="c" k="Cubiertos" clase="rv-card-acum"><Num v={a.cubiertos} /></Tarjeta>,
     esNum(a.ordenes) && <Tarjeta key="o" k="Órdenes" clase="rv-card-acum"><Num v={a.ordenes} /></Tarjeta>,
     esNum(a.cubiertos) && <Tarjeta key="pc" k="Prom. por cubierto" clase="rv-card-acum"><Num v={a.promCubierto} pesos /></Tarjeta>,
     esNum(a.ordenes) && <Tarjeta key="po" k="Prom. por orden" clase="rv-card-acum"><Num v={a.promOrden} pesos /></Tarjeta>,
   ].filter(Boolean)
+  const sinDato = 'Sin dato de INDEC'
   // Con varios locales, cuánto lleva cada uno en el año.
   const porLocal = reporte.consolidado
     ? reporte.locales.map((l) => ({ nombre: nom(reporte, l.local), venta: l.acumulado.venta, varAnual: l.acumulado.varAnual }))
     : null
   return (
-    <Marco m={{ reporte, ...m }} clase="rv-acum" brillo
-      ceja={`Acumulado enero – ${nombreMes(reporte.mes).toLowerCase()} ${anio}`}>
+    <Marco m={{ reporte, ...m }} clase="rv-acum" brillo ceja={`Acumulado enero – ${mesNom} ${anio}`}
+      notaPie="Inflación: IPC nivel general nacional de INDEC">
       <div className="rv-acum-big"><Num v={a.venta} pesos /></div>
       <div className="rv-acum-sub">
         {esNum(a.varAnual)
@@ -608,7 +646,21 @@ function Acumulado({ reporte, ...m }) {
           ))}
         </div>
       )}
-      {tarjetas.length > 0 && <div className={`rv-acum-tarjetas rv-cols-${tarjetas.length}`}>{tarjetas}</div>}
+      <div className="rv-acum-filas">
+        <div className="rv-fila rv-cols-3">
+          <Tarjeta k={`Inflación de ${mesNom}`} clase="rv-card-acum rv-card-inf" sub={esNum(inf.mes) ? 'IPC mensual' : sinDato}>
+            {esNum(inf.mes) ? `${fmtAR(inf.mes, 1)}%` : '—'}
+          </Tarjeta>
+          <Tarjeta k={`Inflación enero – ${mesNom}`} clase="rv-card-acum rv-card-inf" sub={esNum(inf.anio) ? 'Acumulada en el año' : sinDato}>
+            {esNum(inf.anio) ? `${fmtAR(inf.anio, 1)}%` : '—'}
+          </Tarjeta>
+          <Tarjeta k="Crecimiento real" clase="rv-card-acum rv-card-inf"
+            sub={esNum(inf.real) ? `Contra ${anio - 1} actualizado por inflación (${texto(inf.anteriorAct, { pesos: true })})` : `Falta la inflación de algún mes o el acumulado de ${anio - 1}`}>
+            <Num v={inf.real} pct signo />
+          </Tarjeta>
+        </div>
+        {ops.length > 0 && <div className={`rv-fila rv-cols-${ops.length}`}>{ops}</div>}
+      </div>
     </Marco>
   )
 }
@@ -628,7 +680,8 @@ export function Hoja({ pagina, reporte, local, borrador = false, numero }) {
   if (pagina.local && !l) return null
   if ((pagina.tipo === 'consolidado' || pagina.tipo === 'consolidadoHist') && !reporte.consolidado) return null
   const n = numero ?? reporte.paginas.findIndex((p) => p.id === pagina.id) + 1
-  return <Comp reporte={reporte} local={l} borrador={borrador} numero={n} total={reporte.paginas.length} />
+  const obs = reporte.observaciones?.[pagina.id]?.texto || null
+  return <Comp reporte={reporte} local={l} borrador={borrador} numero={n} total={reporte.paginas.length} obs={obs} />
 }
 
 // Todas las hojas en orden. Para imprimir, pasar `imprimir`: el contenedor queda oculto

@@ -27,6 +27,7 @@
 .rv-cab { position: relative; display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; padding: 96px 97px 0; }
 .rv-ceja { font-size: 19px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--rv-oro); }
 .rv-hoja h2.rv-tit { margin: 14px 0 0; font-size: 46px; font-weight: 800; line-height: 1.18; letter-spacing: -.01em; color: var(--rv-tx); }
+.rv-hoja h2.rv-tit-chico { font-size: 40px; }
 .rv-cuerpo { position: relative; padding: 32px 97px 0; }
 
 /* pie */
@@ -71,7 +72,9 @@
 .rv-part-pista { height: 14px; border-radius: 7px; background: var(--rv-pista); overflow: hidden; }
 .rv-part-barra { height: 100%; border-radius: 7px; background: var(--rv-teal); }
 .rv-part-barra-1 { background: var(--rv-oro); }
-.rv-part-pct { font-size: 19px; color: var(--rv-tx-2); }
+.rv-part-pct { display: flex; justify-content: space-between; gap: 20px; font-size: 19px; color: var(--rv-tx-2); }
+.rv-part-mini { margin-top: 30px; }
+.rv-part-mini .rv-card-k { font-size: 14px; margin-bottom: 8px; }
 .rv-part-total { display: flex; justify-content: space-between; padding-top: 22px; border-top: 2px solid #535c66; margin-top: -1px; font-size: 28px; font-weight: 800; }
 .rv-part-muchas { padding-top: 6px; padding-bottom: 20px; }
 .rv-part-muchas .rv-part-fila { padding: 10px 0; gap: 6px; }
@@ -111,7 +114,7 @@
 .rv-hoja .rv-tabla-ancha thead th { font-size: 15px; }
 
 /* columnas mes a mes */
-.rv-comp { padding-top: 56px; }
+.rv-comp { padding-top: 22px; }
 .rv-svg { display: block; overflow: visible; font-family: 'Montserrat', system-ui, sans-serif; }
 .rv-col-act { fill: var(--rv-act); }
 .rv-col-cur { fill: var(--rv-oro); }
@@ -122,10 +125,30 @@
 .rv-col-mes { font-size: 21px; font-weight: 500; fill: var(--rv-tx-2); }
 .rv-col-mes-cur { font-weight: 700; fill: var(--rv-oro); }
 .rv-col-base { stroke: #474f59; stroke-width: 2; }
-.rv-leyenda { display: flex; gap: 30px; font-size: 20px; color: var(--rv-tx-2); padding-bottom: 6px; }
-.rv-leyenda i { display: inline-block; vertical-align: -2px; width: 18px; height: 18px; border-radius: 4px; margin-right: 10px; }
-.rv-ley-act { background: var(--rv-act); }
-.rv-ley-ant { background: var(--rv-ant); }
+.rv-leyenda { display: flex; justify-content: flex-end; gap: 32px; font-size: 19px; color: var(--rv-tx-2); margin-bottom: 4px; }
+.rv-leyenda i { display: inline-block; vertical-align: middle; width: 30px; height: 0; margin-right: 10px; border-top: 4px solid var(--rv-act); }
+.rv-leyenda i.rv-ley-ant { border-top: 3px dashed #7d8da0; }
+.rv-leyenda i.rv-ley-act { border-top: 3px dotted var(--rv-teal); }
+
+/* líneas mes a mes */
+.rv-lin-guia { stroke: rgba(255, 255, 255, .06); stroke-width: 1; }
+.rv-lin-eje { font-size: 14px; fill: var(--rv-tx-3); }
+.rv-lin-area { fill: rgba(220, 215, 206, .06); }
+.rv-lin-venta { stroke: var(--rv-act); stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
+.rv-lin-ant { stroke: #7d8da0; stroke-width: 3; stroke-dasharray: 9 7; stroke-linejoin: round; }
+.rv-lin-act { stroke: var(--rv-teal); stroke-width: 3; stroke-dasharray: 2 7; stroke-linecap: round; stroke-linejoin: round; }
+.rv-lin-pto { fill: var(--rv-act); stroke: var(--rv-fondo); stroke-width: 3; }
+.rv-lin-pto-cur { fill: var(--rv-oro); stroke: var(--rv-fondo); stroke-width: 3; }
+.rv-lin-pto-ant { fill: #5b6b7d; stroke: var(--rv-fondo); stroke-width: 2; }
+.rv-lin-pto-act { fill: var(--rv-fondo); stroke: var(--rv-teal); stroke-width: 2.5; }
+.rv-lin-val { font-weight: 700; fill: var(--rv-tx); }
+.rv-lin-val-cur { fill: var(--rv-oro); }
+.rv-lin-val-ant { fill: var(--rv-tx-2); }
+.rv-lin-fila { font-size: 15px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; fill: var(--rv-tx-3); }
+.rv-lin-nom { font-weight: 500; fill: var(--rv-tx-2); }
+.rv-lin-pos { font-weight: 700; fill: var(--rv-verde); }
+.rv-lin-neg { font-weight: 700; fill: var(--rv-rojo); }
+.rv-lin-nulo { fill: var(--rv-tx-3); }
 
 /* delivery */
 .rv-minis { display: grid; gap: 18px; margin-top: 22px; }
@@ -136,6 +159,7 @@
 .rv-mini-cur { fill: var(--rv-oro); }
 .rv-mini-val { font-size: 15px; font-weight: 700; fill: var(--rv-tx); }
 .rv-mini-eje { font-size: 13px; fill: var(--rv-tx-3); }
+.rv-mini-eje-cur { fill: var(--rv-oro); font-weight: 700; }
 .rv-mini-vacia { color: var(--rv-tx-3); font-size: 18px; padding: 20px 0; }
 
 /* acumulado */
@@ -148,10 +172,13 @@
 .rv-acum-local-nom { color: var(--rv-tx-2); }
 .rv-acum-local-v { font-weight: 700; }
 .rv-acum-local-var { font-size: 18px; }
-.rv-acum-tarjetas { position: absolute; left: 97px; right: 97px; bottom: 122px; display: grid; gap: 18px; }
-.rv-card-acum { background: rgba(255, 255, 255, .03); border-color: #2c333b; padding: 30px 28px; }
+.rv-acum-filas { position: absolute; left: 97px; right: 97px; bottom: 112px; display: flex; flex-direction: column; gap: 14px; }
+.rv-card-acum { background: rgba(255, 255, 255, .03); border-color: #2c333b; padding: 18px 26px; }
 .rv-card-acum .rv-card-k { color: var(--rv-oro); }
-.rv-card-acum .rv-card-v { font-size: 40px; }
+.rv-card-acum .rv-card-v { font-size: 36px; margin-top: 4px; }
+.rv-card-acum .rv-card-sub { margin-top: 4px; font-size: 16px; }
+.rv-card-inf { background: rgba(79, 179, 187, .06); border-color: rgba(79, 179, 187, .25); }
+.rv-card-inf .rv-card-k { color: var(--rv-teal); }
 
 /* portada */
 .rv-portada-logo { position: absolute; left: 147px; top: 97px; width: 189px; height: auto; }
@@ -176,6 +203,25 @@
 .rv-contra-cuerpo { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 56px; padding-top: 30px; }
 .rv-contra-logo { width: 435px; height: auto; }
 .rv-contra-lema { font-size: 56px; font-weight: 800; color: var(--rv-oro); letter-spacing: -.005em; }
+
+/* observaciones de la hoja: franja arriba del pie, hasta dos renglones */
+.rv-obs {
+  position: absolute; left: 97px; right: 97px; bottom: 92px; display: flex; align-items: baseline; gap: 18px;
+  padding: 12px 20px; border-radius: 10px; background: rgba(255, 255, 255, .035); border: 1px solid var(--rv-borde);
+}
+.rv-obs-k { flex: none; font-size: 14px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--rv-oro); }
+.rv-hoja .rv-obs p {
+  margin: 0; font-size: 18px; line-height: 1.4; color: #d6d2ca; white-space: pre-line;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* con observación, lo que va al pie sube para dejarle lugar */
+.rv-con-obs .rv-sint-tarjetas { bottom: 196px; }
+.rv-con-obs .rv-acum-filas { bottom: 182px; }
+.rv-con-obs .rv-acum-big { font-size: 104px; padding-top: 8px; }
+.rv-con-obs .rv-part { min-height: 0; }
+.rv-hoja .rv-tabla-apretada td { padding-top: 2px; padding-bottom: 2px; }
+.rv-hoja table.rv-tabla-apretada { font-size: 17px; }
+.rv-con-obs .rv-portada-pie { bottom: 40px; }
 
 /* marca de agua del borrador */
 .rv-marca {

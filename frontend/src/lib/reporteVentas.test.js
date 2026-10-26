@@ -149,8 +149,8 @@ test('consolidado de Grupo Perros sep-26', () => {
     [['TOGNIS-CAFE', 80003001, 10.10], ['TOGNIS-PIZZA', 316106840, 39.90], ['EVELIA', 396160370, 50.00]])
   assert.deepEqual(r.paginas.map((p) => [p.tipo, p.local]), [
     ['portada', undefined], ['sintesis', undefined], ['consolidado', undefined], ['consolidadoHist', undefined],
-    ['mes', 'TOGNIS-CAFE'], ['canales', 'TOGNIS-CAFE'], ['comparativo', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'],
-    ['mes', 'TOGNIS-PIZZA'], ['canales', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'],
+    ['mes', 'TOGNIS-CAFE'], ['comparativo', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'],
+    ['mes', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'],
     ['mes', 'EVELIA'], ['comparativo', 'EVELIA'], ['historico', 'EVELIA'],
     ['acumulado', undefined], ['contraportada', undefined]])
   assert.equal(new Set(r.paginas.map((p) => p.id)).size, r.paginas.length)
@@ -275,4 +275,30 @@ test('acumulado del año: sumas estrictas, promedios y variación contra el año
   assert.equal(r.consolidado.acumulado.cubiertos, 40)
   assert.equal(r.consolidado.acumulado.anterior, null) // Q no tiene 2025: no se inventa
   assert.equal(r.consolidado.historico[1].varPesos, 0)
+})
+
+test('canales: hoja propia solo con un canal que no sea de delivery (las apps van en la de delivery)', () => {
+  const conApps = armarLocal({ local: 'X', mes: '2026-09', valores: [], cierres: [], auto: { meses: { '2026-09': { venta: 1000 } },
+    canales: { '2026-09': canalesAuto({ detalles: [{ metodo: 'Rappi', monto: 100 }], cajasOrigen: [], reglas: [] }) } } })
+  const r1 = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: conApps }, hoy: HOY })
+  assert.ok(!r1.paginas.some((p) => p.tipo === 'canales'))
+  assert.ok(r1.paginas.some((p) => p.tipo === 'delivery'))
+  const conBigBox = armarLocal({ local: 'X', mes: '2026-09', cierres: [], auto: { meses: { '2026-09': { venta: 1000 } }, canales: {} },
+    valores: [{ local: 'X', mes: '2026-09', dato: 'canal:Big Box', valor: 50 }] })
+  const r2 = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: conBigBox }, hoy: HOY })
+  assert.ok(r2.paginas.some((p) => p.tipo === 'canales'))
+})
+test('cubiertos, órdenes y tickets libres: lo cargado a mano le gana al mes cerrado; la venta no', () => {
+  const cierres = [{ mes: '2026-08', origen: 'deck', snapshot: { locales: { X: { venta: 500, cubiertos: 40, tickets: { Rappi: 3 }, canales: { Rappi: 100 }, delivery: ['Rappi'] } } } }]
+  const valores = [
+    { local: 'X', mes: '2026-08', dato: 'cubiertos', valor: 45, actualizado_por: 'yo' },
+    { local: 'X', mes: '2026-08', dato: 'tickets:Rappi', valor: 7 },
+    { local: 'X', mes: '2026-08', dato: 'venta', valor: 999 },
+  ]
+  const l = armarLocal({ local: 'X', mes: '2026-08', auto: { meses: {}, canales: {} }, valores, cierres })
+  assert.deepEqual([l.cubiertos.valor, l.cubiertos.fuente, l.cubiertos.original], [45, 'mano', 40])
+  assert.equal(l.venta.valor, 500)
+  assert.equal(l.venta.fuente, 'cerrado')
+  const ago = l.delivery.find((d) => d.mes === '2026-08')
+  assert.deepEqual([ago.apps.Rappi.tickets, ago.apps.Rappi.ticketsDato.fuente], [7, 'mano'])
 })

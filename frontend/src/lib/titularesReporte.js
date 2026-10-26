@@ -61,17 +61,3 @@ export function titularConsolidado(filas) {
   if (!p) return 'Venta por local'
   return `${p.nombre} hizo el ${pctEntero(p.inc)} de la venta del grupo`
 }
-
-// filas: [{ mes, venta, anterior }]
-export function titularComparativo(filas, anio) {
-  const pares = filas.filter((f) => esNum(f.venta) && esNum(f.anterior))
-  if (!pares.length) return `Venta mes a mes ${anio}`
-  const arriba = pares.filter((f) => f.venta > f.anterior).length
-  if (pares.length === 1) {
-    const m = mayus(nombreMes(pares[0].mes))
-    return arriba ? `${m} ${anio} supera al mismo mes de ${anio - 1}` : `${m} ${anio} queda debajo del mismo mes de ${anio - 1}`
-  }
-  if (arriba === pares.length) return `Todos los meses de ${anio} superan a ${anio - 1}`
-  if (arriba === 0) return `Ningún mes de ${anio} supera a ${anio - 1}`
-  return `${arriba} de ${pares.length} meses de ${anio} superan a ${anio - 1}`
-}

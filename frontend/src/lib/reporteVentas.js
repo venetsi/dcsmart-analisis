@@ -116,6 +116,9 @@ export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [] }) {
   return [...out.values()]
 }
 
+// Datos que se corrigen aunque el mes esté cerrado (igual que en la API).
+export const datoLibre = (dato) => dato === 'cubiertos' || dato === 'ordenes' || String(dato).startsWith('tickets:')
+
 function mesDe(anio, m) { return `${anio}-${String(m).padStart(2, '0')}` }
 function mesPrevio(mes) {
   const [a, m] = mes.split('-').map(Number)
@@ -153,10 +156,16 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
 
   // Resuelve un dato: cerrado > mano > auto > falta. En un mes cerrado, lo que
   // la foto no trae se puede cargar a mano; si no, falta (no se toma lo de hoy).
+  // Cubiertos, órdenes y tickets son libres: lo cargado a mano le gana a la foto.
   // `parcial` (opcional): suma automática incompleta, solo como pista en el panel.
   const resolver = (m, dato, valorCerrado, autoValor, parcial) => {
     const s = snap(m)
-    if (s !== undefined && num(valorCerrado) != null) return { valor: num(valorCerrado), fuente: 'cerrado' }
+    const cerrado = s !== undefined ? num(valorCerrado) : null
+    if (datoLibre(dato) && cerrado != null) {
+      const row = mano(m, dato)
+      return row ? datoMano(row, cerrado) : { valor: cerrado, fuente: 'cerrado' }
+    }
+    if (cerrado != null) return { valor: cerrado, fuente: 'cerrado' }
     const row = mano(m, dato)
     if (row) return datoMano(row, s !== undefined ? null : autoValor)
     if (s === undefined && autoValor != null) return { valor: autoValor, fuente: 'auto' }
@@ -326,7 +335,7 @@ function sumaEstricta(vals) {
 // páginas y si se puede cerrar el mes. `hoy` decide si el mes terminó.
 // También acepta `cierres` (parte de la interfaz), pero no lo usa: los cierres
 // ya entran en cada LocalMes por armarLocal.
-export function armarReporte({ cliente, mes, porLocal, hoy = new Date() }) {
+export function armarReporte({ cliente, mes, porLocal, hoy = new Date(), ipc = {}, observaciones = {} }) {
   const nombres = (cliente?.locales?.length ? cliente.locales : Object.keys(porLocal)).filter((l) => porLocal[l])
   const locales = nombres.map((l) => porLocal[l])
 
@@ -361,8 +370,9 @@ export function armarReporte({ cliente, mes, porLocal, hoy = new Date() }) {
   }
   for (const l of locales) {
     paginas.push({ id: `mes:${l.local}`, tipo: 'mes', local: l.local })
-    // Canales solo si hay alguno además de "Local": un 100% Local no dice nada.
-    if (l.canales.some((c) => c.nombre !== LOCAL && c.valor != null && c.valor !== 0)) {
+    // Canales solo si hay alguno además de "Local" que no sea de delivery: un 100% Local
+    // no dice nada y las apps ya tienen su hoja (con su peso sobre la venta).
+    if (l.canales.some((c) => c.nombre !== LOCAL && !c.delivery && c.valor != null && c.valor !== 0)) {
       paginas.push({ id: `canales:${l.local}`, tipo: 'canales', local: l.local })
     }
     // Venta mes a mes (contra el año anterior si lo hay): solo si hay alguna venta del año.
@@ -384,7 +394,7 @@ export function armarReporte({ cliente, mes, porLocal, hoy = new Date() }) {
     if (c && c.valor != null && c.valor < 0) motivos.push(`${l.local}: Local queda negativo`)
   }
 
-  return { cliente, mes, locales, consolidado, paginas, puedeCerrar: motivos.length === 0, motivos }
+  return { cliente, mes, locales, consolidado, paginas, ipc, observaciones, puedeCerrar: motivos.length === 0, motivos }
 }
 
 // Foto del mes para guardar al cerrar: solo valores, sin fuentes.

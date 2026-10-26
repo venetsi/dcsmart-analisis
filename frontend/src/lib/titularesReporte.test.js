@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { enMillones, titularCanales, titularComparativo, titularConsolidado, titularSintesis } from './titularesReporte.js'
+import { enMillones, titularCanales, titularConsolidado, titularSintesis } from './titularesReporte.js'
 
 test('síntesis de 3 Monos sep-26 (como el PDF de referencia)', () => {
   assert.equal(titularSintesis({ mes: '2026-09', venta: 151736690, varAnual: 47.39, varPct: -2.6 }),
@@ -29,12 +29,4 @@ test('canales y consolidado: el que más vende', () => {
   assert.equal(titularCanales([{ nombre: 'Local', valor: null, inc: null }]), 'Ventas por canal')
   assert.equal(titularConsolidado([{ nombre: 'Evelia', valor: 396, inc: 50 }, { nombre: 'Pizza', valor: 316, inc: 39.9 }]),
     'Evelia hizo el 50% de la venta del grupo')
-})
-test('comparativo contra el año anterior', () => {
-  const f = (venta, anterior, mes = '2026-01') => ({ mes, venta, anterior })
-  assert.equal(titularComparativo([f(2, 1), f(3, 1)], 2026), 'Todos los meses de 2026 superan a 2025')
-  assert.equal(titularComparativo([f(2, 1), f(1, 3), f(5, null)], 2026), '1 de 2 meses de 2026 superan a 2025')
-  assert.equal(titularComparativo([f(1, 2), f(1, 3)], 2026), 'Ningún mes de 2026 supera a 2025')
-  assert.equal(titularComparativo([f(2, 1, '2026-03')], 2026), 'Marzo 2026 supera al mismo mes de 2025')
-  assert.equal(titularComparativo([f(2, null)], 2026), 'Venta mes a mes 2026')
 })

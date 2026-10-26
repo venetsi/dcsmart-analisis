@@ -84,3 +84,13 @@
 .rve-regla-btn { display: flex; gap: 8px; }
 @media (max-width: 1250px) { .rve-config-local { grid-template-columns: 280px minmax(0, 320px); } .rve-config-logo { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .rve-regla, .rve-config-local { grid-template-columns: 1fr; } }
+
+/* observación de la hoja */
+.rve-obs-ed { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.rve-obs-ed textarea { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; resize: none; overflow: hidden; min-height: 54px;
+  border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-input, var(--border)); color: var(--txt); font-size: 12.5px; line-height: 1.45; }
+.rve-obs-ed textarea:focus { outline: none; border-color: var(--teal); }
+.rve-obs-pie { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.rve-obs-pie small { font-size: 10.5px; color: var(--txt3); }
+.rve-obs-botones { display: flex; gap: 8px; }
+.rve-obs-botones .btn-pri, .rve-obs-botones .btn-sec { padding: 5px 12px; font-size: 12px; }
