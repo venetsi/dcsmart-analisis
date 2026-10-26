@@ -46,6 +46,15 @@ function IcoReporteMensual() {
     </svg>
   )
 }
+function IcoImpuestos() {
+  return (
+    <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-2-2z"/>
+      <line x1="15" y1="8" x2="9" y2="14"/>
+      <circle cx="9.5" cy="8.5" r="1"/><circle cx="14.5" cy="13.5" r="1"/>
+    </svg>
+  )
+}
 function IcoUsers() {
   return (
     <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -82,6 +91,7 @@ export const TABLEROS = [
   { to: '/pyl',             label: 'P&L',                sub: 'Resultado mensual por rubro', Icon: IcoPyl },
   { to: '/reporte-mensual', label: 'Informe Mensual',    sub: 'P&L, resumen y presentación del mes', Icon: IcoReporteMensual },
   { to: '/reporte-ventas',   label: 'Reporte de Ventas',  sub: 'Reporte mensual para el cliente, en PDF', Icon: IcoVentas },
+  { to: '/costo-impositivo', label: 'Costo impositivo',   sub: 'IVA e IIBB a pagar e impuestos internos', Icon: IcoImpuestos },
 ]
 
 function iniciales(nombre, email) {

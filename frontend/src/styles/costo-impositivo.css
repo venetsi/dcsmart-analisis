@@ -1,0 +1,154 @@
+/* Costo impositivo. Se apoya en las piezas del P&L (pyl.css): filtros,
+   tarjetas, tabla. Acá va solo lo propio: saldos a pagar / a favor, la
+   alícuota editable, el desglose de cada local y los avisos. */
+
+.ci-saldo {
+  display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.15;
+  font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.ci-saldo small { font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; opacity: .8; }
+.ci-saldo.pagar { color: var(--txt); }
+.ci-saldo.pagar small { color: var(--txt3); }
+.ci-saldo.favor { color: #6FD39C; }
+.ci-saldo.vacio { color: var(--txt3); font-weight: 500; font-size: 12px; }
+.ci-saldo.chico { font-size: 13px; }
+
+.ci-pill {
+  display: inline-block; padding: 2px 9px; border-radius: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .03em;
+}
+.ci-pill.pagar { background: rgba(63,182,189,.14); color: var(--pyl-turquesa-l); }
+.ci-pill.favor { background: var(--ok-bg); color: #6FD39C; }
+.pyl-kpi.ci-total {
+  background: linear-gradient(150deg, rgba(201,176,134,.13), transparent 58%), var(--card);
+  border-color: rgba(201,176,134,.3);
+}
+.pyl-kpi.ci-total .pyl-kpi-icon { background: rgba(201,176,134,.16); color: var(--teal-l); }
+
+/* avisos */
+.ci-aviso {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 16px; margin-bottom: 14px; border-radius: 12px;
+  background: var(--warn-bg); border: 1px solid var(--warn-border); color: #F0CF95;
+  font-size: 13px; line-height: 1.5;
+}
+.ci-aviso svg { flex-shrink: 0; margin-top: 2px; }
+.ci-aviso.info { background: var(--info-bg); border-color: var(--info-border); color: #A9CDF0; }
+.ci-aviso.chico { font-size: 12px; padding: 9px 12px; margin: 14px 0 0; }
+
+/* tabla de locales */
+.ci-tabla td { vertical-align: middle; }
+.ci-tabla th:nth-child(2), .ci-tabla td:nth-child(2) { width: 150px; }
+.ci-fuera td { opacity: .5; }
+.ci-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--txt3); border: 1px solid rgba(255,255,255,.14); border-radius: 6px; padding: 1px 6px;
+}
+.ci-fila-desglose > td { padding: 0 !important; background: rgba(0,0,0,.12); }
+.ci-fila-desglose:hover td { background: rgba(0,0,0,.12) !important; }
+
+/* alícuota editable */
+.ci-alic { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.ci-alic input {
+  width: 64px; height: 32px; padding: 0 8px; text-align: right;
+  background: var(--bg-input); border: 1px solid rgba(201,176,134,.25); border-radius: 8px;
+  color: var(--txt); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; outline: none;
+}
+.ci-alic input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(201,176,134,.16); }
+.ci-alic input::placeholder { color: var(--txt4); }
+.ci-alic.error input { border-color: var(--bad); }
+.ci-alic-pct { font-size: 12px; color: var(--txt3); font-weight: 600; }
+.ci-alic-msg {
+  position: absolute; right: 0; top: 100%; margin-top: 2px; white-space: nowrap;
+  font-size: 10px; font-weight: 600; color: var(--txt3);
+}
+.ci-alic-msg.ok { color: #6FD39C; }
+.ci-alic-msg.error { color: #F08A8A; }
+.ci-alic-solo { font-weight: 600; color: var(--txt2); }
+
+/* interruptor "entra en los totales" */
+.ci-switch { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }
+.ci-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.ci-switch span {
+  position: absolute; inset: 0; border-radius: 10px; background: rgba(255,255,255,.12); transition: background .18s;
+}
+.ci-switch span::before {
+  content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--txt2); transition: transform .18s var(--ease), background .18s;
+}
+.ci-switch input:checked + span { background: rgba(63,182,189,.45); }
+.ci-switch input:checked + span::before { transform: translateX(16px); background: #fff; }
+.ci-switch input:focus-visible + span { box-shadow: 0 0 0 3px rgba(63,182,189,.3); }
+.ci-switch.bloqueado { cursor: default; opacity: .6; }
+
+/* desglose del local */
+.ci-desglose { padding: 18px 24px 20px 52px; }
+.ci-desglose-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.ci-bloque {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+}
+.ci-bloque-tit {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--txt3);
+  margin-bottom: 8px;
+}
+.ci-bloque-alic { font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--teal-l); }
+.ci-linea {
+  display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: baseline;
+  padding: 5px 0; font-size: 12.5px; color: var(--txt2);
+}
+.ci-linea-signo { color: var(--txt3); font-weight: 700; text-align: center; }
+.ci-linea-label em { font-style: normal; color: var(--txt4); margin-left: 6px; font-size: 11.5px; }
+.ci-linea-valor { font-variant-numeric: tabular-nums; color: var(--txt); }
+.ci-linea.total { border-top: 1px dashed rgba(255,255,255,.12); margin-bottom: 8px; font-weight: 700; color: var(--txt); }
+.ci-resultado {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 6px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255,255,255,.04); border: 1px solid var(--border);
+  font-size: 12.5px; font-weight: 700; color: var(--txt);
+}
+.ci-falta { margin: 6px 0 10px; padding: 9px 12px; border-radius: 9px; font-size: 12px; background: var(--warn-bg); color: #F0CF95; }
+.ci-ver-facturas { margin: 14px 0 10px; }
+.ci-cargando { display: flex; align-items: center; gap: 8px; padding: 14px 0; font-size: 12.5px; color: var(--txt3); }
+
+/* facturas del local */
+.ci-facturas { min-width: 900px; }
+.ci-facturas td { font-size: 12px !important; padding-top: 7px; padding-bottom: 7px; }
+.ci-facturas td:first-child, .ci-facturas th:first-child { padding-left: 12px; }
+.ci-facturas .ci-prov { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-tipo {
+  display: inline-block; min-width: 34px; text-align: center; padding: 1px 6px; border-radius: 5px;
+  font-size: 10.5px; font-weight: 700;
+}
+.ci-tipo.egr { background: rgba(255,255,255,.07); color: var(--txt2); }
+.ci-tipo.ing { background: rgba(63,182,189,.16); color: var(--pyl-turquesa-l); }
+.ci-sentido, .ci-revisar {
+  margin-left: 6px; font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 5px;
+}
+.ci-sentido { color: var(--pyl-turquesa-l); border: 1px solid rgba(63,182,189,.35); }
+.ci-revisar { color: #F0CF95; border: 1px solid var(--warn-border); }
+
+/* cómo se calcula */
+.ci-como { margin-top: 16px; }
+.ci-como summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--txt); }
+.ci-como-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 14px; }
+.ci-como-grid strong { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--teal-l); margin-bottom: 6px; }
+.ci-como-grid p { font-size: 12.5px; line-height: 1.55; color: var(--txt2); margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  .ci-desglose { padding: 14px 12px; }
+  .ci-desglose-grid, .ci-como-grid { grid-template-columns: 1fr; }
+}
+
+@media print {
+  .ci-saldo.pagar, .ci-linea-valor, .ci-resultado { color: #1a1a1a !important; }
+  .ci-saldo.favor { color: #2e8b57 !important; }
+  .ci-saldo small, .ci-linea, .ci-linea-label em, .ci-bloque-tit { color: #555 !important; }
+  .ci-bloque, .ci-resultado { background: #fff !important; border-color: #ccc !important; }
+  .ci-fila-desglose > td { background: #fff !important; }
+  .ci-aviso { background: #fff !important; color: #333 !important; border-color: #bbb !important; }
+  .ci-alic input { border: none !important; background: none !important; color: #1a1a1a !important; width: 40px; }
+  .ci-como { display: none !important; }
+  .ci-desglose-grid { grid-template-columns: 1fr 1fr !important; }
+}

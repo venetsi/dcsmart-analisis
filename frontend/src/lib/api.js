@@ -101,6 +101,10 @@ export const api = {
   rvPutRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'PUT', body }),
   rvDelRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'DELETE', body }),
 
+  ciGet: (grupo, mes) => request(`/costo-impositivo${toQueryString({ grupo, mes })}`),
+  ciFacturas: (idLocal, mes) => request(`/costo-impositivo/facturas${toQueryString({ id_local: idLocal, mes })}`),
+  ciPutLocal: (body) => request('/costo-impositivo/local', { method: 'PUT', body }),
+
   getUsers: (search) => request(`/access/users${toQueryString({ search })}`),
   updateUserAccess: (id, body) => request(`/access/users/${id}`, { method: 'PUT', body })
 }

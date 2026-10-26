@@ -12,6 +12,7 @@ import ResumenPage from './pages/ResumenPage.jsx'
 import PyLPage from './pages/PyLPage.jsx'
 import InformePage from './pages/InformePage.jsx'
 import ReporteVentasPage from './pages/ReporteVentasPage.jsx'
+import CostoImpositivoPage from './pages/CostoImpositivoPage.jsx'
 import AdminUsersPage from './pages/AdminUsersPage.jsx'
 
 function RequireAuth({ children }) {
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="pyl" element={<PyLPage />} />
         <Route path="reporte-mensual" element={<InformePage />} />
         <Route path="reporte-ventas" element={<ReporteVentasPage />} />
+        <Route path="costo-impositivo" element={<CostoImpositivoPage />} />
         <Route
           path="admin/usuarios"
           element={
