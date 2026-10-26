@@ -104,3 +104,36 @@ export function totalizar (locales) {
     locales: inc.length
   }
 }
+
+// Período de la consulta: un mes (?mes=YYYY-MM) o un rango de fechas
+// (?desde=YYYY-MM-DD&hasta=YYYY-MM-DD, ambos inclusive, hasta dos años).
+// En un mes las facturas van por PERÍODO (o por fecha si no tienen), que es
+// como se validaron los números; en un rango van por la FECHA de la factura,
+// porque el período es un mes entero y no se puede cortar a mitad. Las cajas
+// van siempre por fecha de inicio. `hasta` sale exclusivo (el día siguiente).
+const DIA = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
+const MAX_DIAS = 731
+
+function diaSiguiente (d) {
+  const t = new Date(d + 'T00:00:00Z')
+  t.setUTCDate(t.getUTCDate() + 1)
+  return t.toISOString().slice(0, 10)
+}
+const fechaValida = (d) => DIA.test(d) && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d
+
+export function periodoConsulta (q = {}) {
+  if (typeof q.mes === 'string' && q.mes) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(q.mes)) return { error: 'El mes no es válido.' }
+    const [y, m] = q.mes.split('-').map(Number)
+    const hasta = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+    return { modo: 'mes', mes: q.mes, desde: `${q.mes}-01`, hasta, campoFactura: 'periodo' }
+  }
+  const { desde, hasta } = q
+  if (typeof desde !== 'string' || typeof hasta !== 'string' || !fechaValida(desde) || !fechaValida(hasta)) {
+    return { error: 'Elegí un mes o un rango de fechas válido.' }
+  }
+  if (desde > hasta) return { error: 'La fecha "desde" es posterior a "hasta".' }
+  const dias = (new Date(hasta) - new Date(desde)) / 864e5 + 1
+  if (dias > MAX_DIAS) return { error: 'El rango puede ser de hasta dos años.' }
+  return { modo: 'rango', desde, hastaIncl: hasta, hasta: diaSiguiente(hasta), campoFactura: 'fecha' }
+}

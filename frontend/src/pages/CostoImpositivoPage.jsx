@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { fmtNum, fmtMesLargo, fmtPesos, fmtDate } from '../lib/format.js'
@@ -100,15 +100,15 @@ function Alicuota({ local, puede, onGuardar }) {
   )
 }
 
-function Facturas({ local, mes }) {
+function Facturas({ local, periodo }) {
   const [filas, setFilas] = useState(null)
   const [error, setError] = useState('')
   useEffect(() => {
-    api.ciFacturas(local.id, mes).then(setFilas).catch(() => setError('No se pudieron traer las facturas.'))
-  }, [local.id, mes])
+    api.ciFacturas(local.id, periodo).then(setFilas).catch(() => setError('No se pudieron traer las facturas.'))
+  }, [local.id, periodo])
   if (error) return <div className="pyl-error">{error}</div>
   if (!filas) return <div className="ci-cargando"><span className="pyl-spinner" /> Trayendo facturas…</div>
-  if (!filas.length) return <div className="pyl-card-vacio">No hay facturas A, C, M ni notas de crédito o débito en el mes.</div>
+  if (!filas.length) return <div className="pyl-card-vacio">No hay facturas A, C, M ni notas de crédito o débito en el período.</div>
   const suma = (k) => filas.reduce((a, f) => a + f[k], 0)
   return (
     <div className="pyl-tabla-scroll">
@@ -124,7 +124,7 @@ function Facturas({ local, mes }) {
             <tr key={f.id} className={f.sentido === 'INGRESO' ? 'ci-ingreso' : ''}>
               <td>
                 {fmtDate(f.fecha)}
-                {f.fecha && f.fecha.slice(0, 7) !== f.periodo && <span className="ci-periodo" title="La factura es de otro mes pero se cargó con el período de este">período {f.periodo.slice(5, 7)}/{f.periodo.slice(2, 4)}</span>}
+                {periodo.mes && f.fecha && f.fecha.slice(0, 7) !== f.periodo && <span className="ci-periodo" title="La factura es de otro mes pero se cargó con el período de este">período {f.periodo.slice(5, 7)}/{f.periodo.slice(2, 4)}</span>}
               </td>
               <td>
                 <span className={`ci-tipo ${f.sentido === 'INGRESO' ? 'ing' : 'egr'}`}>{f.tipo}</span>
@@ -154,7 +154,7 @@ function Facturas({ local, mes }) {
   )
 }
 
-function Desglose({ local, mes }) {
+function Desglose({ local, periodo }) {
   const c = local.calculo
   const [verFacturas, setVerFacturas] = useState(false)
   const alic = c.iibb.alicuota
@@ -207,7 +207,62 @@ function Desglose({ local, mes }) {
       <button type="button" className="pyl-btn-sec ci-ver-facturas pyl-noprint" onClick={() => setVerFacturas((v) => !v)}>
         {verFacturas ? 'Ocultar facturas' : `Ver las ${fmtNum(c.facturas)} facturas`}
       </button>
-      {verFacturas && <Facturas local={local} mes={mes} />}
+      {verFacturas && <Facturas local={local} periodo={periodo} />}
+    </div>
+  )
+}
+
+const ultimoDia = (mes) => {
+  const [y, m] = mes.split('-').map(Number)
+  return `${mes}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`
+}
+const hoy = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
+const fmtDia = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`
+const DIA = /^\d{4}-\d{2}-\d{2}$/
+const rangoValido = (d, h) => DIA.test(d || '') && DIA.test(h || '') && d <= h
+
+// Atajos del rango: siempre días completos.
+function atajos() {
+  const m = hoy().slice(0, 7)
+  const ant = mesAnterior(m)
+  const hace3 = mesAnterior(mesAnterior(ant))
+  return [
+    { label: 'Este mes', desde: `${m}-01`, hasta: hoy() },
+    { label: 'Mes anterior', desde: `${ant}-01`, hasta: ultimoDia(ant) },
+    { label: 'Últimos 3 meses', desde: `${hace3}-01`, hasta: ultimoDia(ant) },
+    { label: 'Este año', desde: `${m.slice(0, 4)}-01-01`, hasta: hoy() }
+  ]
+}
+
+// Desde / Hasta con atajos. Se aplica cuando las dos fechas son válidas.
+function RangoFechas({ desde, hasta, onChange }) {
+  const [d, setD] = useState(desde)
+  const [h, setH] = useState(hasta)
+  useEffect(() => { setD(desde); setH(hasta) }, [desde, hasta])
+  const aplicar = (nd, nh) => { if (rangoValido(nd, nh)) onChange(nd, nh) }
+  const invertido = d && h && d > h
+  return (
+    <div className="pyl-filtro">
+      <div className="pyl-filtro-label">Rango de fechas</div>
+      <div className="ci-rango">
+        <label className={'ci-fecha' + (invertido ? ' error' : '')}>
+          <span>Desde</span>
+          <input type="date" value={d} max={hoy()} onChange={(e) => { setD(e.target.value); aplicar(e.target.value, h) }} />
+        </label>
+        <span className="ci-rango-guion">→</span>
+        <label className={'ci-fecha' + (invertido ? ' error' : '')}>
+          <span>Hasta</span>
+          <input type="date" value={h} max={hoy()} onChange={(e) => { setH(e.target.value); aplicar(d, e.target.value) }} />
+        </label>
+        <div className="ci-atajos">
+          {atajos().map((a) => (
+            <button key={a.label} type="button" className={'pyl-mes' + (a.desde === desde && a.hasta === hasta ? ' active' : '')} onClick={() => onChange(a.desde, a.hasta)}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {invertido && <div className="ci-rango-error">La fecha "desde" tiene que ser anterior a "hasta".</div>}
     </div>
   )
 }
@@ -217,7 +272,15 @@ export default function CostoImpositivoPage() {
   const { user } = useAuth()
   const interno = (user?.roles || []).some((r) => r === 'super_admin' || r === 'dcsmart')
   const [searchParams, setSearchParams] = useSearchParams()
+  // Período: un mes (?mes=) o un rango (?desde=&hasta=). Sin nada, el mes anterior.
+  const qDesde = searchParams.get('desde')
+  const qHasta = searchParams.get('hasta')
+  const modo = rangoValido(qDesde, qHasta) ? 'rango' : 'mes'
   const mes = searchParams.get('mes') || mesAnterior(mesActual())
+  const periodoKey = modo === 'rango' ? `${qDesde}|${qHasta}` : mes
+  // Objeto estable mientras no cambie el período (lo usan los efectos de abajo).
+  const periodo = useMemo(() => (modo === 'rango' ? { desde: qDesde, hasta: qHasta } : { mes }), [periodoKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const etiqueta = modo === 'rango' ? `${fmtDia(qDesde)} al ${fmtDia(qHasta)}` : fmtMesLargo(mes)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -226,18 +289,31 @@ export default function CostoImpositivoPage() {
   const load = useCallback((silencioso = false) => {
     if (!silencioso) setLoading(true)
     setError('')
-    return api.ciGet(grupo, mes)
+    return api.ciGet(grupo, periodo)
       .then(setData)
       .catch(() => { setData(null); setError('No se pudo calcular el costo impositivo. Probá de nuevo en un momento.') })
       .finally(() => setLoading(false))
-  }, [grupo, mes])
+  }, [grupo, periodo])
 
   useEffect(() => { load() }, [load])
 
   const cambiarMes = (m) => {
     const next = new URLSearchParams(searchParams)
+    next.delete('desde'); next.delete('hasta')
     next.set('mes', m)
     setSearchParams(next)
+  }
+  const cambiarRango = (d, h) => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('mes')
+    next.set('desde', d); next.set('hasta', h)
+    setSearchParams(next)
+  }
+  // Al pasar de un modo al otro se arranca del período que se estaba mirando.
+  const cambiarModo = (m) => {
+    if (m === modo) return
+    if (m === 'rango') cambiarRango(`${mes}-01`, ultimoDia(mes) > hoy() ? hoy() : ultimoDia(mes))
+    else cambiarMes(qDesde.slice(0, 7))
   }
   const alternar = (id) => setAbiertos((prev) => {
     const n = new Set(prev)
@@ -257,8 +333,8 @@ export default function CostoImpositivoPage() {
     <div className="page pyl ci">
       <PageHeader
         title="Costo impositivo"
-        chips={[grupo, fmtMesLargo(mes)]}
-        sub="IVA e ingresos brutos a pagar del mes, y los impuestos internos de las facturas, local por local."
+        chips={[grupo, etiqueta]}
+        sub="IVA e ingresos brutos a pagar, y los impuestos internos de las facturas, local por local."
         actions={
           <button className="pyl-btn-pdf pyl-noprint" type="button" onClick={() => window.print()}>
             <IcoDescargar /> Descargar PDF
@@ -267,16 +343,31 @@ export default function CostoImpositivoPage() {
       />
 
       <section className="pyl-filtros pyl-noprint">
-        <SelectorMes mes={mes} onChange={cambiarMes} />
+        <div className="pyl-filtro">
+          <div className="pyl-filtro-label">Ver por</div>
+          <div className="ci-modo" role="tablist">
+            <button type="button" role="tab" aria-selected={modo === 'mes'} className={modo === 'mes' ? 'active' : ''} onClick={() => cambiarModo('mes')}>Mes</button>
+            <button type="button" role="tab" aria-selected={modo === 'rango'} className={modo === 'rango' ? 'active' : ''} onClick={() => cambiarModo('rango')}>Rango de fechas</button>
+          </div>
+        </div>
+        {modo === 'mes'
+          ? <SelectorMes mes={mes} onChange={cambiarMes} />
+          : <RangoFechas desde={qDesde} hasta={qHasta} onChange={cambiarRango} />}
         <div className="pyl-estado-carga">
           {loading ? <><span className="pyl-spinner" /> Calculando…</> : t ? `${t.locales} ${t.locales === 1 ? 'local' : 'locales'} en la cuenta` : ''}
         </div>
       </section>
 
+      {modo === 'rango' && (
+        <div className="ci-nota-rango pyl-noprint">
+          En un rango, las facturas se toman por su <strong>fecha de factura</strong> y las cajas por su fecha de inicio.
+          Por mes se usa el <strong>período</strong> cargado en cada factura, así que un mes completo puede dar distinto que por mes.
+        </div>
+      )}
       {error && <div className="pyl-error">{error}</div>}
       {!data && loading && <div className="pyl-kpis">{[0, 1, 2, 3].map(i => <div key={i} className="pyl-kpi pyl-skel" />)}</div>}
       {data && !data.locales.length && (
-        <div className="pyl-vacio"><strong>Este grupo no tiene locales con movimiento en {fmtMesLargo(mes)}.</strong></div>
+        <div className="pyl-vacio"><strong>Este grupo no tiene locales con movimiento en {modo === 'rango' ? `el rango ${etiqueta}` : etiqueta}.</strong></div>
       )}
 
       {data && data.locales.length > 0 && (
@@ -291,7 +382,7 @@ export default function CostoImpositivoPage() {
                 : <div className="pyl-kpi-sub">Débito {fmtPesos(t.iibb.debito)} − crédito {fmtPesos(t.iibb.credito)}</div>}
             </Tarjeta>
             <Tarjeta label="Impuestos internos" Icon={IcoInternos} valor={t.internos} saldo={false}>
-              <div className="pyl-kpi-sub">Lo que traen las facturas del mes</div>
+              <div className="pyl-kpi-sub">Lo que traen las facturas del período</div>
             </Tarjeta>
             <Tarjeta label="Total impositivo" Icon={IcoTotal} valor={totalImpuestos} saldo={false} tono="ci-total">
               <div className="pyl-kpi-sub">IVA + IIBB + internos{t.iibb.sinAlicuota.length > 0 ? ' (IIBB incompleto)' : ''}</div>
@@ -363,7 +454,7 @@ export default function CostoImpositivoPage() {
                       </tr>,
                       abierto && (
                         <tr key={l.id + '-d'} className="ci-fila-desglose">
-                          <td colSpan={6}><Desglose local={l} mes={mes} /></td>
+                          <td colSpan={6}><Desglose local={l} periodo={periodo} /></td>
                         </tr>
                       )
                     ]
@@ -396,8 +487,8 @@ export default function CostoImpositivoPage() {
               </div>
               <div>
                 <strong>Impuestos internos</strong>
-                <p>La suma de los impuestos internos que traen las facturas del mes.</p>
-                <p>Comprobantes que cuentan: A, C, M y las notas de crédito y débito (NCA, NDA, NCC, NDC). Las facturas van por período; las cajas, por fecha de inicio. Si da negativo, es saldo a favor.</p>
+                <p>La suma de los impuestos internos que traen las facturas del período.</p>
+                <p>Comprobantes que cuentan: A, C, M y las notas de crédito y débito (NCA, NDA, NCC, NDC). Por mes, las facturas van por período; por rango de fechas, por fecha de factura. Las cajas, siempre por fecha de inicio. Si da negativo, es saldo a favor.</p>
               </div>
             </div>
           </details>

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calcularLocal, totalizar, alicuotaOk } from './costoImpositivo.js'
+import { calcularLocal, totalizar, alicuotaOk, periodoConsulta } from './costoImpositivo.js'
 
 const r = Math.round
 
@@ -72,4 +72,19 @@ test('alícuota válida entre 0 y 20', () => {
   assert.equal(alicuotaOk(null), null)
   assert.equal(alicuotaOk(25), undefined)
   assert.equal(alicuotaOk('x'), undefined)
+})
+
+test('período: un mes va por período de la factura', () => {
+  assert.deepEqual(periodoConsulta({ mes: '2026-12' }), { modo: 'mes', mes: '2026-12', desde: '2026-12-01', hasta: '2027-01-01', campoFactura: 'periodo' })
+  assert.ok(periodoConsulta({ mes: '2026-13' }).error)
+})
+
+test('período: un rango va por fecha de factura, con hasta inclusive', () => {
+  assert.deepEqual(periodoConsulta({ desde: '2026-09-01', hasta: '2026-09-30' }),
+    { modo: 'rango', desde: '2026-09-01', hastaIncl: '2026-09-30', hasta: '2026-10-01', campoFactura: 'fecha' })
+  assert.equal(periodoConsulta({ desde: '2026-02-28', hasta: '2026-02-28' }).hasta, '2026-03-01')
+  assert.ok(periodoConsulta({ desde: '2026-09-30', hasta: '2026-09-01' }).error)
+  assert.ok(periodoConsulta({ desde: '2026-02-30', hasta: '2026-03-01' }).error)
+  assert.ok(periodoConsulta({ desde: '2023-01-01', hasta: '2026-01-01' }).error)
+  assert.ok(periodoConsulta({}).error)
 })

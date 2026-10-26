@@ -25,6 +25,36 @@
 }
 .pyl-kpi.ci-total .pyl-kpi-icon { background: rgba(201,176,134,.16); color: var(--teal-l); }
 
+/* mes o rango de fechas */
+.ci-modo { display: inline-flex; gap: 4px; padding: 3px; border-radius: 11px; background: var(--bg-input); border: 1px solid var(--border); }
+.ci-modo button {
+  height: 34px; padding: 0 16px; border-radius: 8px; border: 1px solid transparent; cursor: pointer;
+  background: transparent; color: var(--txt3); font-size: 13px; font-weight: 600; transition: all .18s;
+}
+.ci-modo button:hover:not(.active) { color: var(--txt2); }
+.ci-modo button.active { background: rgba(63,182,189,.14); color: var(--pyl-turquesa-l); border-color: rgba(63,182,189,.45); }
+.ci-rango { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ci-fecha {
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px;
+  background: var(--bg-input); border: 1px solid rgba(201,176,134,.25); cursor: pointer;
+}
+.ci-fecha span { font-size: 11px; font-weight: 600; color: var(--txt3); text-transform: uppercase; letter-spacing: .05em; }
+.ci-fecha input {
+  background: transparent; border: none; outline: none; color: var(--txt); color-scheme: dark;
+  font-size: 13px; font-weight: 600; font-family: inherit;
+}
+.ci-fecha:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(201,176,134,.16); }
+.ci-fecha.error { border-color: var(--bad); }
+.ci-rango-guion { color: var(--txt3); font-weight: 700; }
+.ci-atajos { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 6px; }
+.ci-atajos .pyl-mes { height: 34px; font-size: 12px; }
+.ci-rango-error { margin-top: 6px; font-size: 12px; color: #F08A8A; }
+.ci-nota-rango {
+  margin: -8px 0 16px; padding: 10px 14px; border-radius: 10px; font-size: 12.5px; line-height: 1.5;
+  background: var(--info-bg); border: 1px solid var(--info-border); color: #A9CDF0;
+}
+.ci-nota-rango strong { color: #CFE3F7; }
+
 /* avisos */
 .ci-aviso {
   display: flex; gap: 10px; align-items: flex-start;
