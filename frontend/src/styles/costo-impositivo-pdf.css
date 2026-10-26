@@ -1,0 +1,92 @@
+/* PDF de Costo impositivo: una hoja A4 con la maqueta de los PDF de gestión
+   (dcsmart/backend/src/lib/plantillaCmv.js). En pantalla no existe; al
+   imprimir se esconde todo lo demás y queda solo la hoja, a sangre (la página
+   A4 sin márgenes la pone HojaPdf.jsx mientras la pantalla está abierta). */
+
+.ci-hoja { display: none; }
+
+@media print {
+  .ci-pantalla { display: none !important; }
+
+  .ci-hoja {
+    display: block;
+    --h-card: rgba(255,255,255,.042); --h-border: rgba(255,255,255,.08);
+    --h-gold: #C9B086; --h-gold-b: #E1CBA0;
+    --h-t1: #F0EDE8; --h-t2: rgba(240,237,232,.65); --h-t3: rgba(240,237,232,.42); --h-t4: rgba(240,237,232,.28);
+    width: 210mm; min-height: 297mm; padding: 12mm 11mm 10mm;
+    /* Cada página repite el relleno, así la segunda no arranca pegada al borde. */
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    background:
+      radial-gradient(120% 60% at 100% 0%, rgba(201,176,134,.10), transparent 55%),
+      radial-gradient(90% 50% at 0% 100%, rgba(107,166,224,.07), transparent 60%),
+      #19232f;
+    color: var(--h-t1); font-family: Montserrat, system-ui, sans-serif;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .h-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--h-border); }
+  .h-logo { height: 62px; width: auto; display: block; }
+  .h-id { text-align: right; }
+  .h-id h1 { font-size: 22px; font-weight: 800; letter-spacing: -.01em; line-height: 1; color: var(--h-t1); }
+  .h-cuando { font-size: 10.5px; color: var(--h-t2); margin-top: 6px; font-weight: 500; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .h-chip { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 8.5px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; color: var(--h-gold-b); background: rgba(201,176,134,.11); border: 1px solid rgba(201,176,134,.28); }
+
+  .h-sec { margin-top: 12px; }
+  .h-sec-tit { font-size: 8.5px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; color: var(--h-t3); margin-bottom: 6px; }
+  .h-card { background: var(--h-card); border: 1px solid var(--h-border); border-radius: 12px; padding: 12px 14px; break-inside: avoid; }
+
+  .h-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  .h-lbl { font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; color: var(--h-t3); margin-bottom: 6px; }
+  .h-hero-v { font-size: 40px; font-weight: 800; color: var(--h-gold-b); letter-spacing: -.025em; line-height: .95; }
+  .h-hero-sub { font-size: 10.5px; color: var(--h-t2); text-align: right; line-height: 1.75; }
+  .h-hero-sub b { color: var(--h-t1); font-weight: 700; font-size: 12px; }
+
+  .h-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .h-kpi { background: var(--h-card); border: 1px solid var(--h-border); border-radius: 10px; padding: 10px 12px; break-inside: avoid; }
+  .h-k { font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--h-t3); display: flex; align-items: center; gap: 6px; }
+  .h-k i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+  .h-kv { font-size: 18px; font-weight: 800; margin-top: 5px; letter-spacing: -.02em; }
+  .h-kv em { font-size: 8px; letter-spacing: .08em; }
+  .h-ks { font-size: 8.5px; color: var(--h-t3); margin-top: 2px; }
+
+  .h-pagar { color: var(--h-t1); }
+  .h-favor { color: #6FD39C; }
+  .h-pagar em, .h-favor em { font-style: normal; font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-left: 4px; opacity: .65; }
+  .h-sin { color: var(--h-t3); font-size: 8.5px; font-weight: 600; }
+
+  .h-aviso { margin-top: 10px; padding: 8px 12px; border-radius: 10px; font-size: 9px; color: #F0CF95; background: rgba(212,149,42,.12); border: 1px solid rgba(212,149,42,.28); }
+
+  .h-tabla { padding: 10px 12px; }
+  .h-tabla table { width: 100%; border-collapse: collapse; }
+  .h-tabla th { font-size: 7px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--h-t3); text-align: left; padding: 0 0 5px; white-space: nowrap; }
+  .h-tabla th.n, .h-tabla td.n { text-align: right; }
+  .h-tabla td { font-size: 8.5px; padding: 5px 0 4px; border-top: 1px solid rgba(255,255,255,.05); color: var(--h-t2); white-space: nowrap; }
+  .h-tabla td + td, .h-tabla th + th { padding-left: 6px; }
+  .h-tabla tbody tr:first-child td { border-top: 0; }
+  .h-tabla td.met { font-weight: 700; color: var(--h-t1); }
+  .h-tabla td.fuerte { font-weight: 700; color: var(--h-t1); }
+  .h-tabla td em { display: none; }
+  .h-tabla tr.fuera td { opacity: .45; }
+  .h-tabla tr.tot td { border-top: 1px solid rgba(201,176,134,.35); font-weight: 800; color: var(--h-gold-b); padding-top: 6px; }
+  .h-tabla tr.tot .h-pagar { color: var(--h-gold-b); }
+  .h-tag { margin-left: 5px; font-size: 6.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--h-t3); border: 1px solid rgba(255,255,255,.15); border-radius: 4px; padding: 0 4px; }
+
+  .h-detalles { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .h-detalle { padding: 10px 12px; }
+  .h-det-tit { display: flex; align-items: baseline; justify-content: space-between; font-size: 10.5px; font-weight: 800; margin-bottom: 6px; }
+  .h-det-tit span { font-size: 8.5px; font-weight: 600; color: var(--h-t3); }
+  .h-det-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .h-det-sub { font-size: 7.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--h-gold); margin-bottom: 3px; }
+  .h-linea { display: grid; grid-template-columns: 9px 1fr auto; gap: 5px; font-size: 8.5px; color: var(--h-t2); padding: 2px 0; }
+  .h-signo { color: var(--h-t3); font-weight: 800; text-align: center; }
+  .h-v { color: var(--h-t1); }
+  .h-linea.total { border-top: 1px dashed rgba(255,255,255,.12); font-weight: 700; color: var(--h-t1); margin-bottom: 4px; padding-top: 3px; }
+  .h-res { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; padding: 5px 8px; border-radius: 7px; background: rgba(255,255,255,.05); font-size: 9px; font-weight: 800; }
+  .h-falta { font-size: 8.5px; color: #F0CF95; padding: 3px 0 5px; }
+  .h-nota { margin-top: 6px; font-size: 8px; color: #A9CDF0; }
+
+  .h-pie { margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--h-border); display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+  .h-criterio { font-size: 7.5px; color: var(--h-t3); line-height: 1.5; max-width: 150mm; }
+  .h-firma { font-size: 7.5px; color: var(--h-t4); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+}

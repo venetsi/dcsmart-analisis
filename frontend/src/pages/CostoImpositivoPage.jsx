@@ -7,8 +7,10 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useGroup } from '../context/GroupContext.jsx'
 import PageHeader from '../components/PageHeader.jsx'
 import SelectorMes, { mesActual } from '../components/SelectorMes.jsx'
+import HojaPdf from '../components/costoImpositivo/HojaPdf.jsx'
 import '../styles/pyl.css'
 import '../styles/costo-impositivo.css'
+import '../styles/costo-impositivo-pdf.css'
 
 // Costo impositivo del mes: IVA a pagar, IIBB a pagar e impuestos internos,
 // por local. Las cuentas las hace la API (backend/src/lib/costoImpositivo.js);
@@ -331,6 +333,7 @@ export default function CostoImpositivoPage() {
 
   return (
     <div className="page pyl ci">
+      <div className="ci-pantalla">
       <PageHeader
         title="Costo impositivo"
         chips={[grupo, etiqueta]}
@@ -494,6 +497,8 @@ export default function CostoImpositivoPage() {
           </details>
         </div>
       )}
+      </div>
+      <HojaPdf data={data} grupo={grupo} etiqueta={etiqueta} modo={modo} />
     </div>
   )
 }

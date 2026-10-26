@@ -172,14 +172,4 @@
   .ci-desglose-grid, .ci-como-grid { grid-template-columns: 1fr; }
 }
 
-@media print {
-  .ci-saldo.pagar, .ci-linea-valor, .ci-resultado { color: #1a1a1a !important; }
-  .ci-saldo.favor { color: #2e8b57 !important; }
-  .ci-saldo small, .ci-linea, .ci-linea-label em, .ci-bloque-tit { color: #555 !important; }
-  .ci-bloque, .ci-resultado { background: #fff !important; border-color: #ccc !important; }
-  .ci-fila-desglose > td { background: #fff !important; }
-  .ci-aviso { background: #fff !important; color: #333 !important; border-color: #bbb !important; }
-  .ci-alic input { border: none !important; background: none !important; color: #1a1a1a !important; width: 40px; }
-  .ci-como { display: none !important; }
-  .ci-desglose-grid { grid-template-columns: 1fr 1fr !important; }
-}
+/* La impresión (PDF) es una hoja aparte: ver costo-impositivo-pdf.css. */
