@@ -90,6 +90,43 @@ Los presets viven en la tabla `dcsmart_analytics.presets` (no hardcodeados): nom
 - **Particionado (FinOps):** `raw_pagos` particionada por `DATE(fecha)` y clusterizada por `id_local, rubro`; `raw_cajas` por `DATE(fecha_inicio)` clusterizada por `id_local`. Las consultas del tablero siempre filtran por fecha → escanean solo las particiones necesarias.
 - **Validación por corte (f_post):** al final de cada corrida se compara `COUNT` y `SUM(importe)/SUM(total)` entre Postgres y BigQuery para la ventana procesada y se registra en `etl_runs` con estado `OK / MISMATCH`. Un mismatch no corta el servicio: queda visible en el header del tablero ("último corte: 12:00 — cuadratura OK").
 
+## Control quincenal de datos (`anomalias/`)
+
+Cloud Run Job `dcsmart-anomalias`: cada quincena revisa pagos y cajas en
+`dcsmart_analytics_cdc` y manda un mail con lo que no cierra. Solo lee
+BigQuery; no toca la base de producción ni `dcsmart_analytics`. No usa IA:
+son reglas SQL y una comparación con el histórico (mediana y MAD), así que
+cada cifra del mail sale tal cual de gestión.
+
+- **Cuándo:** días 3 y 18 a las 8:00 (AR). Revisa la quincena calendario que
+  cerró dos días antes (1–15 o 16–fin de mes), para que las cajas manuales de
+  los últimos días ya estén cargadas.
+- **Reglas fijas** (`anomalias/reglas/*.sql`, una por archivo): facturas y
+  ventas cargadas dos veces, importes en 0, fechas imposibles, días sin caja,
+  cajas sin tickets en locales que siempre los informan, datos faltantes.
+- **Fuera de lo normal** (`anomalias/series/*.sql` + `lib/estadistica.js`):
+  venta diaria contra el mismo día de la semana de las 12 semanas anteriores;
+  gasto por local y rubro contra la misma quincena de los 8 meses anteriores;
+  picos de carga por grupo. Las migraciones salen como una línea aparte.
+- **Día en hora argentina:** las reglas calculan el día con
+  `DATE(fecha_inicio, 'America/Argentina/Buenos_Aires')` y no usan
+  `raw_cajas.fecha_dia`, que está en UTC y corre un día las cajas que abren
+  después de las 21:00.
+- **Modo seco por defecto:** imprime el mail. `ANOMALIAS_GUARDAR=1` guarda en
+  `dcsmart_anomalias.hallazgos`; `ANOMALIAS_ENVIAR_REAL=1` lo manda por
+  EnvíaloSimple a `ANOMALIAS_DESTINO`.
+
+```bash
+cd anomalias && npm install
+npm test                                          # funciones puras
+ANOMALIAS_DESDE=2026-10-01 ANOMALIAS_HASTA=2026-10-15 \
+  ANOMALIAS_SALIDA=mail.html node index.js        # corrida en seco de una quincena
+node backtest.js 2025-04-01 2026-10-15            # hallazgos por quincena y por regla
+```
+
+Infra: `infra/07_anomalias_job.sh` (dataset, cuenta de servicio, job y, con
+`SCHEDULER=1`, el Scheduler). Crea recursos en prod: correrlo con OK.
+
 ## Estructura del proyecto
 
 ```
@@ -97,6 +134,7 @@ dcsmart-analytics/
 ├── infra/            # scripts gcloud numerados (ejecutar en orden)
 ├── etl/              # Cloud Run Job de extracción (Node 20)
 │   └── sql/          # DDL BigQuery: tablas, vistas, validación
+├── anomalias/        # Cloud Run Job del control quincenal de datos (Node 20)
 ├── backend/          # dcsmart-analytics-api (Fastify, Node 20)
 └── frontend/         # dcsmart-analytics-api client: React + Vite (login, sidebar, explorador, admin)
 ```
