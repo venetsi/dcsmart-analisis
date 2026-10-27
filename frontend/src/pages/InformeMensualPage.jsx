@@ -2,7 +2,7 @@
 // hoja elegida con sus miniaturas y el panel de datos; descarga en PDF y cierre
 // del mes. Los números salen de lib/informeMensual.js (motor puro) y las hojas de
 // components/informeMensual/Hojas.jsx; acá solo se juntan las piezas.
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../lib/api.js'
 import { useGroup } from '../context/GroupContext.jsx'
@@ -14,8 +14,8 @@ import { HojaIm, MazoIm } from '../components/informeMensual/Hojas.jsx'
 import PanelIm, { tituloPagina } from '../components/informeMensual/PanelIm.jsx'
 import ListaHojas, { configDeHojas } from '../components/informeMensual/ListaHojas.jsx'
 import { armarPorLocal, armarReporte } from '../lib/reporteVentas.js'
-import { seccionPorDefecto, subCmv } from '../lib/informe.js'
-import { HOJAS_DEFECTO, armarInformeMensual, hojasDe, paginasDe, snapshotIm, trasladoDeCorrecciones } from '../lib/informeMensual.js'
+import { claveLinea, norm, seccionPorDefecto, subCmv } from '../lib/informe.js'
+import { HOJAS_DEFECTO, armarInformeMensual, hojasDe, paginasDe, snapshotIm } from '../lib/informeMensual.js'
 import { mesEnPalabrasIm } from '../lib/formatosIm.js'
 import '../styles/reporte-editor.css'
 import '../styles/informe-editor.css'
@@ -37,7 +37,6 @@ function moverMes(mes, delta) {
 }
 const mesActual = () => moverMes(mesAnterior(), 1)
 const fecha = (iso) => (iso ? new Date(iso).toLocaleDateString('es-AR') : '')
-const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 // Una hoja que hoy no genera páginas (apagada, sin datos o que no corresponde):
 // se puede elegir igual en la lista para cargarle los datos.
@@ -123,6 +122,10 @@ export default function InformeMensualPage() {
   const [confirmar, setConfirmar] = useState(null) // 'sinDatos' | 'previo' | 'previo+sinDatos'
   const [imprimir, setImprimir] = useState(null) // { borrador }
   const pedido = useRef(0)
+  // Cliente y mes en pantalla: una respuesta de otro cliente o mes (pedida antes de cambiar,
+  // por ejemplo al terminar un guardado) se descarta. Se actualiza apenas cambia la pantalla.
+  const claveActual = useRef('')
+  useLayoutEffect(() => { claveActual.current = `${clienteId}|${mes}` }, [clienteId, mes])
 
   // ── clientes del grupo ──
   const cargarClientes = useCallback(async (elegir) => {
@@ -138,12 +141,14 @@ export default function InformeMensualPage() {
   // ── datos del cliente y mes: informe y Reporte de Ventas en paralelo ──
   const recargar = useCallback(async () => {
     if (!clienteId) return false
+    const clave = `${clienteId}|${mes}`
     const mio = ++pedido.current
+    const vigente = () => mio === pedido.current && claveActual.current === clave
     try {
       const [im, rvData] = await Promise.all([api.imGet(clienteId, mes), api.rvGet(clienteId, mes)])
-      if (mio === pedido.current) setDatos({ im, rvData })
-      return mio === pedido.current
-    } catch (e) { if (mio === pedido.current) setError(msgError(e)); return false }
+      if (vigente()) setDatos({ im, rvData })
+      return vigente()
+    } catch (e) { if (vigente()) setError(msgError(e)); return false }
   }, [clienteId, mes])
   useEffect(() => { setDatos(null); setError(''); setConfirmar(null); recargar() }, [recargar])
 
@@ -200,27 +205,23 @@ export default function InformeMensualPage() {
       hojas: configDeHojas(hojasDe(informe)), indicadores: { ...indicadoresActuales(), [local]: lista },
     })),
     // Mover una categoría de sección: regla del grupo para cada rubro / categoría de la
-    // línea y, después, las correcciones de la clave vieja pasan a la nueva (o se borran).
+    // línea. La clave de la línea cambia (`seccion|concepto`): con la última regla va el
+    // `traslado`, y el servidor pasa a la clave nueva (o borra) las correcciones de la vieja
+    // en la misma transacción, para todos los clientes del grupo y los meses abiertos.
     mover: (l, seccion) => hacer(async () => {
       const reglas = im?.reglas || []
-      for (const r of l.rubros || []) {
+      const pares = l.rubros || []
+      for (const [i, r] of pares.entries()) {
+        // Si ya hay una regla guardada, se usa su escritura: el servidor la busca tal cual.
         const previa = reglas.find((x) => norm(x.rubro) === norm(r.rubro) && norm(x.categoria) === norm(r.categoria))
+        const rubro = previa?.rubro ?? r.rubro
+        const categoria = previa?.categoria ?? r.categoria
         const concepto = previa?.concepto || null
-        const porDefecto = seccionPorDefecto(r.rubro, r.categoria) === seccion && !concepto
-        await api.imPutRegla({ grupo: informe.cliente.grupo, rubro: r.rubro, categoria: r.categoria, seccion: porDefecto ? null : seccion, concepto })
-      }
-      const ops = trasladoDeCorrecciones({
-        lineas: im?.lineas || [], claveVieja: l.clave, seccionNueva: seccion, concepto: l.concepto,
-        sub: seccion === 'cmv' ? subCmv(l.rubros?.[0]?.rubro) : null,
-        mesesCerrados: new Set((im?.cierres || []).filter((c) => c.cerrado !== false).map((c) => c.mes)),
-      })
-      try {
-        for (const op of ops) {
-          if (op.borrar) await api.imDelLinea(clienteId, op.borrar)
-          else await api.imPutLinea(clienteId, op.linea)
-        }
-      } catch (e) {
-        throw new Error(`La categoría se movió, pero no se pudo pasar su corrección a la sección nueva. ${msgError(e)} Revisá esa línea antes de cerrar el mes.`)
+        const porDefecto = seccionPorDefecto(rubro, categoria) === seccion && !concepto
+        const traslado = i === pares.length - 1
+          ? { de: l.clave, a: seccion === 'excluido' ? null : claveLinea(seccion, l.concepto), sub: seccion === 'cmv' ? subCmv(rubro) : null }
+          : undefined
+        await api.imPutRegla({ grupo: informe.cliente.grupo, rubro, categoria, seccion: porDefecto ? null : seccion, concepto, traslado })
       }
     }),
   }), [hacer, clienteId, mes, informe, im, indicadoresActuales, cargarClientes])
@@ -289,16 +290,16 @@ export default function InformeMensualPage() {
           <section className="filters rve-barra">
             <div className="fg">
               <label htmlFor="ime-cli">Cliente</label>
-              <select id="ime-cli" value={clienteId} onChange={(e) => { setClienteId(Number(e.target.value)); setSel(null) }}>
+              <select id="ime-cli" value={clienteId} disabled={ocupado} onChange={(e) => { setClienteId(Number(e.target.value)); setSel(null) }}>
                 {(clientes || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </div>
             <div className="fg">
               <label>Mes</label>
               <div className="rve-mes">
-                <button type="button" className="btn-sec" onClick={() => setMes(moverMes(mes, -1))} aria-label="Mes anterior">‹</button>
+                <button type="button" className="btn-sec" disabled={ocupado} onClick={() => setMes(moverMes(mes, -1))} aria-label="Mes anterior">‹</button>
                 <span>{mesEnPalabrasIm(mes)}</span>
-                <button type="button" className="btn-sec" disabled={!hayMas} onClick={() => setMes(moverMes(mes, 1))} aria-label="Mes siguiente">›</button>
+                <button type="button" className="btn-sec" disabled={ocupado || !hayMas} onClick={() => setMes(moverMes(mes, 1))} aria-label="Mes siguiente">›</button>
               </div>
             </div>
             {informe && <span className={`ime-estado${cerrado ? ' cerrado' : ''}`}>{cerrado ? 'Cerrado' : 'Borrador'}</span>}

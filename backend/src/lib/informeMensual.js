@@ -119,6 +119,34 @@ export function datoIm(d) {
   return typeof d === 'string' && /^ind:[a-z0-9_]{1,30}$/.test(d) ? d : null
 }
 
+// Traslado de correcciones al mover una categoría de sección (PUT /regla). La clave de la
+// línea pasa de `de` a `a` (`seccion|concepto`); `a` null = la categoría sale del P&L.
+// `sub` = tipo de CMV cuando la línea entra al CMV. Sin traslado → { ok: true, traslado: null }.
+export function trasladoOk(t) {
+  if (t == null) return { ok: true, traslado: null }
+  if (typeof t !== 'object' || Array.isArray(t)) return err('El traslado no es válido.')
+  const clave = (v) => typeof v === 'string' && v.length >= 1 && v.length <= 200
+  if (!clave(t.de)) return err('La línea que se mueve no es válida.')
+  if (t.a !== null && !clave(t.a)) return err('La línea nueva no es válida.')
+  if (t.a !== null && !SECCIONES_LINEA.pyl.includes(t.a.split('|')[0])) return err('La sección nueva no es válida.')
+  const sub = t.sub == null || t.sub === '' ? null : t.sub
+  if (sub !== null) {
+    if (t.a === null || t.a.split('|')[0] !== 'cmv') return err('El tipo de CMV solo se indica en líneas de CMV.')
+    if (!SUBS_CMV.includes(sub)) return err('El tipo de CMV no es válido.')
+  }
+  return { ok: true, traslado: { de: t.de, a: t.a, sub } }
+}
+
+// Qué hacer con una corrección (im_linea con corrige = traslado.de) de un mes abierto:
+//   { borrar: true } si la categoría sale del P&L o ese cliente / local / mes ya tiene
+//   una corrección con la clave nueva (si no, quedaría huérfana y se contaría dos veces);
+//   { cambio: { corrige, seccion, sub } } si no.
+export function accionTraslado(fila, traslado, yaHayConClaveNueva) {
+  if (traslado.a === null || yaHayConClaveNueva) return { borrar: true }
+  const seccion = traslado.a.split('|')[0]
+  return { cambio: { corrige: traslado.a, seccion, sub: seccion === 'cmv' ? fila.sub || traslado.sub || 'alimentos' : null } }
+}
+
 // Rango que lee el informe: desde enero del año anterior hasta el último día de `mes` (YYYY-MM).
 export function rangoInforme(mes) {
   const [y, m] = mes.split('-').map(Number)

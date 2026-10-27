@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { HOJAS_IM, SECCIONES_LINEA, rangoInforme, lineaOk, hojasOk, indicadoresOk, textoOk, datoIm } from './informeMensual.js'
+import { HOJAS_IM, SECCIONES_LINEA, rangoInforme, lineaOk, hojasOk, indicadoresOk, textoOk, datoIm, trasladoOk, accionTraslado } from './informeMensual.js'
 
 const base = { local: 'EVELIA', mes: '2026-09', hoja: 'pyl', seccion: 'otros', concepto: 'Seguro', monto: 1000, monto2: null }
 
@@ -87,4 +87,37 @@ test('lineaOk: sub del CMV solo en pyl/cmv y con valor conocido', () => {
   assert.deepEqual(lineaOk({ ...cmv, sub: 'postres' }), { ok: false, error: 'El tipo de CMV no es válido.' })
   assert.deepEqual(lineaOk({ ...base, sub: 'bebidas' }), { ok: false, error: 'El tipo de CMV solo se indica en líneas de CMV.' })
   assert.equal(lineaOk({ ...base, hoja: 'cashflow', local: null, seccion: 'pagar', sub: 'bebidas' }).ok, false)
+})
+
+test('trasladoOk: sin traslado es null; claves de texto de hasta 200; a null = sale del P&L; sub como en lineaOk', () => {
+  assert.deepEqual(trasladoOk(undefined), { ok: true, traslado: null })
+  assert.deepEqual(trasladoOk(null), { ok: true, traslado: null })
+  assert.deepEqual(trasladoOk({ de: 'otros|alarma', a: 'alquiler|alarma' }), { ok: true, traslado: { de: 'otros|alarma', a: 'alquiler|alarma', sub: null } })
+  assert.deepEqual(trasladoOk({ de: 'cmv|quesos', a: null }), { ok: true, traslado: { de: 'cmv|quesos', a: null, sub: null } })
+  assert.equal(trasladoOk({ de: 'otros|hielo', a: 'cmv|hielo', sub: 'bebidas' }).traslado.sub, 'bebidas')
+  assert.equal(trasladoOk({ de: '', a: 'otros|x' }).ok, false)
+  assert.equal(trasladoOk({ de: 'x'.repeat(201), a: 'otros|x' }).ok, false)
+  assert.equal(trasladoOk({ de: 'otros|x', a: 'y'.repeat(201) }).ok, false)
+  assert.equal(trasladoOk({ de: 'otros|x', a: 5 }).ok, false)
+  assert.equal(trasladoOk({ de: 'otros|x' }).ok, false) // a tiene que venir: null o la clave nueva
+  assert.equal(trasladoOk({ de: 'otros|x', a: 'nada|x' }).ok, false) // sección desconocida
+  assert.equal(trasladoOk({ de: 'otros|x', a: 'cmv|x', sub: 'vinos' }).ok, false)
+  assert.equal(trasladoOk({ de: 'otros|x', a: 'alquiler|x', sub: 'bebidas' }).ok, false) // sub solo yendo al CMV
+  assert.equal(trasladoOk('otros|x').ok, false)
+})
+
+test('accionTraslado: mover la corrección a la clave nueva o borrarla', () => {
+  const fila = { id: '7', seccion: 'otros', corrige: 'otros|alarma', sub: null }
+  // sale del P&L: se borra
+  assert.deepEqual(accionTraslado(fila, { de: 'otros|alarma', a: null, sub: null }, false), { borrar: true })
+  // ya hay una corrección con la clave nueva en ese cliente, local y mes: se borra la vieja
+  assert.deepEqual(accionTraslado(fila, { de: 'otros|alarma', a: 'alquiler|alarma', sub: null }, true), { borrar: true })
+  // si no, cambia de clave y de sección
+  assert.deepEqual(accionTraslado(fila, { de: 'otros|alarma', a: 'alquiler|alarma', sub: null }, false),
+    { cambio: { corrige: 'alquiler|alarma', seccion: 'alquiler', sub: null } })
+  // al CMV lleva el tipo (el de la fila si tenía, si no el del traslado, si no alimentos)
+  assert.deepEqual(accionTraslado(fila, { de: 'otros|alarma', a: 'cmv|alarma', sub: 'bebidas' }, false).cambio.sub, 'bebidas')
+  assert.deepEqual(accionTraslado(fila, { de: 'otros|alarma', a: 'cmv|alarma', sub: null }, false).cambio.sub, 'alimentos')
+  // fuera del CMV, sin tipo
+  assert.equal(accionTraslado({ ...fila, seccion: 'cmv', sub: 'bebidas' }, { de: 'cmv|alarma', a: 'otros|alarma', sub: null }, false).cambio.sub, null)
 })

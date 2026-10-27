@@ -832,34 +832,6 @@ export function deudaDe(informe) {
   }
 }
 
-// Mover una categoría de gestión a otra sección (regla del grupo) cambia la clave
-// de su línea: de `seccion|concepto` a `nueva|concepto`. Una corrección guardada
-// con la clave vieja (im_linea.corrige) quedaría huérfana y se contaría dos veces
-// (la línea movida + la huérfana). Esto dice qué hacer con cada una:
-//   { linea: body de PUT /linea } → la misma corrección, con la clave nueva;
-//   { borrar: id } → se borra: la línea sale del P&L ('excluido') o el local y mes
-//                    ya tienen una corrección con la clave nueva.
-// Los meses cerrados no se tocan (usan su foto y la API no deja cambiarlos).
-export function trasladoDeCorrecciones({ lineas = [], claveVieja, seccionNueva, concepto, sub = null, mesesCerrados = new Set() }) {
-  const claveNueva = seccionNueva === 'excluido' ? null : claveLinea(seccionNueva, concepto)
-  const out = []
-  for (const f of lineas || []) {
-    if (f.hoja !== 'pyl' || f.corrige !== claveVieja || mesesCerrados.has(f.mes)) continue
-    const yaEsta = claveNueva && lineas.some((g) => g.hoja === 'pyl' && g.corrige === claveNueva && g.local === f.local && g.mes === f.mes)
-    if (!claveNueva || yaEsta) { out.push({ borrar: Number(f.id) }); continue }
-    out.push({
-      linea: {
-        id: Number(f.id), local: f.local, mes: f.mes, hoja: 'pyl', seccion: seccionNueva,
-        concepto: f.concepto || concepto || '', corrige: claveNueva,
-        monto: num(f.monto), monto2: num(f.monto2), oculta: !!f.oculta,
-        sub: seccionNueva === 'cmv' ? f.sub || sub || 'alimentos' : null,
-        orden: Number.isInteger(f.orden) ? f.orden : 0,
-      },
-    })
-  }
-  return out
-}
-
 // Foto del mes para cerrar (POST /cerrar): { locales: { [local]: fotoDeMes(...) } }.
 // Un local sin datos en el mes no entra (al reabrirlo se ve igual: null).
 export function snapshotIm(informe) {

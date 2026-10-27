@@ -349,34 +349,39 @@ function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones,
     if (!f) return Promise.resolve(false)
     return acciones.linea({
       id: Number(f.id), local, mes, hoja: 'pyl', seccion: f.seccion, concepto: f.concepto,
-      monto: num(f.monto) ?? 0, monto2: num(f.monto2) ?? 0, oculta: false,
+      monto: num(f.monto), monto2: num(f.monto2), oculta: false,
       sub: f.seccion === 'cmv' ? f.sub || 'alimentos' : null, orden: Number.isInteger(f.orden) ? f.orden : 0, ...cambios,
     })
   }
 
   const avisos = (informe.avisos || []).filter((a) => a.local === local && AVISOS_LINEAS.has(a.tipo))
 
+  // Un monto puesto a propósito (columna corregida o escrita en una línea a mano) se ve
+  // aunque sea 0; un 0 que nadie cargó (gestión sin nada en esa columna, o columna de una
+  // línea a mano que quedó vacía) se ve "—".
   const montos = (l, manual) => {
     const corr = manual ? null : correccionDe(l.clave)
-    const campo = (col, valor) => {
-      const corregido = manual ? false : num(corr?.[col === 'col1' ? 'monto' : 'monto2']) != null
-      return (
-        <CampoNum valor={valor} tieneCorreccion={corregido} disabled={ocupado} etiqueta={`${l.concepto}, columna ${col === 'col1' ? 1 : 2}`}
-          placeholder="—" onError={onError}
-          onGuardar={(v) => (manual ? guardarManual(l, { [col === 'col1' ? 'monto' : 'monto2']: v }) : corregir(l, { [col]: v }))}
-          onRestaurar={() => (manual ? null : corregir(l, { [col]: null }))} />
-      )
-    }
+    const fila = manual ? filaManual(l.id) : null
+    const campoDe = (col) => (col === 'col1' ? 'monto' : 'monto2')
+    const cargado = (col) => num((manual ? fila : corr)?.[campoDe(col)]) != null
+    const valor = (col) => (cargado(col) ? l[col] ?? null : l[col] || null)
+    const campo = (col) => (
+      <CampoNum valor={valor(col)} tieneCorreccion={cargado(col)} disabled={ocupado} etiqueta={`${l.concepto}, columna ${col === 'col1' ? 1 : 2}`}
+        placeholder="—" onError={onError}
+        onGuardar={(v) => (manual ? guardarManual(l, { [campoDe(col)]: v }) : corregir(l, { [col]: v }))}
+        onRestaurar={() => (manual ? guardarManual(l, { [campoDe(col)]: null }) : corregir(l, { [col]: null }))} />
+    )
+    const total = cargado('col1') || cargado('col2') ? l.total ?? null : l.total || null
     if (!editable) {
       return (
         <div className="ime-ln-montos">
-          <span>{fmtPesosIm(l.col1 || null)}</span><span>{fmtPesosIm(l.col2 || null)}</span><span className="ime-ln-total">{fmtPesosIm(l.total || null)}</span>
+          <span>{fmtPesosIm(valor('col1'))}</span><span>{fmtPesosIm(valor('col2'))}</span><span className="ime-ln-total">{fmtPesosIm(total)}</span>
         </div>
       )
     }
     return (
       <div className="ime-ln-montos">
-        {campo('col1', l.col1 || null)}{campo('col2', l.col2 || null)}<span className="ime-ln-total">{fmtPesosIm(l.total || null)}</span>
+        {campo('col1')}{campo('col2')}<span className="ime-ln-total">{fmtPesosIm(total)}</span>
       </div>
     )
   }
@@ -500,7 +505,8 @@ function NuevaLineaPyl({ secciones, ocupado, onError, onAgregar }) {
     setErr('')
     enviando.current = true
     try {
-      const ok = await onAgregar({ seccion, concepto: c, monto: v1 ?? 0, monto2: v2 ?? 0, sub: seccion === 'cmv' ? sub : null })
+      // La columna que queda vacía se guarda vacía (null): suma 0 y se ve "—".
+      const ok = await onAgregar({ seccion, concepto: c, monto: v1, monto2: v2, sub: seccion === 'cmv' ? sub : null })
       if (ok) { setConcepto(''); setCol1(null); setCol2(null); setVuelta((v) => v + 1) }
     } finally { enviando.current = false }
   }
@@ -541,7 +547,7 @@ const SECCIONES_CLIENTE = {
   deuda: [['deuda', 'Deuda corriente'], ['venta_periodo', 'Venta del período (opcional)']],
 }
 const FECHAS = {
-  cashflow: [['cashflow:elaborado', 'Elaborado el', 400], ['cashflow:proyectado', 'Proyectado al', 400]],
+  cashflow: [['cashflow:elaborado', 'Elaborado el', 40], ['cashflow:proyectado', 'Proyectado al', 40]],
   deuda: [['deuda:fecha', 'Deuda al', 40]],
 }
 
@@ -571,7 +577,7 @@ function PanelCliente({ informe, im, pagina, interno, cerrado, ocupado, acciones
           <div key={clave}>
             <div className="rve-k">{etiqueta}</div>
             {interno
-              ? <CampoTexto valor={texto(clave)} max={Math.min(max, 40)} etiqueta={etiqueta} placeholder="dd/mm/aaaa" disabled={ocupado}
+              ? <CampoTexto valor={texto(clave)} max={max} etiqueta={etiqueta} placeholder="dd/mm/aaaa" disabled={ocupado}
                   onGuardar={(t) => acciones.texto({ local: '', clave, texto: t })} onError={onError} />
               : <p className="ime-dato">{texto(clave) || '—'}</p>}
           </div>

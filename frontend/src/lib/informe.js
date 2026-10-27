@@ -67,7 +67,8 @@ export const COLUMNA_POR_TIPO = {
 }
 export const columnaDeTipo = (tipo) => COLUMNA_POR_TIPO[tipo] ?? null
 
-const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+// Para comparar textos de gestión sin mayúsculas, acentos ni espacios de más.
+export const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 // Sección por defecto de un rubro/categoría de gestión. Una regla guardada
 // (informe_reglas) la pisa. Salió de comparar los pagos de Loreto de agosto

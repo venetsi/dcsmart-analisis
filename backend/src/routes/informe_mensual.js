@@ -9,7 +9,7 @@
 import { Storage } from '@google-cloud/storage'
 import { crearLogosLocales } from '../lib/logosLocales.js'
 import { okMes, esInterno, mesCerrable, snapshotOk, obsOk, paginaOk, OBS_MAX } from '../lib/reporteVentas.js'
-import { rangoInforme, lineaOk, hojasOk, indicadoresOk, textoOk, datoIm } from '../lib/informeMensual.js'
+import { rangoInforme, lineaOk, hojasOk, indicadoresOk, textoOk, datoIm, trasladoOk, accionTraslado } from '../lib/informeMensual.js'
 
 const txt = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
@@ -375,17 +375,60 @@ export default async function (fastify) {
     const seccion = req.body?.seccion == null ? null : txt(req.body.seccion, 40)
     const concepto = txt(req.body?.concepto) || null
     if (!grupo || !rubro || !categoria) return reply.code(400).send({ error: 'grupo, rubro y categoria requeridos' })
-    if (!seccion) {
-      await db.query('DELETE FROM informe_reglas WHERE grupo = $1 AND rubro = $2 AND categoria = $3', [grupo, rubro, categoria])
-      return { ok: true }
-    }
-    await db.query(
-      `INSERT INTO informe_reglas (grupo, rubro, categoria, seccion, concepto, actualizado_por)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (grupo, rubro, categoria) DO UPDATE
-         SET seccion = EXCLUDED.seccion, concepto = EXCLUDED.concepto, actualizado_por = EXCLUDED.actualizado_por, actualizado_at = now()`,
-      [grupo, rubro, categoria, seccion, concepto, quien(req)])
-    return { ok: true }
+    // Mover la categoría cambia la clave de su línea (`seccion|concepto`): las correcciones
+    // guardadas con la clave vieja se pasan a la nueva en la misma transacción, en todos los
+    // clientes del grupo y en todos los meses abiertos. Si no, quedan huérfanas y la línea se
+    // cuenta dos veces. Los meses cerrados no se tocan: usan su foto.
+    const t = trasladoOk(req.body?.traslado)
+    if (!t.ok) return reply.code(400).send({ error: t.error })
+    const traslado = t.traslado && t.traslado.de !== t.traslado.a ? t.traslado : null
+
+    const c = await db.connect()
+    try {
+      await c.query('BEGIN')
+      if (!seccion) {
+        await c.query('DELETE FROM informe_reglas WHERE grupo = $1 AND rubro = $2 AND categoria = $3', [grupo, rubro, categoria])
+      } else {
+        await c.query(
+          `INSERT INTO informe_reglas (grupo, rubro, categoria, seccion, concepto, actualizado_por)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (grupo, rubro, categoria) DO UPDATE
+             SET seccion = EXCLUDED.seccion, concepto = EXCLUDED.concepto, actualizado_por = EXCLUDED.actualizado_por, actualizado_at = now()`,
+          [grupo, rubro, categoria, seccion, concepto, quien(req)])
+      }
+      let movidas = 0
+      let borradas = 0
+      if (traslado) {
+        const { rows } = await c.query(
+          `SELECT l.* FROM im_linea l JOIN rv_cliente cl ON cl.id = l.cliente_id
+            WHERE cl.grupo = $1 AND l.hoja = 'pyl' AND l.corrige = $2
+              AND NOT EXISTS (SELECT 1 FROM im_cierre k WHERE k.cliente_id = l.cliente_id AND k.mes = l.mes AND k.cerrado)
+            ORDER BY l.id FOR UPDATE OF l`, [grupo, traslado.de])
+        for (const antes of rows) {
+          const ya = traslado.a !== null && (await c.query(
+            `SELECT 1 FROM im_linea WHERE cliente_id = $1 AND local IS NOT DISTINCT FROM $2 AND mes = $3 AND hoja = 'pyl' AND corrige = $4 AND id <> $5 LIMIT 1`,
+            [antes.cliente_id, antes.local, antes.mes, traslado.a, antes.id])).rows.length > 0
+          const accion = accionTraslado(antes, traslado, ya)
+          if (accion.borrar) {
+            await c.query('DELETE FROM im_linea WHERE id = $1', [antes.id])
+            await historial(c, antes.id, antes.cliente_id, antes.mes, 'baja', lineaPlana(antes), null, quien(req))
+            borradas++
+          } else {
+            const { corrige, seccion: sec, sub } = accion.cambio
+            const fila = (await c.query(
+              `UPDATE im_linea SET corrige = $2, seccion = $3, sub = $4, actualizado_por = $5, actualizado_at = now()
+                WHERE id = $1 RETURNING *`, [antes.id, corrige, sec, sub, quien(req)])).rows[0]
+            await historial(c, antes.id, antes.cliente_id, antes.mes, 'cambio', lineaPlana(antes), lineaPlana(fila), quien(req))
+            movidas++
+          }
+        }
+      }
+      await c.query('COMMIT')
+      return { ok: true, movidas, borradas }
+    } catch (e) {
+      await c.query('ROLLBACK').catch(() => {})
+      throw e
+    } finally { c.release() }
   })
 
   // Razón social del cliente para la portada. null o vacía = volver a la de gestión.

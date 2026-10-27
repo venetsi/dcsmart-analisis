@@ -104,6 +104,9 @@ test('observaciones: hasta 280 caracteres, recortadas; páginas con id válido',
   assert.equal(paginaOk('pyl_acumulado:LATINO TACUARI 185:1'), true)
   assert.equal(paginaOk('ind_locales'), true)
   assert.equal(paginaOk('_x'), false)
+  // detalle:<local largo>:<grupo>:2 pasa de 60 caracteres después de la clave
+  assert.equal(paginaOk(`detalle:${'L'.repeat(80)}:impositivos:2`), true)
+  assert.equal(paginaOk(`detalle:${'L'.repeat(121)}`), false)
 })
 test('IPC: variación mensual desde el índice de INDEC, sin saltar huecos', () => {
   const v = variacionesIpc([['2025-08-01', 9193.2441], ['2025-09-01', 9384.0922], ['2025-11-01', 9841.3581]])
