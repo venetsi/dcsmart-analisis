@@ -577,9 +577,14 @@ function colDe(x, mes) {
 }
 
 // Suma de columnas (el acumulado): lo que falta no suma; sin ninguna columna con datos, null.
+// Solo suman los meses que tienen venta: así el % del total no se achica por un mes con ventas y sin gastos
+// (ni se infla por uno con gastos y sin ventas). `sinVenta` lista los meses que quedaron afuera.
 function sumarCols(cols, mes = 'total') {
-  const con = cols.filter(Boolean)
-  if (!con.length) return null
+  const presentes = cols.filter(Boolean)
+  if (!presentes.length) return null
+  const conVenta = presentes.filter((c) => esNum(c.venta))
+  const con = conVenta.length ? conVenta : presentes
+  const sinVenta = conVenta.length ? presentes.filter((c) => !esNum(c.venta)).map((c) => c.mes) : []
   const S = (f) => sumaNulos(con.map(f))
   const canales = new Map()
   for (const c of con) for (const [k, v] of c.canales) canales.set(k, (canales.get(k) || 0) + v)
@@ -588,7 +593,7 @@ function sumarCols(cols, mes = 'total') {
     return ps.length ? { num: ps.reduce((a, p) => a + p.num, 0), den: ps.reduce((a, p) => a + p.den, 0) } : null
   }
   return {
-    mes, venta: S((c) => c.venta), canales, dias: S((c) => c.dias), pax: S((c) => c.pax), parDias: par('parDias'), parPax: par('parPax'),
+    mes, sinVenta, venta: S((c) => c.venta), canales, dias: S((c) => c.dias), pax: S((c) => c.pax), parDias: par('parDias'), parPax: par('parPax'),
     cmv: Object.fromEntries(CMV_FILAS.map(([k]) => [k, S((c) => c.cmv[k])])),
     cmvTotal: S((c) => c.cmvTotal), bruto: S((c) => c.bruto),
     egresos: Object.fromEntries(EGRESOS_RESUMEN.map(([k]) => [k, S((c) => c.egresos[k])])),
@@ -809,7 +814,11 @@ function PylAcumulado({ informe, m, pagina }) {
   const txtCeja = `P&L acumulado ${anio} · ${parte} de 2`
   const ceja = esGrupo ? `Grupo · ${txtCeja}` : cejaLocal(informe, l, txtCeja)
   const faltan = fuente?.acumulado?.faltan || []
-  const notaPie = faltan.length ? `Total sin ${faltan.map(mes3).join(', ')}: sin datos` : undefined
+  const sinVenta = total?.sinVenta || []
+  const notaPie = [
+    faltan.length ? `Total sin ${faltan.map(mes3).join(', ')}: sin datos` : null,
+    sinVenta.length ? `Total sin ${sinVenta.map(mes3).join(', ')}: sin ventas cargadas` : null,
+  ].filter(Boolean).join(' · ') || undefined
   const ancha = informe.meses.length > 6
   // El % al lado del monto solo entra con pocos meses; con más, va debajo como en la parte 1.
   const alLado = parte === 2 && informe.meses.length <= 6
@@ -852,8 +861,10 @@ function PylHistorico({ informe, m, pagina }) {
   const n = rubros.length
   const filaAlto = n > 14 ? 24 : 27
   const datos = rubros.map((r) => {
-    const a = r.get(act) ?? 0
-    const b = r.get(ant) ?? 0
+    // Sin monto (null o 0) no hay dato: ni punto ni % ni diferencia, igual que la columna de montos.
+    const monto = (x) => { const v = r.get(x); return esNum(v) && v !== 0 ? v : null }
+    const a = monto(act)
+    const b = monto(ant)
     return { ...r, a, b, pa: pct(a, act.venta), pb: pct(b, ant.venta) }
   })
   const maxPct = Math.max(0, ...datos.flatMap((d) => [d.pa, d.pb]).filter(esNum))
@@ -863,7 +874,11 @@ function PylHistorico({ informe, m, pagina }) {
   const alto = 45 + Math.max(0, n - 1) * filaAlto + 40
   const ticks = Array.from({ length: Math.floor(eje / 10) + 1 }, (_, i) => i * 10)
   const faltan = l.anioAnterior?.faltan || []
-  const notaPie = faltan.length ? `${anio - 1}: sin datos en ${faltan.map(mes3).join(', ')}` : undefined
+  const notaPie = [
+    faltan.length ? `${anio - 1}: sin datos en ${faltan.map(mes3).join(', ')}` : null,
+    ant.sinVenta.length ? `${anio - 1} sin ${ant.sinVenta.map(mes3).join(', ')}: sin ventas` : null,
+    act.sinVenta.length ? `${anio} sin ${act.sinVenta.map(mes3).join(', ')}: sin ventas` : null,
+  ].filter(Boolean).join(' · ') || undefined
   const tarjeta = (k, a, b, { oro = false, pesos = false } = {}) => (
     <div className={`im-card im-ph-card${oro ? ' im-card-oro' : ''}`}>
       <div className="im-k">{k}</div>
