@@ -109,3 +109,9 @@ export function datoIm(d) {
   if (d === 'pax' || d === 'dias') return d
   return typeof d === 'string' && /^ind:[a-z0-9_]{1,30}$/.test(d) ? d : null
 }
+
+// Rango que lee el informe: desde enero del año anterior hasta el último día de `mes` (YYYY-MM).
+export function rangoInforme(mes) {
+  const [y, m] = mes.split('-').map(Number)
+  return { desde: `${y - 1}-01-01`, hasta: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) }
+}

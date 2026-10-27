@@ -164,7 +164,7 @@ export default async function (fastify) {
       db.query(`SELECT local, mes, dato, antes, despues, por, at FROM rv_valor_historial
                  WHERE cliente_id = $1 AND mes = $2 ORDER BY at DESC, id DESC LIMIT 200`, [id, mes]),
       db.query(`SELECT pagina, texto, actualizado_por, actualizado_at FROM rv_observacion
-                 WHERE cliente_id = $1 AND mes = $2`, [id, mes]),
+                 WHERE cliente_id = $1 AND mes = $2 AND reporte = 'ventas'`, [id, mes]),
       ipcDe(desde.slice(0, 7), mes),
     ])
 
@@ -273,11 +273,11 @@ export default async function (fastify) {
     if (texto === null) return reply.code(400).send({ error: `La observación puede tener hasta ${OBS_MAX} caracteres.` })
     if (!(await getCli(id))) return reply.code(404).send({ error: 'Cliente no encontrado' })
     if (!texto) {
-      await db.query('DELETE FROM rv_observacion WHERE cliente_id = $1 AND mes = $2 AND pagina = $3', [id, b.mes, b.pagina])
+      await db.query(`DELETE FROM rv_observacion WHERE cliente_id = $1 AND mes = $2 AND pagina = $3 AND reporte = 'ventas'`, [id, b.mes, b.pagina])
     } else {
       await db.query(
-        `INSERT INTO rv_observacion (cliente_id, mes, pagina, texto, actualizado_por) VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (cliente_id, mes, pagina)
+        `INSERT INTO rv_observacion (cliente_id, mes, pagina, reporte, texto, actualizado_por) VALUES ($1,$2,$3,'ventas',$4,$5)
+         ON CONFLICT (cliente_id, mes, pagina, reporte)
          DO UPDATE SET texto = EXCLUDED.texto, actualizado_por = EXCLUDED.actualizado_por, actualizado_at = now()`,
         [id, b.mes, b.pagina, texto, quien(req)])
     }

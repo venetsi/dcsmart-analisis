@@ -17,6 +17,7 @@ import datasetsRoutes from './routes/datasets.js'
 import reporteManualRoutes from './routes/reporte_manual.js'
 import informeRoutes from './routes/informe.js'
 import reporteVentasRoutes from './routes/reporte_ventas.js'
+import informeMensualRoutes from './routes/informe_mensual.js'
 import tvRoutes from './routes/tv.js'
 import costoImpositivoRoutes from './routes/costo_impositivo.js'
 
@@ -60,6 +61,7 @@ await app.register(datasetsRoutes, { prefix: '/api/data' })
 await app.register(reporteManualRoutes, { prefix: '/api/reporte-manual' })
 await app.register(informeRoutes, { prefix: '/api/informe' })
 await app.register(reporteVentasRoutes, { prefix: '/api/reporte-ventas' })
+await app.register(informeMensualRoutes, { prefix: '/api/informe-mensual' })
 await app.register(costoImpositivoRoutes, { prefix: '/api/costo-impositivo' })
 // Dashboard de la TV de oficina: si esta línea falta, la TV queda congelada en
 // "Sin conexión" sin que salte ninguna alarma (pasó del 25/09 al 05/10).

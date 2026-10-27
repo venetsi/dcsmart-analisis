@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { HOJAS_IM, SECCIONES_LINEA, lineaOk, hojasOk, indicadoresOk, textoOk, datoIm } from './informeMensual.js'
+import { HOJAS_IM, SECCIONES_LINEA, rangoInforme, lineaOk, hojasOk, indicadoresOk, textoOk, datoIm } from './informeMensual.js'
 
 const base = { local: 'EVELIA', mes: '2026-09', hoja: 'pyl', seccion: 'otros', concepto: 'Seguro', monto: 1000, monto2: null }
 
@@ -70,4 +70,11 @@ test('datoIm', () => {
   assert.equal(datoIm('venta'), null)
   assert.equal(datoIm('ind:'), null)
   assert.ok(SECCIONES_LINEA.pyl.includes('cmv'))
+})
+
+test('rangoInforme: desde enero del año anterior hasta el último día del mes', () => {
+  assert.deepEqual(rangoInforme('2026-09'), { desde: '2025-01-01', hasta: '2026-09-30' })
+  assert.deepEqual(rangoInforme('2026-02'), { desde: '2025-01-01', hasta: '2026-02-28' })
+  assert.deepEqual(rangoInforme('2024-02'), { desde: '2023-01-01', hasta: '2024-02-29' })
+  assert.deepEqual(rangoInforme('2026-12'), { desde: '2025-01-01', hasta: '2026-12-31' })
 })
