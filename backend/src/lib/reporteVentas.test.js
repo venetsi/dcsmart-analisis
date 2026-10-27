@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla, datoLibre, obsOk, paginaOk, ipcOk, variacionesIpc } from './reporteVentas.js'
+import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla, datoLibre, obsOk, paginaOk, ipcOk, variacionesIpc, datoRestaurable } from './reporteVentas.js'
 
 test('esInterno: el is_admin externo no alcanza', () => {
   assert.equal(esInterno({ roles: ['dcsmart'] }), true)
@@ -115,4 +115,9 @@ test('IPC: variación mensual desde el índice de INDEC, sin saltar huecos', () 
   assert.equal(ipcOk(null), true)
   assert.equal(ipcOk(150), false)
   assert.equal(ipcOk('2'), false)
+})
+
+test('datoRestaurable: "Restaurar originales" del RV solo toca los datos del RV, no los del informe', () => {
+  for (const d of ['venta', 'cubiertos', 'ordenes', 'canal:Eventos', 'tickets:Rappi']) assert.equal(datoRestaurable(d), true, d)
+  for (const d of ['dias', 'ind:r50', 'pax', 'otra', '', null, undefined, 5]) assert.equal(datoRestaurable(d), false, String(d))
 })
