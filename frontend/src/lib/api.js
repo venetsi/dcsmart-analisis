@@ -79,14 +79,6 @@ export const api = {
   getReporteManualAnterior: (query) => request(`/reporte-manual/anterior${toQueryString(query)}`),
   putReporteManual: (body) => request('/reporte-manual', { method: 'PUT', body }),
 
-  // Informe mensual (detalle + resumen + presentación), ver routes/informe.js
-  getInforme: (query) => request(`/informe${toQueryString(query)}`),
-  guardarInforme: (body) => request('/informe', { method: 'PUT', body }),
-  cerrarInforme: (body) => request('/informe/cerrar', { method: 'POST', body }),
-  reabrirInforme: (body) => request('/informe/reabrir', { method: 'POST', body }),
-  guardarRegla: (body) => request('/informe/regla', { method: 'PUT', body }),
-  guardarLocalInforme: (body) => request('/informe/local', { method: 'PUT', body }),
-
   // Reporte de Ventas mensual por cliente (ver routes/reporte_ventas.js)
   rvClientes: (grupo) => request(`/reporte-ventas/clientes${toQueryString({ grupo })}`),
   rvGet: (id, mes) => request(`/reporte-ventas/${id}${toQueryString({ mes })}`),
