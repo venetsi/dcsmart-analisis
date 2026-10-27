@@ -15,6 +15,7 @@ export const MSG_CERRADO = 'El mes está cerrado. Reabrilo para hacer cambios.'
 const OBS_MAX = 280
 const COMENTARIO_MAX = 400
 const CONCEPTO_MAX = 80
+const MSG_SIN_MONTO = 'Escribí el monto en la columna 1, en la 2 o en las dos.'
 
 const num = (v) => {
   if (v == null || v === '') return null
@@ -229,7 +230,7 @@ function ValoresLocal({ l, informe, im, interno, cerrado, ocupado, acciones, onE
         <td className="rve-dato">{etiqueta}</td>
         <td className="rve-valor">
           {editable
-            ? <CampoNum valor={valor} tieneCorreccion={!!m} disabled={ocupado} etiqueta={`${etiqueta} de ${l.nombre}`}
+            ? <CampoNum valor={valor} tieneCorreccion={!!m} escapeRestaura={false} disabled={ocupado} etiqueta={`${etiqueta} de ${l.nombre}`}
                 onGuardar={guardar} onRestaurar={() => guardar(null)} onError={onError} placeholder="Falta cargar" />
             : <span>{valor == null ? '—' : formatoNum === 'pesos' ? fmtPesosIm(valor) : fmtNumIm(valor)}</span>}
         </td>
@@ -344,14 +345,24 @@ function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones,
       orden: Number.isInteger(f?.orden) ? f.orden : 0,
     })
   }
+  // Campos de montos: se vuelven a montar cuando se rechaza un cambio, para que muestren
+  // otra vez lo guardado (si no, el campo vaciado quedaría en blanco).
+  const [vuelta, setVuelta] = useState(0)
   const guardarManual = (l, cambios) => {
     const f = filaManual(l.id)
     if (!f) return Promise.resolve(false)
-    return acciones.linea({
+    const body = {
       id: Number(f.id), local, mes, hoja: 'pyl', seccion: f.seccion, concepto: f.concepto,
       monto: num(f.monto), monto2: num(f.monto2), oculta: false,
       sub: f.seccion === 'cmv' ? f.sub || 'alimentos' : null, orden: Number.isInteger(f.orden) ? f.orden : 0, ...cambios,
-    })
+    }
+    // Igual que al crearla: una línea a mano tiene que tener algún monto (para sacarla, "Borrar la línea").
+    if (body.monto == null && body.monto2 == null) {
+      onError?.(MSG_SIN_MONTO)
+      setVuelta((v) => v + 1)
+      return Promise.resolve(false)
+    }
+    return acciones.linea(body)
   }
 
   const avisos = (informe.avisos || []).filter((a) => a.local === local && AVISOS_LINEAS.has(a.tipo))
@@ -365,8 +376,9 @@ function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones,
     const campoDe = (col) => (col === 'col1' ? 'monto' : 'monto2')
     const cargado = (col) => num((manual ? fila : corr)?.[campoDe(col)]) != null
     const valor = (col) => (cargado(col) ? l[col] ?? null : l[col] || null)
+    // Escape solo cancela lo escrito; para volver atrás se vacía el campo (o "Volver al de gestión").
     const campo = (col) => (
-      <CampoNum valor={valor(col)} tieneCorreccion={cargado(col)} disabled={ocupado} etiqueta={`${l.concepto}, columna ${col === 'col1' ? 1 : 2}`}
+      <CampoNum key={`${col}:${vuelta}`} valor={valor(col)} tieneCorreccion={cargado(col)} escapeRestaura={false} disabled={ocupado} etiqueta={`${l.concepto}, columna ${col === 'col1' ? 1 : 2}`}
         placeholder="—" onError={onError}
         onGuardar={(v) => (manual ? guardarManual(l, { [campoDe(col)]: v }) : corregir(l, { [col]: v }))}
         onRestaurar={() => (manual ? guardarManual(l, { [campoDe(col)]: null }) : corregir(l, { [col]: null }))} />
@@ -501,7 +513,7 @@ function NuevaLineaPyl({ secciones, ocupado, onError, onAgregar }) {
     const v1 = 'col1' in extra ? extra.col1 : col1
     const v2 = 'col2' in extra ? extra.col2 : col2
     if (!c) return setErr('Escribí el concepto de la línea.')
-    if (v1 == null && v2 == null) return setErr('Escribí el monto en la columna 1, en la 2 o en las dos.')
+    if (v1 == null && v2 == null) return setErr(MSG_SIN_MONTO)
     setErr('')
     enviando.current = true
     try {

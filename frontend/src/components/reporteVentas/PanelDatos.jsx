@@ -30,7 +30,9 @@ function formatear(t) {
 
 // Campo numérico: texto con miles con punto, lee con parseNumeroAR.
 // Enter o salir del campo guarda; Escape o vaciarlo vuelve al original.
-export function CampoNum({ valor, tieneCorreccion = false, disabled = false, etiqueta, onGuardar, onRestaurar, onEnter, onError, placeholder = '—' }) {
+// `escapeRestaura = false`: Escape solo cancela lo que se estaba escribiendo (vaciar el
+// campo y salir sigue restaurando). Lo usa el Informe Mensual; el Reporte de Ventas no cambia.
+export function CampoNum({ valor, tieneCorreccion = false, disabled = false, etiqueta, onGuardar, onRestaurar, onEnter, onError, placeholder = '—', escapeRestaura = true }) {
   const inicial = esNum(valor) ? verNum(valor) : ''
   const [texto, setTexto] = useState(inicial)
   const foco = useRef(false)
@@ -76,7 +78,7 @@ export function CampoNum({ valor, tieneCorreccion = false, disabled = false, eti
     }
     else if (e.key === 'Escape') {
       saltar.current = true
-      if (tieneCorreccion) onRestaurar?.()
+      if (tieneCorreccion && escapeRestaura) onRestaurar?.()
       e.currentTarget.blur()
     }
   }
