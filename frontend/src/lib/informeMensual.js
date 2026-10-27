@@ -491,8 +491,9 @@ export const GRUPOS_SECCION = [
 const GRUPO = Object.fromEntries(GRUPOS_SECCION.map((x) => [x.key, x]))
 
 // Renglones que entran en una hoja de detalle / apertura; si hay más, sigue en
-// otra hoja (parte 2, 3…). Los ajusta quien dibuja la hoja.
-export const FILAS_POR_HOJA = { detalle: 34, apertura: 22 }
+// otra hoja (parte 2, 3…). Ajustados a lo que entra en la hoja de 1456×819: el detalle va en dos
+// columnas de 14 renglones (más títulos y totales) y la apertura en una de 20.
+export const FILAS_POR_HOJA = { detalle: 28, apertura: 20 }
 
 const SUBS_CMV = [['alimentos', 'Alimentos'], ['bebidas', 'Bebidas'], ['movstock', 'Movimiento de stock']]
 
