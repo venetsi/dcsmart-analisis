@@ -1,0 +1,13 @@
+{
+  "name": "dcsmart-anomalias",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test",
+    "backtest": "node backtest.js"
+  },
+  "dependencies": {
+    "@google-cloud/bigquery": "^8.3.1"
+  }
+}
