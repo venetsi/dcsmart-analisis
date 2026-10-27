@@ -2,7 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { claveLinea } from './informe.js'
 import { armarPorLocal, armarReporte, autoDeLocal } from './reporteVentas.js'
-import { datosDeLineas, ventasDeLocal, pylMes, armarInformeMensual, pct, fotoDeMes } from './informeMensual.js'
+import {
+  datosDeLineas, ventasDeLocal, pylMes, armarInformeMensual, pct, fotoDeMes,
+  HOJAS_DEFECTO, GRUPOS_SECCION, hojasDe, paginasDe, resumenDe, detalleDe, aperturaDe, cmvDe, cashflowDe, deudaDe, snapshotIm,
+} from './informeMensual.js'
 
 const HOY = new Date('2026-10-20T12:00:00')
 const MES = '2026-02'
@@ -279,4 +282,283 @@ test('mes con gastos y sin ventas: la venta y lo que depende de ella son null, n
   assert.equal(m.resumen.ventas.find((f) => f.clave === 'subtotal').monto, null)
   assert.equal(m.resumen.economico.find((f) => f.clave === 'eerr').monto, null)
   assert.equal(m.resumen.cmv.find((f) => f.clave === 'subtotal').pct, null)
+})
+
+// ── Task 5: hojas ────────────────────────────────────────────────────────────
+
+// CMV de ATTE (agosto → septiembre del lienzo) puesto en enero → febrero de L1.
+const conCmvAtte = (im) => {
+  im.auto.L1['2026-01'].gastos = [
+    g('CMV Alimentos', 'Carnes', 'A', 30000000), g('CMV Bebidas', 'Vinos', 'A', 14000000),
+    g('CMV Alimentos', 'Lácteos', 'B', 209493), g('Sueldos', 'Sueldos', 'B', 200),
+  ]
+  im.auto.L1[MES].gastos = [
+    g('CMV Alimentos', 'Carnes', 'A', 20000000), g('CMV Alimentos', 'Carnes', 'B', 8000000),
+    g('CMV Alimentos', 'Quesos', 'A', 9000000), g('CMV Bebidas', 'Vinos', 'A', 4209956),
+    g('Sueldos', 'Sueldos', 'B', 250),
+  ]
+  return im
+}
+let idLinea = 100
+const cl = (seccion, concepto, monto, extra = {}) => ({
+  id: idLinea++, local: null, mes: MES, hoja: seccion === 'deuda' || seccion === 'venta_periodo' ? 'deuda' : 'cashflow',
+  seccion, concepto, monto, monto2: null, corrige: null, oculta: false, orden: 0, ...extra,
+})
+const ids = (pags) => pags.map((p) => p.id)
+
+test('HOJAS_DEFECTO en el orden del spec; GRUPOS_SECCION con las secciones del P&L', () => {
+  assert.deepEqual(HOJAS_DEFECTO.map((h) => h.clave), ['portada', 'indice', 'indicadores', 'ind_locales', 'historico', 'pyl_acumulado',
+    'pyl_historico', 'consolidado', 'cmv', 'detalle', 'apertura', 'cashflow', 'deuda', 'resumen', 'contraportada'])
+  assert.deepEqual(GRUPOS_SECCION.map((x) => x.key), ['cmv', 'fijos', 'generales', 'financieros', 'sueldos', 'impositivos'])
+  assert.deepEqual(GRUPOS_SECCION.find((x) => x.key === 'generales').secciones, ['publicidad', 'descartables', 'instalaciones', 'representacion'])
+  assert.deepEqual(GRUPOS_SECCION.find((x) => x.key === 'sueldos').secciones, ['sueldos', 'sueldos_socios', 'desvinculaciones', 'honorarios'])
+})
+
+test('paginasDe con un local: indicadores (no ind_locales), detalle/apertura por sección con datos, sin cash flow ni deuda vacíos', () => {
+  const inf = informeDe()
+  const pags = paginasDe(inf)
+  const p = ids(pags)
+  assert.equal(p[0], 'portada')
+  assert.ok(p.includes('indicadores'))
+  assert.ok(!p.includes('ind_locales'))
+  assert.ok(!p.includes('consolidado'))
+  assert.ok(!p.includes('cashflow'))
+  assert.ok(!p.includes('deuda'))
+  assert.ok(p.includes('historico:L1'))
+  assert.ok(p.includes('pyl_acumulado:L1:1') && p.includes('pyl_acumulado:L1:2'))
+  assert.ok(!p.some((x) => x.startsWith('pyl_acumulado:grupo')))
+  assert.ok(p.includes('detalle:L1:cmv') && p.includes('detalle:L1:sueldos'))
+  assert.ok(!p.includes('detalle:L1:fijos')) // sin alquiler en el mes
+  assert.ok(p.includes('apertura:L1:cmv')) // un solo local: apertura visible
+  assert.equal(p.at(-1), 'contraportada')
+  assert.equal(new Set(p).size, p.length)
+  const det = pags.find((x) => x.id === 'detalle:L1:cmv')
+  assert.deepEqual({ clave: det.clave, local: det.local, seccion: det.seccion, parte: det.parte }, { clave: 'detalle', local: 'L1', seccion: 'cmv', parte: 1 })
+  assert.equal(pags.find((x) => x.id === 'pyl_acumulado:L1:2').parte, 2)
+})
+
+test('paginasDe con 2 locales: ind_locales, consolidado y P&L acumulado del grupo; sin indicadores ni apertura', () => {
+  const inf = informeDe(['L1', 'L2'])
+  const p = ids(paginasDe(inf))
+  assert.ok(p.includes('ind_locales'))
+  assert.ok(!p.includes('indicadores'))
+  assert.ok(p.includes('consolidado'))
+  assert.ok(p.includes('cmv:L1') && p.includes('cmv:L2'))
+  assert.ok(p.includes('pyl_acumulado:grupo:1') && p.includes('pyl_acumulado:grupo:2'))
+  assert.ok(p.indexOf('pyl_acumulado:L2:2') < p.indexOf('pyl_acumulado:grupo:1'))
+  assert.ok(!p.some((x) => x.startsWith('apertura:'))) // oculta por defecto con varios locales
+  assert.equal(paginasDe(inf).find((x) => x.id === 'pyl_acumulado:grupo:1').grupo, true)
+  // La configuración la puede prender.
+  assert.ok(ids(paginasDe(inf, { hojas: [{ clave: 'apertura', visible: true }] })).includes('apertura:L2:cmv'))
+})
+
+test('paginasDe: config.hojas pisa visible y orden; cash flow y deuda entran con líneas', () => {
+  const inf = informeDe()
+  const sinCmv = ids(paginasDe(inf, { hojas: [{ clave: 'cmv', visible: false, orden: 8 }] }))
+  assert.ok(!sinCmv.some((x) => x.startsWith('cmv:')))
+  assert.ok(ids(paginasDe(inf)).includes('cmv:L1'))
+  const resumenPrimero = ids(paginasDe(inf, { hojas: [{ clave: 'resumen', visible: true, orden: -1 }] }))
+  assert.equal(resumenPrimero[0], 'resumen:L1')
+  // Sin config explícita se usa la guardada (informe.hojasConfig).
+  assert.ok(!ids(paginasDe({ ...inf, hojasConfig: [{ clave: 'portada', visible: false }] })).includes('portada'))
+
+  const conDatos = informeDe(['L1'], (im) => ({ ...im, lineas: [cl('disponible', 'Banco', 10), cl('deuda', 'AFIP', 5)] }))
+  const p = ids(paginasDe(conDatos))
+  assert.ok(p.includes('cashflow') && p.includes('deuda'))
+  assert.ok(p.indexOf('cashflow') < p.indexOf('deuda'))
+  // El editor sabe por qué una hoja no sale.
+  const cf = hojasDe(inf).find((h) => h.clave === 'cashflow')
+  assert.equal(cf.visible, true)
+  assert.equal(cf.aplica, false)
+  assert.ok(cf.motivo)
+})
+
+test('detalleDe CMV: agosto 44.209.493 vs septiembre 41.209.956 → diferencia −2.999.537', () => {
+  const inf = informeDe(['L1'], conCmvAtte)
+  const d = detalleDe(inf, 'L1', 'cmv')
+  assert.equal(d.totales.anterior, 44209493)
+  assert.equal(d.totales.actual, 41209956)
+  assert.equal(d.totales.diferencia, -2999537)
+  assert.equal(d.totales.pctActual, pct(41209956, 1200))
+  assert.equal(d.totales.pctAnterior, pct(44209493, 1000))
+  const fila = (c) => d.filas.find((f) => f.concepto === c)
+  const { concepto, anterior, actual, diferencia, bloque } = fila('Carnes')
+  assert.deepEqual({ concepto, anterior, actual, diferencia, bloque }, { concepto: 'Carnes', anterior: 30000000, actual: 28000000, diferencia: -2000000, bloque: 'alimentos' })
+  // Un concepto que no está en un mes es null ("—"), no 0.
+  assert.equal(fila('Quesos').anterior, null)
+  assert.equal(fila('Quesos').pctAnterior, null)
+  assert.equal(fila('Quesos').diferencia, 9000000)
+  assert.equal(fila('Lácteos').actual, null)
+  assert.equal(fila('Lácteos').diferencia, -209493)
+  assert.equal(fila('Vinos').bloque, 'bebidas')
+  // Alimentos primero, de mayor a menor; después bebidas.
+  assert.deepEqual(d.filas.map((f) => f.concepto), ['Carnes', 'Quesos', 'Lácteos', 'Vinos'])
+  assert.deepEqual(d.bloques.map((b) => b.key), ['alimentos', 'bebidas'])
+  assert.equal(d.resultadoBruto.actual, 1200 - 41209956)
+  // Sueldos y honorarios: otro grupo.
+  const s = detalleDe(inf, 'L1', 'sueldos')
+  assert.deepEqual(s.filas.map((f) => [f.concepto, f.anterior, f.actual, f.diferencia]), [['Sueldos', 200, 250, 50]])
+  assert.equal(s.resultadoBruto, null)
+})
+
+test('detalleDe sin mes anterior: anterior y diferencia en null', () => {
+  const inf = informeDe(['L1', 'L2'])
+  const d = detalleDe(inf, 'L2', 'cmv') // L2 no tiene enero
+  assert.equal(d.totales.anterior, null)
+  assert.equal(d.totales.diferencia, null)
+  assert.equal(d.filas[0].diferencia, null)
+  assert.equal(d.totales.actual, 100)
+})
+
+test('aperturaDe: columnas 1 y 2 con % sobre la venta de cada columna y reparto', () => {
+  const inf = informeDe(['L1'], conCmvAtte)
+  const a = aperturaDe(inf, 'L1', 'cmv')
+  assert.deepEqual(a.venta, { total: 1200, col1: 1050, col2: 150 })
+  const carnes = a.filas.find((f) => f.concepto === 'Carnes')
+  assert.equal(carnes.total, 28000000)
+  assert.equal(carnes.col1, 20000000)
+  assert.equal(carnes.col2, 8000000)
+  assert.equal(carnes.pct, pct(28000000, 1200))
+  assert.equal(carnes.pct1, pct(20000000, 1050))
+  assert.equal(carnes.pct2, pct(8000000, 150))
+  assert.equal(carnes.reparto, pct(20000000, 28000000))
+  // Sin monto en una columna: null (la hoja muestra "—").
+  const quesos = a.filas.find((f) => f.concepto === 'Quesos')
+  assert.equal(quesos.col2, null)
+  assert.equal(quesos.pct2, null)
+  assert.equal(quesos.reparto, 100)
+  // Orden alfabético dentro de cada bloque; Lácteos (solo enero) no está.
+  assert.deepEqual(a.filas.map((f) => f.concepto), ['Carnes', 'Quesos', 'Vinos'])
+  assert.equal(a.totales.total, 41209956)
+  assert.equal(a.totales.col2, 8000000)
+  assert.equal(a.resultadoBruto.col2, 150 - 8000000)
+})
+
+test('cmvDe: total, partes con pts vs mes anterior y categorías de mayor a menor', () => {
+  const inf = informeDe(['L1'], conCmvAtte)
+  const c = cmvDe(inf, 'L1')
+  assert.equal(c.total, 41209956)
+  assert.equal(c.pct, pct(41209956, 1200))
+  assert.equal(c.venta, 1200)
+  assert.equal(c.anterior.total, 44209493)
+  assert.equal(c.porSub.alimentos.total, 37000000)
+  assert.equal(c.porSub.alimentos.pct, pct(37000000, 1200))
+  assert.equal(c.porSub.alimentos.pts, pct(37000000, 1200) - pct(30209493, 1000))
+  assert.equal(c.porSub.bebidas.total, 4209956)
+  assert.equal(c.porSub.movstock.total, null)
+  assert.equal(c.porSub.movstock.pts, null)
+  assert.deepEqual(c.categorias.alimentos.map((x) => x.concepto), ['Carnes', 'Quesos'])
+  assert.equal(c.categorias.alimentos[0].barra, 100)
+  assert.deepEqual(c.categorias.movstock, [])
+  // Local sin mes anterior: pts null.
+  const l2 = cmvDe(informeDe(['L1', 'L2']), 'L2')
+  assert.equal(l2.porSub.alimentos.total, 100)
+  assert.equal(l2.porSub.alimentos.pts, null)
+})
+
+test('resumenDe: CMV bajó → diferencia < 0, sentido costo; comentario desde textos', () => {
+  const inf = informeDe(['L1'], (im) => {
+    im.auto.L1[MES].gastos = [g('CMV Alimentos', 'Carnes', 'A', 250), g('Sueldos', 'Sueldos', 'B', 250)]
+    im.textos = [{ local: 'L1', mes: MES, clave: 'resumen:cmv', texto: 'Bajó por compras de agosto.' },
+      { local: 'L2', mes: MES, clave: 'resumen:venta', texto: 'otro local' }]
+    return im
+  })
+  const r = resumenDe(inf, 'L1')
+  const f = (k) => r.find((x) => x.clave === k)
+  assert.deepEqual(r.slice(0, 8).map((x) => x.clave), ['venta', 'dias', 'pax', 'prom_pax', 'cmv', 'cmv_alimentos', 'cmv_bebidas', 'cmv_movstock'])
+  assert.equal(f('cmv').actual, 250)
+  assert.equal(f('cmv').anterior, 300)
+  assert.ok(f('cmv').diferencia < 0)
+  assert.equal(f('cmv').sentido, 'costo')
+  assert.equal(f('cmv').diferenciaPts, pct(250, 1200) - pct(300, 1000))
+  assert.equal(f('cmv').comentario, 'Bajó por compras de agosto.')
+  assert.equal(f('venta').sentido, 'resultado')
+  assert.equal(f('venta').diferencia, 200)
+  assert.equal(f('venta').diferenciaPts, null)
+  assert.equal(f('venta').comentario, null)
+  assert.equal(f('dias').diferencia, 2)
+  assert.equal(f('labor').sentido, 'costo') // egreso con dato
+  assert.equal(f('fijos'), undefined) // egreso sin dato en ningún mes
+  assert.deepEqual(r.slice(-2).map((x) => x.clave), ['eerr', 'rf'])
+  assert.equal(f('eerr').actual, 1200 - 250 - 250)
+  assert.equal(f('eerr').sentido, 'resultado')
+})
+
+test('resumenDe sin mes anterior: anterior y diferencias null', () => {
+  const r = resumenDe(informeDe(['L1', 'L2']), 'L2')
+  const venta = r.find((x) => x.clave === 'venta')
+  assert.equal(venta.actual, 500)
+  assert.equal(venta.anterior, null)
+  assert.equal(venta.diferencia, null)
+  assert.equal(r.find((x) => x.clave === 'cmv').diferenciaPts, null)
+})
+
+test('cashflowDe: disponible 29.949.357, pagar 38.577.751 → resultado −8.628.394, cobertura 77,6', () => {
+  const lineas = [
+    cl('disponible', 'Galicia', 4894439), cl('disponible', 'Mercado Pago', 13484918), cl('disponible', 'Acreditaciones MP', 11570000),
+    ...[11624732, 9680870, 9000000, 3109875, 1500000, 1450000, 1290274, 922000].map((m, i) => cl('pagar', `Pago ${i}`, String(m), { orden: i })),
+    cl('mp_liquidar', 'MP', 32609505),
+    cl('disponible', 'Otro mes', 999, { mes: '2026-01' }),
+    cl('disponible', 'Oculta', 999, { oculta: true }),
+  ]
+  const inf = informeDe(['L1'], (im) => ({ ...im, lineas, textos: [
+    { local: '', mes: MES, clave: 'cashflow:elaborado', texto: '2026-10-13' },
+    { local: '', mes: MES, clave: 'cashflow:proyectado', texto: '2026-10-16' }] }))
+  const c = cashflowDe(inf)
+  assert.equal(c.disponible.total, 29949357)
+  assert.equal(c.disponible.lineas.length, 3)
+  assert.deepEqual(Object.keys(c.disponible.lineas[0]).sort(), ['concepto', 'id', 'monto'])
+  assert.equal(c.pagar.total, 38577751)
+  assert.equal(c.pagar.lineas[0].monto, 11624732)
+  assert.equal(c.resultado, -8628394)
+  assert.equal(Math.round(c.cobertura * 10) / 10, 77.6)
+  assert.equal(c.mpLiquidar, 32609505)
+  assert.equal(c.elaborado, '2026-10-13')
+  assert.equal(c.proyectado, '2026-10-16')
+  assert.equal(c.tieneDatos, true)
+  // Sin nada cargado: todo null.
+  const v = cashflowDe(informeDe())
+  assert.deepEqual([v.disponible.total, v.pagar.total, v.resultado, v.cobertura, v.mpLiquidar, v.elaborado, v.tieneDatos],
+    [null, null, null, null, null, null, false])
+})
+
+test('deudaDe: 32.994.552,98 sobre 222.823.794 → 14,81%; venta del período por defecto = venta del mes', () => {
+  const inf = informeDe(['L1'], (im) => ({ ...im,
+    lineas: [cl('deuda', 'Proveedores', 20000000), cl('deuda', 'AFIP', '12994552.98'), cl('venta_periodo', 'Venta 01/09 al 13/10', 222823794)],
+    textos: [{ local: '', mes: MES, clave: 'deuda:fecha', texto: '2026-10-13' }] }))
+  const d = deudaDe(inf)
+  assert.equal(d.total, 32994552.98)
+  assert.equal(d.ventaPeriodo, 222823794)
+  assert.equal(d.pct.toFixed(2), '14.81')
+  assert.equal(d.fecha, '2026-10-13')
+  assert.equal(d.ventaPeriodoCargada, true)
+  assert.equal(d.lineas.length, 2)
+  // Sin venta del período cargada: la venta del mes del cliente (los dos locales).
+  const dos = deudaDe(informeDe(['L1', 'L2'], (im) => ({ ...im, lineas: [cl('deuda', 'AFIP', 170)] })))
+  assert.equal(dos.ventaPeriodo, 1700)
+  assert.equal(dos.pct, 10)
+  assert.equal(dos.ventaPeriodoCargada, false)
+  const nada = deudaDe(informeDe())
+  assert.deepEqual([nada.total, nada.pct, nada.fecha, nada.tieneDatos], [null, null, null, false])
+})
+
+test('snapshotIm: foto de cada local con fotoDeMes; cerrado con esa foto da los mismos números', () => {
+  const inf = informeDe(['L1', 'L2'])
+  const snap = snapshotIm(inf)
+  assert.deepEqual(Object.keys(snap.locales), ['L1', 'L2'])
+  assert.deepEqual(snap.locales.L1, fotoDeMes(inf.locales[0].meses[MES]))
+  const cerrado = informeDe(['L1', 'L2'], (im) => ({ ...im, cierres: [{ mes: MES, cerrado: true, snapshot: snap }] }))
+  assert.equal(cerrado.cerrado, true)
+  for (const i of [0, 1]) {
+    assert.equal(cerrado.locales[i].meses[MES].cerrado, true)
+    assert.deepEqual(cerrado.locales[i].meses[MES].valores, inf.locales[i].meses[MES].valores)
+    assert.deepEqual(cerrado.locales[i].meses[MES].totales, inf.locales[i].meses[MES].totales)
+  }
+  // Un local sin datos en el mes no entra en la foto (no se guarda un mes vacío).
+  const rvData = rvDataDe(['L1'])
+  const im = imDe(['L1', 'L2'])
+  im.auto.L2[MES] = vacio()
+  const soloL1 = armarInformeMensual({ im, rv: rvDe(rvData), rvData, mes: MES })
+  assert.equal(soloL1.locales[1].meses[MES], null)
+  assert.deepEqual(Object.keys(snapshotIm(soloL1).locales), ['L1'])
 })
