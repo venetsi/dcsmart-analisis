@@ -119,7 +119,7 @@ export default async function (fastify) {
         params
       }),
       db.query(`SELECT hojas, indicadores FROM reporte_hojas WHERE cliente_id = $1 AND reporte = 'informe'`, [id]),
-      db.query(`SELECT id, local, mes, hoja, seccion, concepto, monto, monto2, corrige, oculta, orden, actualizado_por, actualizado_at
+      db.query(`SELECT id, local, mes, hoja, seccion, concepto, monto, monto2, corrige, oculta, sub, orden, actualizado_por, actualizado_at
                   FROM im_linea WHERE cliente_id = $1 AND mes >= $2 AND mes <= $3 ORDER BY mes, hoja, seccion, orden, id`,
       [id, mDesde, mes]),
       db.query(`SELECT local, mes, clave, texto FROM im_texto WHERE cliente_id = $1 AND mes >= $2 AND mes <= $3
@@ -220,17 +220,17 @@ export default async function (fastify) {
       }
       if (await cierreDe(c, id, l.mes)) { await c.query('ROLLBACK'); return reply.code(409).send({ error: MSG_CERRADO }) }
 
-      const campos = [l.local, l.mes, l.hoja, l.seccion, l.concepto, l.monto, l.monto2, l.corrige, l.oculta, l.orden, quien(req)]
+      const campos = [l.local, l.mes, l.hoja, l.seccion, l.concepto, l.monto, l.monto2, l.corrige, l.oculta, l.orden, quien(req), l.sub]
       let fila
       if (l.id) {
         fila = (await c.query(
           `UPDATE im_linea SET local = $3, mes = $4, hoja = $5, seccion = $6, concepto = $7, monto = $8, monto2 = $9,
-                  corrige = $10, oculta = $11, orden = $12, actualizado_por = $13, actualizado_at = now()
+                  corrige = $10, oculta = $11, orden = $12, actualizado_por = $13, sub = $14, actualizado_at = now()
             WHERE id = $1 AND cliente_id = $2 RETURNING *`, [l.id, id, ...campos])).rows[0]
       } else {
         fila = (await c.query(
-          `INSERT INTO im_linea (cliente_id, local, mes, hoja, seccion, concepto, monto, monto2, corrige, oculta, orden, actualizado_por)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`, [id, ...campos])).rows[0]
+          `INSERT INTO im_linea (cliente_id, local, mes, hoja, seccion, concepto, monto, monto2, corrige, oculta, orden, actualizado_por, sub)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`, [id, ...campos])).rows[0]
       }
       await historial(c, fila.id, id, fila.mes, antes ? 'cambio' : 'alta', antes ? lineaPlana(antes) : null, lineaPlana(fila), quien(req))
       await c.query('COMMIT')

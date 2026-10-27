@@ -78,3 +78,13 @@ test('rangoInforme: desde enero del año anterior hasta el último día del mes'
   assert.deepEqual(rangoInforme('2024-02'), { desde: '2023-01-01', hasta: '2024-02-29' })
   assert.deepEqual(rangoInforme('2026-12'), { desde: '2025-01-01', hasta: '2026-12-31' })
 })
+test('lineaOk: sub del CMV solo en pyl/cmv y con valor conocido', () => {
+  const cmv = { ...base, seccion: 'cmv', concepto: 'Vinos' }
+  assert.equal(lineaOk(cmv).linea.sub, null)
+  assert.equal(lineaOk({ ...cmv, sub: 'bebidas' }).linea.sub, 'bebidas')
+  assert.equal(lineaOk({ ...cmv, sub: 'movstock' }).linea.sub, 'movstock')
+  assert.equal(lineaOk({ ...cmv, sub: null }).linea.sub, null)
+  assert.deepEqual(lineaOk({ ...cmv, sub: 'postres' }), { ok: false, error: 'El tipo de CMV no es válido.' })
+  assert.deepEqual(lineaOk({ ...base, sub: 'bebidas' }), { ok: false, error: 'El tipo de CMV solo se indica en líneas de CMV.' })
+  assert.equal(lineaOk({ ...base, hoja: 'cashflow', local: null, seccion: 'pagar', sub: 'bebidas' }).ok, false)
+})

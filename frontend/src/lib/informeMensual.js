@@ -11,7 +11,7 @@
 // Regla de oro (como en el Reporte de Ventas): lo que no está es null, nunca
 // 0. Un mes sin ventas ni gastos es null; un % sin base es null.
 
-import { construirInforme, sumarValores, armarResumen, indicadores, claveLinea, SECCIONES } from './informe.js'
+import { construirInforme, sumarValores, armarResumen, claveLinea, SECCIONES } from './informe.js'
 import { autoDeLocal } from './reporteVentas.js'
 
 const LOCAL = 'Local' // el canal que queda como resto (igual que en lib/reporteVentas.js)
@@ -53,16 +53,17 @@ const mesesHasta = (mes) => Array.from({ length: Number(mes.slice(5, 7)) }, (_, 
 // Líneas de im_linea (hoja 'pyl') de un local y mes → `datos` de construirInforme.
 //   corrige != null → ajuste de una línea automática (montos null = queda el de gestión).
 //   corrige == null → línea agregada a mano (una oculta no se cuenta).
-// im_linea no guarda el sub del CMV: una manual de CMV va a Alimentos (como en el informe viejo).
+// `sub` (parte del CMV) sale de im_linea.sub; una línea de CMV sin sub va a Alimentos.
+const subDe = (l) => (l.seccion === 'cmv' ? l.sub || 'alimentos' : null)
 export function datosDeLineas(lineas = [], local, mes) {
   const ajustes = {}
   const manuales = []
   for (const l of lineas || []) {
     if (l.hoja !== 'pyl' || l.local !== local || l.mes !== mes) continue
     if (l.corrige) {
-      ajustes[l.corrige] = { col1: num(l.monto), col2: num(l.monto2), oculto: !!l.oculta, id: l.id, seccion: l.seccion, concepto: l.concepto }
+      ajustes[l.corrige] = { col1: num(l.monto), col2: num(l.monto2), oculto: !!l.oculta, id: l.id, seccion: l.seccion, concepto: l.concepto, sub: subDe(l) }
     } else if (!l.oculta) {
-      manuales.push({ id: l.id, seccion: l.seccion, concepto: l.concepto || '', col1: n0(l.monto), col2: n0(l.monto2), sub: null })
+      manuales.push({ id: l.id, seccion: l.seccion, concepto: l.concepto || '', col1: n0(l.monto), col2: n0(l.monto2), sub: subDe(l) })
     }
   }
   return { ajustes, manuales }
@@ -120,31 +121,73 @@ const ORDEN_ORIGEN = { auto: 0, manual: 1 }
 const ordenar = (lineas) => lineas.sort((a, b) =>
   (ORDEN_ORIGEN[a.origen] ?? 1) - (ORDEN_ORIGEN[b.origen] ?? 1) || a.concepto.localeCompare(b.concepto, 'es'))
 
-// Indicadores del mes (o del acumulado) sin ceros inventados: lo que no tiene
-// base es null. Prom. pax = venta del canal Local / pax (como el Canva).
-export function indicadoresDe(valores, ventaSalon = null) {
-  const b = indicadores(valores)
-  const cmv = n0(valores?.cmv?.alimentos) + n0(valores?.cmv?.bebidas) + n0(valores?.cmv?.movstock)
-  const rf = b.eerr - n0(valores?.pasivo) - n0(valores?.dividendos)
+// Bases de los indicadores: lo que se suma entre meses o locales sin perder
+// qué falta. venta / ventaSalon / pax / dias son null si no hay dato (pax o
+// días en 0 = sin dato). Los promedios llevan su propio par numerador /
+// denominador, armado solo con los meses o locales que tienen los dos: un mes
+// sin pax no infla el Prom. pax del año ni del grupo.
+//   { venta, ventaSalon, pax, dias, parPax: { num, den }|null, parDias: { num, den }|null }
+const positivo = (v) => (num(v) > 0 ? num(v) : null)
+function basesDeMes({ venta, ventaSalon, pax, dias }) {
   return {
-    venta: b.venta, pax: b.pax, dias: b.dias,
-    promPax: dividir(ventaSalon, b.pax),
-    promDias: dividir(b.venta, b.dias),
-    cmv, cmvPct: pct(cmv, b.venta),
-    laborPct: pct(n0(valores?.egresos?.labor), b.venta),
-    eerr: b.eerr, eerrPct: pct(b.eerr, b.venta),
-    rf, rfPct: pct(rf, b.venta),
+    venta, ventaSalon, pax, dias,
+    parPax: ventaSalon != null && pax != null ? { num: ventaSalon, den: pax } : null,
+    parDias: venta != null && dias != null ? { num: venta, den: dias } : null,
+  }
+}
+const sumaNula = (vals) => {
+  const con = vals.filter((v) => v != null)
+  return con.length ? con.reduce((t, v) => t + v, 0) : null
+}
+const sumaPar = (pares) => {
+  const con = pares.filter(Boolean)
+  return con.length ? { num: con.reduce((t, p) => t + p.num, 0), den: con.reduce((t, p) => t + p.den, 0) } : null
+}
+function combinarBases(lista) {
+  return {
+    venta: sumaNula(lista.map((b) => b.venta)),
+    ventaSalon: sumaNula(lista.map((b) => b.ventaSalon)),
+    pax: sumaNula(lista.map((b) => b.pax)),
+    dias: sumaNula(lista.map((b) => b.dias)),
+    parPax: sumaPar(lista.map((b) => b.parPax)),
+    parDias: sumaPar(lista.map((b) => b.parDias)),
   }
 }
 
-// armarResumen con los % recalculados sin ceros inventados (null si no hay venta).
-export function resumenValores(valores, ventaSalon = null) {
+// Indicadores del mes, del acumulado o del grupo sin ceros inventados: sin
+// venta, la venta y todo lo que se mide contra ella es null; un promedio sin
+// base es null. Prom. pax = venta del canal Local / pax (como el Canva).
+export function indicadoresDe(valores, bases = {}) {
+  const venta = num(bases.venta)
+  const cmv = n0(valores?.cmv?.alimentos) + n0(valores?.cmv?.bebidas) + n0(valores?.cmv?.movstock)
+  const egresos = Object.values(valores?.egresos || {}).reduce((t, x) => t + n0(x), 0)
+  const eerr = venta == null ? null : venta - cmv - egresos
+  const rf = eerr == null ? null : eerr - n0(valores?.pasivo) - n0(valores?.dividendos)
+  const prom = (p) => (p ? dividir(p.num, p.den) : null)
+  return {
+    venta, pax: num(bases.pax), dias: num(bases.dias),
+    promPax: prom(bases.parPax),
+    promDias: prom(bases.parDias),
+    cmv, cmvPct: pct(cmv, venta),
+    laborPct: pct(n0(valores?.egresos?.labor), venta),
+    eerr, eerrPct: pct(eerr, venta),
+    rf, rfPct: pct(rf, venta),
+  }
+}
+
+// armarResumen con los % recalculados sin ceros inventados. Sin venta, los
+// renglones de venta y de resultado quedan en null (no se muestra un 0 como dato).
+const SIN_VENTA = { ventas: ['local', 'evento', 'subtotal'], resultadoBruto: ['bruto'], economico: ['ingresos', 'eerr'], final: ['rf'] }
+export function resumenValores(valores, bases = {}) {
   const r = armarResumen(valores)
-  const venta = r.ventas.find((f) => f.clave === 'subtotal').monto
-  const arreglar = (f) => ({ ...f, pct: pct(f.monto, venta) })
+  const venta = num(bases.venta)
+  const arreglar = (grupo) => (f) => {
+    const monto = venta == null && SIN_VENTA[grupo]?.includes(f.clave) ? null : f.monto
+    return { ...f, monto, pct: pct(monto, venta) }
+  }
   const out = {}
-  for (const [k, v] of Object.entries(r)) out[k] = Array.isArray(v) ? v.map(arreglar) : v?.label ? arreglar(v) : v
-  out.indicadores = indicadoresDe(valores, ventaSalon)
+  for (const [k, v] of Object.entries(r)) out[k] = Array.isArray(v) ? v.map(arreglar(k)) : v?.label ? arreglar(k)(v) : v
+  out.indicadores = indicadoresDe(valores, bases)
   return out
 }
 
@@ -160,13 +203,22 @@ function canalesDe(secciones) {
 // Completa la salida de construirInforme: InformeMes.
 function completar(inf, { local, mes, cerrado, editadoEnLineas = {}, avisos = [], canales }) {
   const c = canalesDe(inf.secciones)
+  const bases = basesDeMes({
+    venta: c.canales.length ? inf.totales.ventas.total : null,
+    ventaSalon: c.ventaSalon,
+    pax: positivo(inf.valores.pax),
+    dias: positivo(inf.valores.dias),
+  })
+  const valores = { ...inf.valores, pax: bases.pax, dias: bases.dias }
   return {
     ...inf,
+    valores,
     local, mes, cerrado,
     canales: canales ?? c.canales,
     ventaSalon: c.ventaSalon,
-    indicadores: indicadoresDe(inf.valores, c.ventaSalon),
-    resumen: resumenValores(inf.valores, c.ventaSalon),
+    bases,
+    indicadores: indicadoresDe(valores, bases),
+    resumen: resumenValores(valores, bases),
     editadoEnLineas,
     avisos: [...inf.avisos, ...avisos],
   }
@@ -247,7 +299,7 @@ export function pylMes({ local, mes, im, rv = {} }) {
   })
   if (huerfanas.length) {
     const extra = huerfanas.filter((h) => !h.aj.oculto)
-      .map((h) => ({ id: `huerfana:${h.clave}`, seccion: h.seccion, concepto: h.concepto, col1: n0(h.aj.col1), col2: n0(h.aj.col2) }))
+      .map((h) => ({ id: `huerfana:${h.clave}`, seccion: h.seccion, concepto: h.concepto, col1: n0(h.aj.col1), col2: n0(h.aj.col2), sub: h.aj.sub }))
     if (extra.length) inf = construirInforme(entrada([...datos.manuales, ...extra]))
     const porClave = new Map(huerfanas.map((h) => [`manual:huerfana:${h.clave}`, h]))
     for (const s of inf.secciones) {
@@ -262,6 +314,7 @@ export function pylMes({ local, mes, im, rv = {} }) {
         const col1 = n0(h.aj.col1)
         const col2 = n0(h.aj.col2)
         s.lineas.push({ clave: h.clave, seccion: h.seccion, concepto: h.concepto, origen: 'auto', col1, col2, total: col1 + col2,
+          sub: h.seccion === 'cmv' ? h.aj.sub || 'alimentos' : undefined,
           auto: { total: 0, col1: 0, col2: 0 }, rubros: [], editado: h.aj.col1 != null || h.aj.col2 != null, oculto: true, huerfana: true })
       }
       ordenar(s.lineas)
@@ -288,11 +341,10 @@ export function pylMes({ local, mes, im, rv = {} }) {
 function acumular(claves, lista) {
   const con = lista.filter(Boolean)
   const faltan = claves.filter((_, i) => !lista[i])
-  if (!con.length) return { total: null, ventaSalon: null, indicadores: null, resumen: null, faltan }
-  const total = sumarValores(con.map((m) => m.valores))
-  const salones = con.map((m) => m.ventaSalon).filter((v) => v != null)
-  const ventaSalon = salones.length ? salones.reduce((t, v) => t + v, 0) : null
-  return { total, ventaSalon, indicadores: indicadoresDe(total, ventaSalon), resumen: resumenValores(total, ventaSalon), faltan }
+  if (!con.length) return { total: null, bases: null, ventaSalon: null, indicadores: null, resumen: null, faltan }
+  const bases = combinarBases(con.map((m) => m.bases))
+  const total = { ...sumarValores(con.map((m) => m.valores)), pax: bases.pax, dias: bases.dias }
+  return { total, bases, ventaSalon: bases.ventaSalon, indicadores: indicadoresDe(total, bases), resumen: resumenValores(total, bases), faltan }
 }
 
 const sumaTriple = (a, b) => ({ total: a.total + b.total, col1: a.col1 + b.col1, col2: a.col2 + b.col2 })
@@ -303,7 +355,8 @@ const ceroTriple = () => ({ total: 0, col1: 0, col2: 0 })
 function consolidar(mes, lista) {
   const con = lista.filter(Boolean)
   if (!con.length) return null
-  const valores = sumarValores(con.map((m) => m.valores))
+  const bases = combinarBases(con.map((m) => m.bases))
+  const valores = { ...sumarValores(con.map((m) => m.valores)), pax: bases.pax, dias: bases.dias }
   const secciones = SECCIONES.map((s) => {
     const porClave = new Map()
     for (const m of con) {
@@ -328,12 +381,10 @@ function consolidar(mes, lista) {
       canalesMap.set(c.canal, { ...g, ...sumaTriple(g, c) })
     }
   }
-  const salones = con.map((m) => m.ventaSalon).filter((v) => v != null)
-  const ventaSalon = salones.length ? salones.reduce((t, v) => t + v, 0) : null
   return {
     mes, locales: con.map((m) => m.local), cerrado: con.every((m) => m.cerrado),
-    secciones, totales, valores, canales: [...canalesMap.values()], ventaSalon,
-    indicadores: indicadoresDe(valores, ventaSalon), resumen: resumenValores(valores, ventaSalon),
+    secciones, totales, valores, canales: [...canalesMap.values()], ventaSalon: bases.ventaSalon, bases,
+    indicadores: indicadoresDe(valores, bases), resumen: resumenValores(valores, bases),
   }
 }
 

@@ -72,7 +72,7 @@ test('datosDeLineas convierte una corrección y una manual (solo hoja pyl del lo
     { id: 5, local: null, mes: MES, hoja: 'cashflow', seccion: 'disponible', concepto: 'Banco', monto: 9, monto2: null, corrige: null, oculta: false },
   ]
   assert.deepEqual(datosDeLineas(lineas, 'L1', MES), {
-    ajustes: { 'cmv|carnes': { col1: 350, col2: null, oculto: false, id: 1, seccion: 'cmv', concepto: 'Carnes' } },
+    ajustes: { 'cmv|carnes': { col1: 350, col2: null, oculto: false, id: 1, seccion: 'cmv', concepto: 'Carnes', sub: 'alimentos' } },
     manuales: [{ id: 2, seccion: 'publicidad', concepto: 'Volantes', col1: 10, col2: 5, sub: null }],
   })
 })
@@ -222,4 +222,61 @@ test('indicadores sin base dan null, no 0', () => {
   const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1() })
   assert.equal(m.indicadores.promDias, null)
   assert.equal(m.indicadores.promPax, null)
+})
+
+test('sub del CMV: manuales y correcciones huérfanas usan im_linea.sub (alimentos si es null)', () => {
+  const base = { local: 'L1', mes: MES, hoja: 'pyl', seccion: 'cmv', monto2: null, oculta: false }
+  const lineas = [
+    { ...base, id: 1, concepto: 'Vinos', monto: 70, corrige: null, sub: 'bebidas' },
+    { ...base, id: 2, concepto: 'Ajuste stock', monto: 30, corrige: null, sub: 'movstock' },
+    { ...base, id: 3, concepto: 'Pan', monto: 5, corrige: null, sub: null },
+    { ...base, id: 4, concepto: 'Cervezas', monto: 40, corrige: claveLinea('cmv', 'Cervezas'), sub: 'bebidas' },
+  ]
+  const d = datosDeLineas(lineas, 'L1', MES)
+  assert.deepEqual(d.manuales.map((m) => m.sub), ['bebidas', 'movstock', 'alimentos'])
+  assert.equal(d.ajustes[claveLinea('cmv', 'Cervezas')].sub, 'bebidas')
+  const im = imDe()
+  im.lineas = lineas
+  const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1() })
+  assert.deepEqual(m.valores.cmv, { alimentos: 400 + 5, bebidas: 70 + 40, movstock: 30 })
+  assert.equal(linea('cmv', 'Cervezas', m).huerfana, true)
+  assert.equal(linea('cmv', 'Cervezas', m).sub, 'bebidas')
+})
+
+test('promedios del acumulado: Prom. pax solo con los meses que tienen pax', () => {
+  const inf = informeDe(['L1'], (im) => { im.auto.L1[MES].pax = 0; return im })
+  const l = inf.locales[0]
+  assert.equal(l.meses[MES].valores.pax, null)
+  assert.equal(l.meses[MES].indicadores.pax, null)
+  assert.equal(l.meses[MES].indicadores.promPax, null)
+  assert.equal(l.acumulado.total.pax, 50)
+  assert.equal(l.acumulado.indicadores.pax, 50)
+  assert.equal(l.acumulado.indicadores.promPax, 800 / 50) // solo enero (Local 800 / 50 pax)
+  assert.equal(l.acumulado.indicadores.promDias, (1000 + 1200) / (20 + 22))
+})
+
+test('promedios del grupo: un local sin pax no infla el promedio', () => {
+  const inf = informeDe(['L1', 'L2'], (im) => { im.auto.L2[MES].pax = 0; return im })
+  const ind = inf.grupo.meses[MES].indicadores
+  assert.equal(ind.pax, 60)
+  assert.equal(ind.promPax, 900 / 60) // solo L1
+  assert.equal(ind.venta, 1700)
+  // Sin pax en ningún mes ni local: null.
+  const sinPax = informeDe(['L1'], (im) => { im.auto.L1['2026-01'].pax = 0; im.auto.L1[MES].pax = 0; return im })
+  assert.equal(sinPax.locales[0].acumulado.total.pax, null)
+  assert.equal(sinPax.locales[0].acumulado.indicadores.promPax, null)
+})
+
+test('mes con gastos y sin ventas: la venta y lo que depende de ella son null, no 0', () => {
+  const im = imDe()
+  im.auto.L1['2025-12'] = { efectivo: 0, dias: 0, pax: 0, gastos: [g('CMV Alimentos', 'Carnes', 'A', 300)], cajaGastos: 0 }
+  const m = pylMes({ local: 'L1', mes: '2025-12', im, rv: rvDeL1() })
+  assert.equal(m.indicadores.venta, null)
+  assert.equal(m.indicadores.cmv, 300)
+  assert.equal(m.indicadores.cmvPct, null)
+  assert.equal(m.indicadores.eerr, null)
+  assert.equal(m.indicadores.rf, null)
+  assert.equal(m.resumen.ventas.find((f) => f.clave === 'subtotal').monto, null)
+  assert.equal(m.resumen.economico.find((f) => f.clave === 'eerr').monto, null)
+  assert.equal(m.resumen.cmv.find((f) => f.clave === 'subtotal').pct, null)
 })

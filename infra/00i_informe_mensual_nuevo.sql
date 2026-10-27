@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS im_linea (
   monto2          numeric(16,2),
   corrige         text,
   oculta          boolean       NOT NULL DEFAULT false,
+  -- Solo en líneas de CMV del P&L: a qué parte del CMV va (NULL = alimentos).
+  sub             text          CHECK (sub IS NULL OR sub IN ('alimentos', 'bebidas', 'movstock')),
   orden           integer       NOT NULL DEFAULT 0,
   actualizado_por text,
   actualizado_at  timestamptz   NOT NULL DEFAULT now()

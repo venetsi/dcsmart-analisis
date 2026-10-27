@@ -45,6 +45,13 @@ export function lineaOk(body) {
   if (!Number.isInteger(orden)) return err('El orden no es válido.')
   if (body.oculta != null && typeof body.oculta !== 'boolean') return err('El dato "oculta" no es válido.')
 
+  // Parte del CMV (alimentos / bebidas / mov. de stock): solo en líneas de CMV del P&L.
+  const sub = body.sub == null || body.sub === '' ? null : body.sub
+  if (sub !== null) {
+    if (hoja !== 'pyl' || seccion !== 'cmv') return err('El tipo de CMV solo se indica en líneas de CMV.')
+    if (!SUBS_CMV.includes(sub)) return err('El tipo de CMV no es válido.')
+  }
+
   return {
     ok: true,
     linea: {
@@ -53,11 +60,13 @@ export function lineaOk(body) {
       monto: body.monto ?? null,
       monto2: body.monto2 ?? null,
       oculta: body.oculta === true,
+      sub,
       orden,
     },
   }
 }
 const HOJAS_LINEA = Object.keys(SECCIONES_LINEA)
+const SUBS_CMV = ['alimentos', 'bebidas', 'movstock']
 
 // Config de hojas: [{ clave, visible, orden }] solo con claves conocidas y sin repetir.
 export function hojasOk(v) {
