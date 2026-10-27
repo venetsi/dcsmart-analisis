@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNumeroAR, fmtAR, canalesAuto, armarLocal, armarReporte, snapshotDe, ticketsAuto } from './reporteVentas.js'
+import { parseNumeroAR, fmtAR, canalesAuto, armarLocal, armarReporte, snapshotDe, ticketsAuto, autoDeLocal, armarPorLocal } from './reporteVentas.js'
 
 test('parseNumeroAR lee los formatos de los decks', () => {
   assert.equal(parseNumeroAR('55.114.440'), 55114440)
@@ -356,4 +356,27 @@ test('mes cerrado con cubiertos guardados sin su venta: si coinciden con lo auto
   assert.equal(Math.round(l.promCubierto), Math.round(46013668 / 1520))
   // Órdenes distintas a las automáticas: no se sabe qué cajas son, va con la venta entera.
   assert.equal(Math.round(l.promOrden), Math.round(77298668 / 886))
+})
+
+const dataMin = () => ({
+  cliente: { locales: ['L1', 'SIN-DATOS'] }, mes: '2026-09', reglas: [], valores: [], cierres: [],
+  auto: { L1: {
+    meses: { '2026-09': { venta: 1000 } },
+    detalles: { '2026-09': [{ metodo: 'Rappi', monto: 300 }] },
+    cajasOrigen: {},
+    cantidades: { '2026-09': [] },
+  } },
+})
+
+test('autoDeLocal arma meses y canales; null si el local no tiene datos', () => {
+  const a = autoDeLocal(dataMin(), 'L1')
+  assert.equal(a.meses['2026-09'].venta, 1000)
+  assert.ok(Array.isArray(a.canales['2026-09']))
+  assert.equal(autoDeLocal(dataMin(), 'SIN-DATOS'), null)
+})
+
+test('armarPorLocal devuelve un LocalMes por local con datos', () => {
+  const p = armarPorLocal(dataMin())
+  assert.deepEqual(Object.keys(p), ['L1'])
+  assert.equal(p.L1.venta.valor, 1000)
 })

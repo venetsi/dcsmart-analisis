@@ -100,6 +100,19 @@ export const api = {
   rvGuardarCliente: (id, body) => request(`/reporte-ventas/clientes/${id}`, { method: 'PUT', body }),
   rvPutRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'PUT', body }),
   rvDelRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'DELETE', body }),
+  // Informe Mensual
+  imClientes: (grupo) => request(`/informe-mensual/clientes${toQueryString({ grupo })}`),
+  imGet: (id, mes) => request(`/informe-mensual/${id}${toQueryString({ mes })}`),
+  imPutLinea: (id, body) => request(`/informe-mensual/${id}/linea`, { method: 'PUT', body }),
+  imDelLinea: (id, lineaId) => request(`/informe-mensual/${id}/linea/${lineaId}`, { method: 'DELETE' }),
+  imPutValor: (id, body) => request(`/informe-mensual/${id}/valor`, { method: 'PUT', body }),
+  imPutTexto: (id, body) => request(`/informe-mensual/${id}/texto`, { method: 'PUT', body }),
+  imPutObs: (id, body) => request(`/informe-mensual/${id}/observacion`, { method: 'PUT', body }),
+  imPutHojas: (id, body) => request(`/informe-mensual/${id}/hojas`, { method: 'PUT', body }),
+  imPutRegla: (body) => request('/informe-mensual/regla', { method: 'PUT', body }),
+  imPutRazonSocial: (id, body) => request(`/informe-mensual/clientes/${id}/razon-social`, { method: 'PUT', body }),
+  imCerrar: (id, mes, snapshot) => request(`/informe-mensual/${id}/cerrar`, { method: 'POST', body: { mes, snapshot } }),
+  imReabrir: (id, mes) => request(`/informe-mensual/${id}/reabrir`, { method: 'POST', body: { mes } }),
 
   // periodo = { mes } o { desde, hasta }
   ciGet: (grupo, periodo) => request(`/costo-impositivo${toQueryString({ grupo, ...periodo })}`),
