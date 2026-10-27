@@ -594,8 +594,12 @@ export function paginasDe(informe, config) {
       for (const l of locales) {
         const act = l.meses?.[informe.mes]
         for (const g of GRUPOS_SECCION) {
-          if (!tieneDatosGrupo(act, g)) continue
+          // El detalle compara contra el mes anterior: sale si hay datos en cualquiera
+          // de los dos. La apertura es solo del mes del informe.
+          const conDatos = h.clave === 'detalle' ? tieneDatosGrupo(act, g) || tieneDatosGrupo(l.mesAnterior, g) : tieneDatosGrupo(act, g)
+          if (!conDatos) continue
           const filas = (h.clave === 'detalle' ? detalleDe : aperturaDe)(informe, l.local, g.key).filas.length
+          if (!filas) continue // p. ej. +5 / −5 en un concepto: total 0, no hay renglón que mostrar
           const partes = Math.max(1, Math.ceil(filas / FILAS_POR_HOJA[h.clave]))
           for (let parte = 1; parte <= partes; parte++) {
             paginas.push({
@@ -704,12 +708,17 @@ export function cmvDe(informe, local) {
   const vAnt = ventaDe(ant)
   const A = [...conceptosDe(act, GRUPO.cmv).values()]
   const P = [...conceptosDe(ant, GRUPO.cmv).values()]
-  // pts: los dos meses tienen que tener venta; una parte sin compras en un mes con datos cuenta 0%.
-  const parte = (total, totalAnt) => ({
-    total, pct: pct(total, vAct),
-    anterior: { total: totalAnt, pct: pct(totalAnt, vAnt) },
-    pts: (total == null && totalAnt == null) || vAct == null || vAnt == null ? null : pct(total ?? 0, vAct) - pct(totalAnt ?? 0, vAnt),
-  })
+  // pts: los dos meses tienen que tener venta (ni null ni 0); una parte sin
+  // compras en un mes con venta cuenta 0%.
+  const parte = (total, totalAnt) => {
+    const p = pct(total ?? 0, vAct)
+    const pa = pct(totalAnt ?? 0, vAnt)
+    return {
+      total, pct: pct(total, vAct),
+      anterior: { total: totalAnt, pct: pct(totalAnt, vAnt) },
+      pts: (total == null && totalAnt == null) || p == null || pa == null ? null : p - pa,
+    }
+  }
   const porSub = {}
   const categorias = {}
   for (const [sub, titulo] of SUBS_CMV) {

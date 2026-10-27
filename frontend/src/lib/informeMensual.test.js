@@ -456,6 +456,37 @@ test('cmvDe: total, partes con pts vs mes anterior y categorías de mayor a meno
   assert.equal(l2.porSub.alimentos.pts, null)
 })
 
+test('paginasDe: sección con datos solo en el mes anterior → detalle sí, apertura no', () => {
+  const inf = informeDe(['L1'], (im) => { im.auto.L1['2026-01'].gastos.push(g('Fijos / Variables', 'Edenor', 'A', 100)); return im })
+  const p = ids(paginasDe(inf))
+  assert.ok(p.includes('detalle:L1:fijos'))
+  assert.ok(!p.includes('apertura:L1:fijos'))
+  assert.deepEqual(detalleDe(inf, 'L1', 'fijos').filas.map((f) => [f.concepto, f.anterior, f.actual, f.diferencia]), [['Edenor', 100, null, -100]])
+})
+
+test('paginasDe: un concepto que da total 0 (+5 / −5) no arma una hoja de detalle vacía', () => {
+  const inf = informeDe(['L1'], (im) => {
+    im.auto.L1[MES].gastos.push(g('Publicidad', 'Volantes', 'A', 5), g('Publicidad', 'Volantes', 'B', -5))
+    return im
+  })
+  assert.equal(detalleDe(inf, 'L1', 'generales').filas.length, 0)
+  const p = ids(paginasDe(inf))
+  assert.ok(!p.includes('detalle:L1:generales'))
+  // La apertura sí tiene renglón: columna 1 = 5, columna 2 = −5.
+  assert.ok(p.includes('apertura:L1:generales'))
+})
+
+test('cmvDe: con venta 0 en un mes los pts son null, no un número inventado', () => {
+  const inf = informeDe(['L1'], conCmvAtte)
+  inf.locales[0].mesAnterior.bases.venta = 0
+  const c = cmvDe(inf, 'L1')
+  assert.equal(c.pts, null)
+  assert.equal(c.porSub.alimentos.pts, null)
+  assert.equal(c.porSub.bebidas.pts, null)
+  assert.equal(c.anterior.pct, null)
+  assert.equal(c.pct, pct(41209956, 1200))
+})
+
 test('resumenDe: CMV bajó → diferencia < 0, sentido costo; comentario desde textos', () => {
   const inf = informeDe(['L1'], (im) => {
     im.auto.L1[MES].gastos = [g('CMV Alimentos', 'Carnes', 'A', 250), g('Sueldos', 'Sueldos', 'B', 250)]
