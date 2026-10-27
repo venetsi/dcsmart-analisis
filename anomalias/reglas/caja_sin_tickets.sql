@@ -34,7 +34,7 @@ SELECT
      CONCAT(CAST(COUNT(*) AS STRING), ' cajas')) AS referencia,
   IF(COUNT(*) = 1, ANY_VALUE(f.id), NULL) AS ref_id, MIN(f.dia) AS fecha,
   CAST(SUM(f.total) AS FLOAT64) AS valor, CAST(NULL AS FLOAT64) AS esperado, COUNT(*) AS cantidad,
-  CONCAT('venta sin ', f.falta, ' · días: ', STRING_AGG(DISTINCT FORMAT_DATE('%d/%m', f.dia), ', ')) AS detalle
+  CONCAT('venta sin ', f.falta, ' · días: ', STRING_AGG(DISTINCT FORMAT_DATE('%d/%m', f.dia), ', ' ORDER BY FORMAT_DATE('%d/%m', f.dia))) AS detalle
 FROM faltan f
 JOIN `{{cdc}}.dim_locales` l ON l.id = f.id_local
 LEFT JOIN `{{cdc}}.dim_apps` a ON a.id = l.id_app

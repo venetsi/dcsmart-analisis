@@ -11,7 +11,10 @@ SELECT
   DATE(c.fecha_inicio, 'America/Argentina/Buenos_Aires') AS fecha,
   CAST(c.total AS FLOAT64) AS valor, CAST(NULL AS FLOAT64) AS esperado, 1 AS cantidad,
   CONCAT('abre ', FORMAT_DATETIME('%d/%m %H:%M', DATETIME(c.fecha_inicio, 'America/Argentina/Buenos_Aires')),
-         ' · cierra ', FORMAT_DATETIME('%d/%m %H:%M', DATETIME(c.fecha_cierre, 'America/Argentina/Buenos_Aires'))) AS detalle
+         -- con el año si no coincide: suele ser un error de tipeo (2025 en vez de 2026)
+         ' · cierra ', FORMAT_DATETIME(
+           IF(EXTRACT(YEAR FROM c.fecha_cierre) = EXTRACT(YEAR FROM c.fecha_inicio), '%d/%m %H:%M', '%d/%m/%Y %H:%M'),
+           DATETIME(c.fecha_cierre, 'America/Argentina/Buenos_Aires'))) AS detalle
 FROM `{{cdc}}.public_cajas` c
 JOIN `{{cdc}}.dim_locales` l ON l.id = CAST(c.id_local AS STRING)
 LEFT JOIN `{{cdc}}.dim_apps` a ON a.id = l.id_app
