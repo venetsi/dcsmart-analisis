@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { claveLinea } from './informe.js'
-import { armarPorLocal, armarReporte, autoDeLocal } from './reporteVentas.js'
+import { armarPorLocal, armarReporte } from './reporteVentas.js'
 import {
   datosDeLineas, ventasDeLocal, pylMes, armarInformeMensual, pct, fotoDeMes,
   HOJAS_DEFECTO, GRUPOS_SECCION, hojasDe, paginasDe, resumenDe, detalleDe, aperturaDe, cmvDe, cashflowDe, deudaDe, snapshotIm,
@@ -11,24 +11,25 @@ const HOY = new Date('2026-10-20T12:00:00')
 const MES = '2026-02'
 
 // Respuesta de GET /api/reporte-ventas/:id: L1 vende en enero y febrero (Rappi aparte),
-// L2 solo en febrero. Del año anterior L1 tiene enero y no febrero.
+// L2 solo en febrero. Del año anterior L1 tiene enero y no febrero. Los cubiertos (el pax
+// del informe) salen de acá, resueltos por el Reporte de Ventas.
 const rvDataDe = (locales) => ({
   cliente: { locales }, mes: MES, reglas: [], valores: [], cierres: [],
   auto: {
     L1: {
-      meses: { '2026-01': { venta: 1000 }, '2026-02': { venta: 1200 }, '2025-01': { venta: 800 } },
+      meses: { '2026-01': { venta: 1000, cubiertos: 50 }, '2026-02': { venta: 1200, cubiertos: 60 }, '2025-01': { venta: 800 } },
       detalles: { '2026-01': [{ metodo: 'Rappi', monto: 200 }], '2026-02': [{ metodo: 'Rappi', monto: 300 }] },
       cajasOrigen: {}, cantidades: {},
     },
     L2: {
-      meses: { '2026-02': { venta: 500 } },
+      meses: { '2026-02': { venta: 500, cubiertos: 20 } },
       detalles: {}, cajasOrigen: {}, cantidades: {},
     },
   },
 })
 const rvDe = (rvData) => armarReporte({ cliente: rvData.cliente, mes: MES, porLocal: armarPorLocal(rvData), hoy: HOY })
 
-const vacio = () => ({ efectivo: 0, dias: 0, pax: 0, gastos: [], cajaGastos: 0 })
+const vacio = () => ({ efectivo: 0, dias: 0, gastos: [], cajaGastos: 0 })
 const g = (rubro, categoria, tipo, total) => ({ rubro, categoria, tipo, total })
 
 // Respuesta de GET /api/informe-mensual/:id armada a mano.
@@ -38,23 +39,22 @@ const imDe = (locales = ['L1']) => {
     auto[l] = {}
     for (const m of ['2025-01', '2025-02', '2025-12', '2026-01', '2026-02']) auto[l][m] = vacio()
   }
-  auto.L1['2026-01'] = { efectivo: 100, dias: 20, pax: 50, gastos: [g('CMV Alimentos', 'Carnes', 'A', 300), g('Sueldos', 'Sueldos', 'B', 200)], cajaGastos: 0 }
-  auto.L1['2026-02'] = { efectivo: 150, dias: 22, pax: 60, gastos: [g('CMV Alimentos', 'Carnes', 'A', 400), g('Sueldos', 'Sueldos', 'B', 250)], cajaGastos: 0 }
-  if (auto.L2) auto.L2['2026-02'] = { efectivo: 50, dias: 10, pax: 20, gastos: [g('CMV Alimentos', 'Carnes', 'A', 100)], cajaGastos: 0 }
+  auto.L1['2026-01'] = { efectivo: 100, dias: 20, gastos: [g('CMV Alimentos', 'Carnes', 'A', 300), g('Sueldos', 'Sueldos', 'B', 200)], cajaGastos: 0 }
+  auto.L1['2026-02'] = { efectivo: 150, dias: 22, gastos: [g('CMV Alimentos', 'Carnes', 'A', 400), g('Sueldos', 'Sueldos', 'B', 250)], cajaGastos: 0 }
+  if (auto.L2) auto.L2['2026-02'] = { efectivo: 50, dias: 10, gastos: [g('CMV Alimentos', 'Carnes', 'A', 100)], cajaGastos: 0 }
   return {
     cliente: { id: 1, nombre: 'Cliente', locales, nombres: { L1: 'Local Uno' }, logosLocal: {}, razon_social: null },
     mes: MES, razonSocialGestion: null, hojas: null, auto,
     lineas: [], textos: [], valores: [], observaciones: {}, cierres: [], reglas: [],
   }
 }
-const informeDe = (locales = ['L1'], cambiar = (im) => im) => {
-  const rvData = rvDataDe(locales)
-  return armarInformeMensual({ im: cambiar(imDe(locales)), rv: rvDe(rvData), rvData, mes: MES })
+const informeDe = (locales = ['L1'], cambiar = (im) => im, cambiarRv = (d) => d) => {
+  const rvData = cambiarRv(rvDataDe(locales))
+  return armarInformeMensual({ im: cambiar(imDe(locales)), rv: rvDe(rvData), mes: MES })
 }
-const rvDeL1 = () => {
-  const rvData = rvDataDe(['L1'])
-  const rv = rvDe(rvData)
-  return { rvLocal: rv.locales[0], rvAuto: autoDeLocal(rvData, 'L1') }
+const rvDeL1 = (cambiarRv = (d) => d) => {
+  const rvData = cambiarRv(rvDataDe(['L1']))
+  return { rvLocal: rvDe(rvData).locales[0] }
 }
 const linea = (seccion, concepto, informeMes) =>
   informeMes.secciones.find((s) => s.key === seccion).lineas.find((l) => l.clave === claveLinea(seccion, concepto))
@@ -81,25 +81,26 @@ test('datosDeLineas convierte una corrección y una manual (solo hoja pyl del lo
 })
 
 test('ventasDeLocal: el efectivo va en la columna 2 de "Local"; los otros canales en la 1', () => {
-  const rvLocal = { venta: { valor: 1200 }, canales: [{ nombre: 'Rappi', valor: 200, delivery: true }, { nombre: 'Local', valor: 1000 }] }
-  const { lineas } = ventasDeLocal({ rvLocal, rvAuto: null, efectivo: 100, mes: MES, esMesInforme: true })
+  const rvMes = { venta: { valor: 1200 }, canales: [{ nombre: 'Rappi', valor: 200, delivery: true }, { nombre: 'Local', valor: 1000 }] }
+  const { lineas } = ventasDeLocal({ rvMes, efectivo: 100 })
   assert.deepEqual(lineas.find((l) => l.canal === 'Local'), { canal: 'Local', total: 1000, col1: 900, col2: 100 })
   assert.deepEqual(lineas.find((l) => l.canal === 'Rappi'), { canal: 'Rappi', total: 200, col1: 200, col2: 0 })
 })
 
-test('ventasDeLocal: otros meses usan la venta del histórico y los canales automáticos; sin venta → []', () => {
-  const { rvLocal, rvAuto } = rvDeL1()
-  const { lineas } = ventasDeLocal({ rvLocal, rvAuto, efectivo: 100, mes: '2026-01', esMesInforme: false })
+test('ventasDeLocal: cualquier mes usa la venta y los canales resueltos del Reporte de Ventas (porMes); sin venta → []', () => {
+  const { rvLocal } = rvDeL1()
+  const { lineas, localNegativo } = ventasDeLocal({ rvMes: rvLocal.porMes['2026-01'], efectivo: 100 })
   assert.deepEqual(lineas.find((l) => l.canal === 'Local'), { canal: 'Local', total: 800, col1: 700, col2: 100 })
   assert.deepEqual(lineas.find((l) => l.canal === 'Rappi'), { canal: 'Rappi', total: 200, col1: 200, col2: 0 })
-  assert.deepEqual(ventasDeLocal({ rvLocal, rvAuto, efectivo: 0, mes: '2025-02', esMesInforme: false }).lineas, [])
-  assert.deepEqual(ventasDeLocal({ rvLocal: null, rvAuto: null, efectivo: 100, mes: MES, esMesInforme: true }).lineas, [])
+  assert.equal(localNegativo, false)
+  assert.deepEqual(ventasDeLocal({ rvMes: rvLocal.porMes['2025-02'], efectivo: 0 }).lineas, [])
+  assert.deepEqual(ventasDeLocal({ rvMes: undefined, efectivo: 100 }).lineas, [])
 })
 
-test('pylMes abierto: ventas por canal, gastos de gestión y pax/días de rv_valor', () => {
+test('pylMes abierto: ventas por canal, gastos de gestión, pax = cubiertos del Reporte de Ventas y días', () => {
   const im = imDe()
-  im.valores = [{ local: 'L1', mes: MES, dato: 'pax', valor: 75, original: 60 }]
-  const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1() })
+  const rv = rvDeL1((d) => ({ ...d, valores: [{ local: 'L1', mes: MES, dato: 'cubiertos', valor: 75, original: 60 }] }))
+  const m = pylMes({ local: 'L1', mes: MES, im, rv })
   assert.equal(m.cerrado, false)
   assert.deepEqual(m.totales.ventas, { total: 1200, col1: 1050, col2: 150 })
   assert.deepEqual(m.canales.map((c) => c.canal).sort(), ['Local', 'Rappi'])
@@ -118,8 +119,9 @@ test('pylMes con el mes cerrado devuelve la foto aunque gestión cambie', () => 
   im.cierres = [{ mes: MES, cerrado: true, snapshot: { locales: { L1: fotoDeMes(abierto) } } }]
   im.auto.L1[MES].gastos = [g('CMV Alimentos', 'Carnes', 'A', 99999)]
   im.auto.L1[MES].efectivo = 7
-  im.valores = [{ local: 'L1', mes: MES, dato: 'pax', valor: 1, original: 60 }]
-  const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1() })
+  // Cubiertos corregidos después en el Reporte de Ventas: el mes cerrado no cambia.
+  const rv = rvDeL1((d) => ({ ...d, valores: [{ local: 'L1', mes: MES, dato: 'cubiertos', valor: 1, original: 60 }] }))
+  const m = pylMes({ local: 'L1', mes: MES, im, rv })
   assert.equal(m.cerrado, true)
   assert.deepEqual(m.valores, abierto.valores)
   assert.deepEqual(m.totales, abierto.totales)
@@ -221,8 +223,9 @@ test('indicadores sin base dan null, no 0', () => {
   assert.equal(ind.promDias, 50)
   const im = imDe()
   im.auto.L1[MES].dias = 0
-  im.auto.L1[MES].pax = 0
-  const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1() })
+  const sinCub = (d) => { d.auto.L1.meses[MES].cubiertos = 0; return d }
+  const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1(sinCub) })
+  assert.equal(m.indicadores.pax, null)
   assert.equal(m.indicadores.promDias, null)
   assert.equal(m.indicadores.promPax, null)
 })
@@ -247,7 +250,7 @@ test('sub del CMV: manuales y correcciones huérfanas usan im_linea.sub (aliment
 })
 
 test('promedios del acumulado: Prom. pax solo con los meses que tienen pax', () => {
-  const inf = informeDe(['L1'], (im) => { im.auto.L1[MES].pax = 0; return im })
+  const inf = informeDe(['L1'], undefined, (d) => { d.auto.L1.meses[MES].cubiertos = null; return d })
   const l = inf.locales[0]
   assert.equal(l.meses[MES].valores.pax, null)
   assert.equal(l.meses[MES].indicadores.pax, null)
@@ -259,20 +262,20 @@ test('promedios del acumulado: Prom. pax solo con los meses que tienen pax', () 
 })
 
 test('promedios del grupo: un local sin pax no infla el promedio', () => {
-  const inf = informeDe(['L1', 'L2'], (im) => { im.auto.L2[MES].pax = 0; return im })
+  const inf = informeDe(['L1', 'L2'], undefined, (d) => { d.auto.L2.meses[MES].cubiertos = null; return d })
   const ind = inf.grupo.meses[MES].indicadores
   assert.equal(ind.pax, 60)
   assert.equal(ind.promPax, 900 / 60) // solo L1
   assert.equal(ind.venta, 1700)
   // Sin pax en ningún mes ni local: null.
-  const sinPax = informeDe(['L1'], (im) => { im.auto.L1['2026-01'].pax = 0; im.auto.L1[MES].pax = 0; return im })
+  const sinPax = informeDe(['L1'], undefined, (d) => { d.auto.L1.meses['2026-01'].cubiertos = null; d.auto.L1.meses[MES].cubiertos = null; return d })
   assert.equal(sinPax.locales[0].acumulado.total.pax, null)
   assert.equal(sinPax.locales[0].acumulado.indicadores.promPax, null)
 })
 
 test('mes con gastos y sin ventas: la venta y lo que depende de ella son null, no 0', () => {
   const im = imDe()
-  im.auto.L1['2025-12'] = { efectivo: 0, dias: 0, pax: 0, gastos: [g('CMV Alimentos', 'Carnes', 'A', 300)], cajaGastos: 0 }
+  im.auto.L1['2025-12'] = { efectivo: 0, dias: 0, gastos: [g('CMV Alimentos', 'Carnes', 'A', 300)], cajaGastos: 0 }
   const m = pylMes({ local: 'L1', mes: '2025-12', im, rv: rvDeL1() })
   assert.equal(m.indicadores.venta, null)
   assert.equal(m.indicadores.cmv, 300)
@@ -589,8 +592,115 @@ test('snapshotIm: foto de cada local con fotoDeMes; cerrado con esa foto da los 
   const rvData = rvDataDe(['L1'])
   const im = imDe(['L1', 'L2'])
   im.auto.L2[MES] = vacio()
-  const soloL1 = armarInformeMensual({ im, rv: rvDe(rvData), rvData, mes: MES })
+  const soloL1 = armarInformeMensual({ im, rv: rvDe(rvData), mes: MES })
   assert.equal(soloL1.locales[1].meses[MES], null)
   assert.deepEqual(Object.keys(snapshotIm(soloL1).locales), ['L1'])
 })
 
+
+// ── Revisión final: pax = cubiertos del Reporte de Ventas, CMV / Labor sin dato ──
+
+test('Togni\'s Café: 1 de 20 cajas informó cubiertos → pax y Prom. pax "—", aviso con la cuenta', () => {
+  const tognis = (d) => { d.auto.L1.meses[MES] = { venta: 1200, cubiertos: 3, cajas: 20, sinCubiertos: 19, ventaConCubiertos: 60 }; return d }
+  const im = imDe()
+  im.auto.L1[MES].pax = 3 // aunque la API vieja lo mande crudo, no se usa
+  const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1(tognis) })
+  assert.equal(m.valores.pax, null)
+  assert.equal(m.indicadores.pax, null)
+  assert.equal(m.indicadores.promPax, null)
+  const aviso = m.avisos.find((a) => a.tipo === 'cubiertos')
+  assert.ok(aviso)
+  assert.match(aviso.texto, /solo 1 de 20 cajas/)
+  // En el informe: el aviso llega con el nombre del local.
+  const inf = informeDe(['L1'], undefined, tognis)
+  assert.ok(inf.avisos.some((a) => a.local === 'L1' && a.tipo === 'cubiertos'))
+  assert.equal(inf.locales[0].meses[MES].indicadores.promPax, null)
+})
+
+test('pax: los cubiertos cargados a mano en el Reporte de Ventas son el pax del informe (mismo número)', () => {
+  const conMano = (d) => {
+    d.auto.L1.meses[MES] = { venta: 1200, cubiertos: 3, cajas: 20, sinCubiertos: 19 }
+    d.valores = [{ local: 'L1', mes: MES, dato: 'cubiertos', valor: 300, original: null }]
+    return d
+  }
+  const { rvLocal } = rvDeL1(conMano)
+  const m = pylMes({ local: 'L1', mes: MES, im: imDe(), rv: { rvLocal } })
+  assert.equal(m.valores.pax, 300)
+  assert.equal(m.valores.pax, rvLocal.cubiertos.valor)
+  assert.equal(m.indicadores.promPax, 900 / 300)
+  assert.ok(!m.avisos.some((a) => a.tipo === 'cubiertos'))
+})
+
+test('pax: algunas cajas sin cubiertos (más de la mitad informó) → valor de gestión y aviso de promedio alto', () => {
+  const parcial = (d) => { d.auto.L1.meses[MES] = { venta: 1200, cubiertos: 55, cajas: 10, sinCubiertos: 2, ventaConCubiertos: 1000 }; return d }
+  const m = pylMes({ local: 'L1', mes: MES, im: imDe(), rv: rvDeL1(parcial) })
+  assert.equal(m.valores.pax, 55)
+  const aviso = m.avisos.find((a) => a.tipo === 'cubiertos')
+  assert.match(aviso.texto, /2 cajas no informaron cubiertos/)
+})
+
+test('informe de enero: el mes anterior (diciembre) usa la venta corregida y los canales del Reporte de Ventas', () => {
+  const ENE = '2026-01'
+  const rvData = {
+    cliente: { locales: ['L1'] }, mes: ENE, reglas: [], cierres: [],
+    valores: [{ local: 'L1', mes: '2025-12', dato: 'venta', valor: 950, original: 900 }],
+    auto: { L1: {
+      meses: { '2025-12': { venta: 900, cubiertos: 40 }, [ENE]: { venta: 1000, cubiertos: 50 } },
+      detalles: { '2025-12': [{ metodo: 'Rappi', monto: 100 }] }, cajasOrigen: {}, cantidades: {},
+    } },
+  }
+  const rv = armarReporte({ cliente: rvData.cliente, mes: ENE, porLocal: armarPorLocal(rvData), hoy: HOY })
+  const im = { ...imDe(), mes: ENE }
+  im.auto.L1['2025-12'] = { efectivo: 0, dias: 25, gastos: [g('CMV Alimentos', 'Carnes', 'A', 100)], cajaGastos: 0 }
+  const inf = armarInformeMensual({ im, rv, mes: ENE })
+  const dic = inf.locales[0].mesAnterior
+  assert.equal(dic.mes, '2025-12')
+  assert.equal(dic.bases.venta, 950) // la corregida en el RV, no los 900 de gestión
+  assert.deepEqual(dic.canales.map((c) => [c.canal, c.total]).sort(), [['Local', 850], ['Rappi', 100]])
+  assert.equal(dic.valores.pax, 40)
+})
+
+test('meses que no son el del informe: canales del cierre del Reporte de Ventas, no los automáticos', () => {
+  const cerradoEne = (d) => {
+    d.cierres = [{ mes: '2026-01', origen: 'reporte', snapshot: { locales: { L1: { venta: 1000, cubiertos: 45, canales: { Rappi: 150, Local: 850 } } } } }]
+    return d
+  }
+  const m = pylMes({ local: 'L1', mes: '2026-01', im: imDe(), rv: rvDeL1(cerradoEne) })
+  assert.deepEqual(m.canales.map((c) => [c.canal, c.total]).sort(), [['Local', 850], ['Rappi', 150]])
+  assert.equal(m.valores.pax, 45)
+})
+
+test('canales que suman más que la venta: aviso "Local queda negativo"', () => {
+  const eventos = (d) => { d.valores = [{ local: 'L1', mes: MES, dato: 'canal:Eventos', valor: 5000 }]; return d }
+  const m = pylMes({ local: 'L1', mes: MES, im: imDe(), rv: rvDeL1(eventos) })
+  assert.ok(m.avisos.some((a) => a.tipo === 'canal' && /Local queda negativo/.test(a.texto)))
+})
+
+test('sin CMV ni sueldos cargados: CMV, CMV % y Labor % son null (no 0%), con aviso; el resultado se calcula igual', () => {
+  const im = imDe()
+  im.auto.L1[MES].gastos = [g('Fijos / Variables', 'Edenor', 'A', 100)]
+  const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1() })
+  assert.equal(m.indicadores.cmv, null)
+  assert.equal(m.indicadores.cmvPct, null)
+  assert.equal(m.indicadores.labor, null)
+  assert.equal(m.indicadores.laborPct, null)
+  assert.equal(m.indicadores.eerr, 1200 - 100)
+  assert.ok(m.avisos.some((a) => a.tipo === 'cmv' && /Falta cargar el CMV/.test(a.texto)))
+  assert.ok(m.avisos.some((a) => a.tipo === 'labor' && /Faltan cargar los sueldos/.test(a.texto)))
+  // Resumen ejecutivo: CMV, sus partes y Labor sin dato en el mes (no "$ 0").
+  const inf = informeDe(['L1'], (x) => { x.auto.L1[MES].gastos = [g('Fijos / Variables', 'Edenor', 'A', 100)]; return x })
+  const r = resumenDe(inf, 'L1')
+  assert.equal(r.find((x) => x.clave === 'cmv').actual, null)
+  assert.equal(r.find((x) => x.clave === 'cmv_alimentos').actual, null)
+  assert.equal(r.find((x) => x.clave === 'labor').actual, null)
+  assert.ok(inf.avisos.some((a) => a.local === 'L1' && a.tipo === 'cmv'))
+})
+
+test('con CMV y sueldos: CMV % y Labor % se calculan y no hay aviso', () => {
+  const m = pylMes({ local: 'L1', mes: MES, im: imDe(), rv: rvDeL1() })
+  assert.equal(m.indicadores.cmv, 400)
+  assert.equal(m.indicadores.cmvPct, pct(400, 1200))
+  assert.equal(m.indicadores.labor, 250)
+  assert.equal(m.indicadores.laborPct, pct(250, 1200))
+  assert.ok(!m.avisos.some((a) => a.tipo === 'cmv' || a.tipo === 'labor'))
+})

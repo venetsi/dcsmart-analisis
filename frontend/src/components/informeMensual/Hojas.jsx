@@ -210,8 +210,10 @@ function Indicadores({ informe, m, pagina }) {
   const dDias = resta(a.dias, b.dias)
   const dPax = resta(a.pax, b.pax)
   const dProm = resta(a.promPax, b.promPax)
-  const labor = act?.valores?.egresos?.labor
-  const laborMonto = act && esNum(labor) ? labor : null
+  // Sin sueldos cargados, Labor es null ("—"), no "$ 0".
+  const laborMonto = esNum(a.labor) ? a.labor : null
+  // Sin diferencia contra el mes anterior: "sin cambios" (no "$ 0 menos").
+  const textoDelta = (dif, texto) => (dif === 0 ? 'sin cambios' : texto)
 
   const textoDias = !esNum(dDias) ? null
     : dDias === 0 ? 'mismos días'
@@ -242,7 +244,7 @@ function Indicadores({ informe, m, pagina }) {
           <div className="im-k">Venta del mes</div>
           <div className="im-ind-v">{fmtPesosIm(a.venta)}</div>
           <div className="im-ind-delta">
-            <Delta dif={dVenta} texto={`${fmtPctIm(pctVenta == null ? null : Math.abs(pctVenta))} · ${fmtPesosIm(esNum(dVenta) ? Math.abs(dVenta) : null)} ${dVenta > 0 ? 'más' : 'menos'}`} />
+            <Delta dif={dVenta} texto={textoDelta(dVenta, `${fmtPctIm(pctVenta == null ? null : Math.abs(pctVenta))} · ${fmtPesosIm(esNum(dVenta) ? Math.abs(dVenta) : null)} ${dVenta > 0 ? 'más' : 'menos'}`)} />
           </div>
         </div>
         <div className="im-card im-ind">
@@ -253,12 +255,12 @@ function Indicadores({ informe, m, pagina }) {
         <div className="im-card im-ind">
           <div className="im-k">Cubiertos (pax)</div>
           <div className="im-ind-v">{fmtNumIm(a.pax)}</div>
-          <div className="im-ind-delta"><Delta dif={dPax} texto={`${fmtNumIm(esNum(dPax) ? Math.abs(dPax) : null)} cubiertos`} /></div>
+          <div className="im-ind-delta"><Delta dif={dPax} texto={textoDelta(dPax, `${fmtNumIm(esNum(dPax) ? Math.abs(dPax) : null)} cubiertos`)} /></div>
         </div>
         <div className="im-card im-ind">
           <div className="im-k">Promedio por pax</div>
           <div className="im-ind-v">{fmtPesosIm(a.promPax)}</div>
-          <div className="im-ind-delta"><Delta dif={dProm} texto={fmtPesosIm(esNum(dProm) ? Math.abs(dProm) : null)} /></div>
+          <div className="im-ind-delta"><Delta dif={dProm} texto={textoDelta(dProm, fmtPesosIm(esNum(dProm) ? Math.abs(dProm) : null))} /></div>
         </div>
       </div>
       <div className="im-ind-grid im-ind-fila2">
@@ -400,7 +402,7 @@ function CashFlow({ informe, m }) {
                   <i style={{ background: 'var(--im-rojo)', width: ancho(c.pagar.total) }} />
                 </div>
                 <div className="im-cf-cob">
-                  {esNum(c.cobertura) ? `Lo disponible cubre el ${fmtNumIm(c.cobertura, { dec: 1 })}% de los pagos` : ''}
+                  {esNum(c.cobertura) ? `Lo disponible cubre el ${fmtPctIm(c.cobertura)} de los pagos` : ''}
                 </div>
               </>
             )}
@@ -569,7 +571,8 @@ function colDe(x, mes) {
     mes: mes || x.mes, venta: b.venta ?? null, canales, dias: b.dias ?? null, pax: b.pax ?? null,
     parDias: b.parDias || null, parPax: b.parPax || null,
     cmv: Object.fromEntries(CMV_FILAS.map(([k]) => [k, x.valores?.cmv?.[k] ?? null])),
-    cmvTotal: t('cmv'), bruto: t('resultadoBruto'),
+    // Sin CMV cargado en el mes, el total es null ("—"), no un 0 con su 0,00%.
+    cmvTotal: x.indicadores && x.indicadores.cmv == null ? null : t('cmv'), bruto: t('resultadoBruto'),
     egresos: Object.fromEntries(EGRESOS_RESUMEN.map(([k]) => [k, x.valores?.egresos?.[k] ?? null])),
     egresosTotal: t('egresos'), eco: t('resultadoEconomico'),
     pasivo: t('pasivo'), dividendos: t('dividendos'), final: t('resultadoFinal'),

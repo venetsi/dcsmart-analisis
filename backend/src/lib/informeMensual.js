@@ -113,9 +113,10 @@ export function textoOk(clave, texto) {
   return t.length > max ? null : t
 }
 
-// Datos cargados a mano en rv_valor que usa el informe: pax, días e indicadores propios.
+// Datos cargados a mano en rv_valor que usa el informe: cubiertos (el pax del informe es el
+// dato 'cubiertos' del Reporte de Ventas, la misma fila), días e indicadores propios.
 export function datoIm(d) {
-  if (d === 'pax' || d === 'dias') return d
+  if (d === 'cubiertos' || d === 'dias') return d
   return typeof d === 'string' && /^ind:[a-z0-9_]{1,30}$/.test(d) ? d : null
 }
 

@@ -380,3 +380,58 @@ test('armarPorLocal devuelve un LocalMes por local con datos', () => {
   assert.deepEqual(Object.keys(p), ['L1'])
   assert.equal(p.L1.venta.valor, 1000)
 })
+
+// ── porMes: la serie resuelta que usa el Informe mensual ─────────────────────
+
+test('porMes: de enero del año anterior al mes, con venta, cubiertos y canales resueltos', () => {
+  const auto = {
+    meses: {
+      '2025-12': { venta: 900 },
+      '2026-09': { venta: 23850828, cubiertos: 3, cajas: 20, sinCubiertos: 19, ventaConCubiertos: 50000 },
+    },
+    canales: { '2025-12': [{ nombre: 'Rappi', valor: 100, delivery: true }], '2026-09': [] },
+  }
+  const l = armarLocal({ local: 'TOGNIS-CAFE', mes: '2026-09', auto, valores: [], cierres: [] })
+  const meses = Object.keys(l.porMes)
+  assert.equal(meses[0], '2025-01')
+  assert.equal(meses.at(-1), '2026-09')
+  assert.equal(meses.length, 21)
+  // Togni's Café sep-26: 1 de 20 cajas informó cubiertos → falta (no 3), con la pista.
+  const sep = l.porMes['2026-09']
+  assert.equal(sep.cubiertos.valor, null)
+  assert.equal(sep.cubiertos.fuente, 'falta')
+  assert.deepEqual(sep.cubiertos.parcial, { valor: 3, cajas: 20, sin: 19 })
+  assert.equal(sep.venta.valor, 23850828)
+  // Igual que lo que muestra el Reporte de Ventas para su mes.
+  assert.deepEqual(sep.cubiertos, l.cubiertos)
+  assert.deepEqual(sep.canales, l.canales)
+  // Diciembre del año anterior: venta y canales resueltos, Local calculado.
+  const dic = l.porMes['2025-12']
+  assert.equal(dic.venta.valor, 900)
+  assert.deepEqual(dic.canales.map((c) => [c.nombre, c.valor]), [['Rappi', 100], ['Local', 800]])
+  // Un mes sin nada: falta, no 0.
+  assert.equal(l.porMes['2025-05'].venta.valor, null)
+  assert.equal(l.porMes['2025-05'].cubiertos.valor, null)
+})
+
+test('porMes: cubiertos y venta cargados a mano (mano > auto) y mes cerrado (cerrado > auto)', () => {
+  const auto = { meses: { '2026-09': { venta: 1000, cubiertos: 3, cajas: 20, sinCubiertos: 19 }, '2025-12': { venta: 900 } }, canales: {} }
+  const valores = [
+    { local: 'X', mes: '2026-09', dato: 'cubiertos', valor: 410, original: null, actualizado_por: 'ana@dcsmart.app' },
+    { local: 'X', mes: '2025-12', dato: 'venta', valor: 950, original: 900 },
+  ]
+  const cierres = [{ mes: '2026-08', origen: 'reporte', snapshot: { locales: { X: { venta: 700, cubiertos: 70, canales: { Rappi: 100, Local: 600 } } } } }]
+  const l = armarLocal({ local: 'X', mes: '2026-09', auto, valores, cierres })
+  assert.deepEqual([l.porMes['2026-09'].cubiertos.valor, l.porMes['2026-09'].cubiertos.fuente], [410, 'mano'])
+  assert.equal(l.porMes['2026-09'].cubiertos.por, 'ana@dcsmart.app')
+  assert.deepEqual([l.porMes['2025-12'].venta.valor, l.porMes['2025-12'].venta.fuente], [950, 'mano'])
+  const ago = l.porMes['2026-08']
+  assert.deepEqual([ago.venta.valor, ago.venta.fuente, ago.cubiertos.valor, ago.cubiertos.fuente], [700, 'cerrado', 70, 'cerrado'])
+  assert.deepEqual(ago.canales.map((c) => [c.nombre, c.valor, c.fuente]), [['Rappi', 100, 'cerrado'], ['Local', 600, 'cerrado']])
+})
+
+test('porMes no entra en la foto del cierre del Reporte de Ventas', () => {
+  const l = armarLocal({ local: 'X', mes: '2026-09', auto: { meses: { '2026-09': { venta: 100, cubiertos: 10 } }, canales: {} }, valores: [], cierres: [] })
+  const r = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: l }, hoy: HOY })
+  assert.deepEqual(Object.keys(snapshotDe(r).locales.X).sort(), ['canales', 'cubiertos', 'delivery', 'ordenes', 'tickets', 'venta'])
+})

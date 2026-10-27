@@ -1,18 +1,17 @@
 // Motor del Informe Mensual nuevo (por cliente). Lógica pura, sin React ni DOM.
 //
 // Arma, a partir de la respuesta de GET /api/informe-mensual/:id (`im`) y del
-// Reporte de Ventas del mismo cliente (`rv` = armarReporte, `rvData` = la
-// respuesta cruda de /api/reporte-ventas/:id), el P&L de cada local para cada
-// mes del año del informe y del año anterior, el acumulado y el consolidado
-// del grupo. Cada P&L de un mes sale de `construirInforme` (lib/informe.js):
-// acá solo se le arma la entrada (ventas por canal, líneas cargadas, pax/días)
-// y se completa la salida.
+// Reporte de Ventas del mismo cliente (`rv` = armarReporte; de cada local se usa
+// `porMes`, la venta, los canales y los cubiertos ya resueltos por el RV), el P&L
+// de cada local para cada mes del año del informe y del año anterior, el
+// acumulado y el consolidado del grupo. Cada P&L de un mes sale de
+// `construirInforme` (lib/informe.js): acá solo se le arma la entrada (ventas
+// por canal, líneas cargadas, pax/días) y se completa la salida.
 //
 // Regla de oro (como en el Reporte de Ventas): lo que no está es null, nunca
 // 0. Un mes sin ventas ni gastos es null; un % sin base es null.
 
 import { construirInforme, sumarValores, armarResumen, claveLinea, SECCIONES, SECCION, EGRESOS_RESUMEN } from './informe.js'
-import { autoDeLocal } from './reporteVentas.js'
 
 const LOCAL = 'Local' // el canal que queda como resto (igual que en lib/reporteVentas.js)
 
@@ -69,51 +68,56 @@ export function datosDeLineas(lineas = [], local, mes) {
   return { ajustes, manuales }
 }
 
-// Venta del local en un mes que no es el del informe: la del histórico del
-// Reporte de Ventas (resuelve cierres y cargas a mano), o lo automático crudo.
-function ventaDelMes(rvLocal, rvAuto, mes) {
-  const hist = rvLocal?.historico || []
-  const h = hist.find((x) => x.mes === mes)
-  if (h) return num(h.venta?.valor)
-  const ant = hist.find((x) => mesAnioAnterior(x.mes) === mes)
-  if (ant && ant.anterior != null) return num(ant.anterior)
-  const a = rvAuto?.meses?.[mes]
-  const v = num(a?.venta)
-  return v === 0 && n0(a?.cajas) > 0 ? null : v // venta 0 con cajas = falta (como el RV)
-}
-
-// Líneas de la sección Ventas del P&L: una por canal. "Local" (el resto) lleva
-// el efectivo de las cajas como columna 2; los demás canales van en la 1.
-//   mes del informe: canales resueltos del Reporte de Ventas (rvLocal.canales);
-//   otros meses: venta del histórico y canales automáticos (rvAuto.canales[mes]).
+// Líneas de la sección Ventas del P&L de un mes: una por canal, con la venta y
+// los canales ya resueltos por el Reporte de Ventas para ese mes (rvMes =
+// rvLocal.porMes[mes]: cierre > carga a mano > automático), en cualquier mes
+// del rango, así los dos reportes muestran los mismos números. "Local" (el
+// resto) lleva el efectivo de las cajas como columna 2; los demás canales van en la 1.
 // Sin venta → { lineas: [] }. `faltan`: canales sin valor (su venta queda en Local).
-export function ventasDeLocal({ rvLocal, rvAuto, efectivo, mes, esMesInforme } = {}) {
+// `localNegativo`: los canales suman más que la venta.
+export function ventasDeLocal({ rvMes, efectivo } = {}) {
   const ef = n0(efectivo)
   const faltan = []
   const otros = []
-  let total
+  const total = num(rvMes?.venta?.valor)
   let local = null
-  if (esMesInforme) {
-    total = num(rvLocal?.venta?.valor)
-    for (const c of rvLocal?.canales || []) {
-      if (c.nombre === LOCAL) local = num(c.valor)
-      else if (num(c.valor) == null) faltan.push(c.nombre)
-      else otros.push({ canal: c.nombre, total: num(c.valor) })
-    }
-  } else {
-    total = ventaDelMes(rvLocal, rvAuto, mes)
-    for (const c of rvAuto?.canales?.[mes] || []) {
-      if (c.nombre !== LOCAL && num(c.valor) != null) otros.push({ canal: c.nombre, total: num(c.valor) })
-    }
+  for (const c of rvMes?.canales || []) {
+    if (c.nombre === LOCAL) local = num(c.valor)
+    else if (num(c.valor) == null) faltan.push(c.nombre)
+    else otros.push({ canal: c.nombre, total: num(c.valor) })
   }
-  if (total == null) return { lineas: [], faltan }
+  if (total == null) return { lineas: [], faltan, localNegativo: false }
   if (local == null) local = r2(total - otros.reduce((t, c) => t + c.total, 0))
 
   const lineas = []
   if (local !== 0 || ef !== 0) lineas.push({ canal: LOCAL, total: local, col1: r2(local - ef), col2: ef })
   for (const c of otros) if (c.total !== 0) lineas.push({ canal: c.canal, total: c.total, col1: c.total, col2: 0 })
-  return { lineas, faltan }
+  return { lineas, faltan, localNegativo: local < 0 }
 }
+
+// Avisos de los cubiertos del mes (el pax del informe = los cubiertos del Reporte de Ventas).
+function avisosCubiertos(cub, pax) {
+  const DONDE = 'Cargalos en la hoja de indicadores (se guardan también en el Reporte de Ventas).'
+  if (pax == null) {
+    const p = cub?.parcial
+    const informaron = num(p?.cajas) != null && num(p?.sin) != null ? p.cajas - p.sin : null
+    return [{
+      tipo: 'cubiertos',
+      texto: informaron != null
+        ? `Faltan los cubiertos del mes: solo ${informaron} de ${p.cajas} cajas los informaron. ${DONDE}`
+        : `Faltan los cubiertos del mes. ${DONDE}`,
+    }]
+  }
+  const sin = num(cub?.sinInformar)
+  if (cub?.fuente === 'auto' && sin > 0) {
+    return [{ tipo: 'cubiertos', texto: `${sin} ${sin === 1 ? 'caja no informó' : 'cajas no informaron'} cubiertos: el promedio por cubierto puede quedar alto. Si hace falta, corregilos en la hoja de indicadores.` }]
+  }
+  return []
+}
+
+// ¿Hay CMV o sueldos en el mes? Sin nada cargado (todo en 0) es un dato que falta, no 0%.
+const hayCmv = (valores) => ['alimentos', 'bebidas', 'movstock'].some((k) => n0(valores?.cmv?.[k]) !== 0)
+const hayLabor = (valores) => n0(valores?.egresos?.labor) !== 0
 
 // ── Salida del motor ─────────────────────────────────────────────────────────
 
@@ -157,11 +161,14 @@ function combinarBases(lista) {
 // Indicadores del mes, del acumulado o del grupo sin ceros inventados: sin
 // venta, la venta y todo lo que se mide contra ella es null; un promedio sin
 // base es null. Prom. pax = venta del canal Local / pax (como el Canva).
+// Sin CMV o sin sueldos cargados, CMV / Labor (y su %) son null, no 0%; el
+// resultado se calcula igual (lo que falta se avisa en el editor).
 export function indicadoresDe(valores, bases = {}) {
   const venta = num(bases.venta)
-  const cmv = n0(valores?.cmv?.alimentos) + n0(valores?.cmv?.bebidas) + n0(valores?.cmv?.movstock)
+  const cmv = hayCmv(valores) ? n0(valores?.cmv?.alimentos) + n0(valores?.cmv?.bebidas) + n0(valores?.cmv?.movstock) : null
+  const labor = hayLabor(valores) ? n0(valores?.egresos?.labor) : null
   const egresos = Object.values(valores?.egresos || {}).reduce((t, x) => t + n0(x), 0)
-  const eerr = venta == null ? null : venta - cmv - egresos
+  const eerr = venta == null ? null : venta - n0(cmv) - egresos
   const rf = eerr == null ? null : eerr - n0(valores?.pasivo) - n0(valores?.dividendos)
   const prom = (p) => (p ? dividir(p.num, p.den) : null)
   return {
@@ -169,7 +176,7 @@ export function indicadoresDe(valores, bases = {}) {
     promPax: prom(bases.parPax),
     promDias: prom(bases.parDias),
     cmv, cmvPct: pct(cmv, venta),
-    laborPct: pct(n0(valores?.egresos?.labor), venta),
+    labor, laborPct: pct(labor, venta),
     eerr, eerrPct: pct(eerr, venta),
     rf, rfPct: pct(rf, venta),
   }
@@ -265,8 +272,9 @@ function desdeFoto({ local, mes, foto }) {
 const cierreDe = (im, mes) => (im.cierres || []).find((c) => c.mes === mes && c.cerrado !== false)
 const valorMano = (im, local, mes, dato) => num((im.valores || []).find((v) => v.local === local && v.mes === mes && v.dato === dato)?.valor)
 
-// P&L de un local en un mes. `rv` = { rvLocal: LocalMes del Reporte de Ventas, rvAuto: autoDeLocal(...) }.
+// P&L de un local en un mes. `rv` = { rvLocal: LocalMes del Reporte de Ventas (con porMes) }.
 //   cerrado → la foto de im_cierre; abierto → construirInforme con gestión + líneas + pax/días.
+//   Venta, canales y pax (= cubiertos) salen de rvLocal.porMes[mes], resueltos por el RV.
 //   null si el mes no tiene ventas ni gastos (ni nada cargado a mano).
 export function pylMes({ local, mes, im, rv = {} }) {
   const cierre = cierreDe(im, mes)
@@ -276,15 +284,18 @@ export function pylMes({ local, mes, im, rv = {} }) {
   }
 
   const a = im.auto?.[local]?.[mes] || {}
-  const ventas = ventasDeLocal({ rvLocal: rv.rvLocal, rvAuto: rv.rvAuto, efectivo: a.efectivo, mes, esMesInforme: mes === im.mes })
+  const rvMes = rv.rvLocal?.porMes?.[mes]
+  const ventas = ventasDeLocal({ rvMes, efectivo: a.efectivo })
   const gastos = (a.gastos || []).filter((x) => n0(x.total) !== 0)
   const datos = datosDeLineas(im.lineas, local, mes)
   if (!ventas.lineas.length && !gastos.length && !datos.manuales.length && !Object.keys(datos.ajustes).length) return null
 
-  const pax = valorMano(im, local, mes, 'pax')
+  // Pax = los cubiertos resueltos del Reporte de Ventas (el mismo dato en los dos reportes).
+  const cub = rvMes?.cubiertos
+  const pax = positivo(cub?.valor)
   const dias = valorMano(im, local, mes, 'dias')
   const entrada = (manuales) => ({
-    auto: { ventas: { lineas: ventas.lineas, dias: a.dias, comensales: a.pax }, gastos, cajaGastos: a.cajaGastos },
+    auto: { ventas: { lineas: ventas.lineas, dias: a.dias, comensales: null }, gastos, cajaGastos: a.cajaGastos },
     reglas: im.reglas || [],
     datos: { ajustes: datos.ajustes, manuales, ...(pax != null ? { pax } : {}), ...(dias != null ? { dias } : {}) },
   })
@@ -331,6 +342,12 @@ export function pylMes({ local, mes, im, rv = {} }) {
   const avisos = []
   if (!ventas.lineas.length) avisos.push({ tipo: 'venta', texto: 'Falta la venta del mes en el Reporte de Ventas.' })
   if (ventas.faltan.length) avisos.push({ tipo: 'canal', texto: `Sin valor en el Reporte de Ventas: ${ventas.faltan.join(', ')}. Su venta quedó dentro de Local.` })
+  if (ventas.localNegativo) avisos.push({ tipo: 'canal', texto: 'Los canales suman más que la venta del mes: Local queda negativo. Revisalo en el Reporte de Ventas.' })
+  if (ventas.lineas.length) {
+    avisos.push(...avisosCubiertos(cub, pax))
+    if (!hayCmv(inf.valores)) avisos.push({ tipo: 'cmv', texto: 'Falta cargar el CMV del mes: no hay compras de mercadería en gestión ni cargadas a mano. CMV sale "—" en el informe.' })
+    if (!hayLabor(inf.valores)) avisos.push({ tipo: 'labor', texto: 'Faltan cargar los sueldos del mes: Labor sale "—" en el informe y el resultado no los descuenta.' })
+  }
   return completar(inf, { local, mes, cerrado: false, editadoEnLineas, avisos })
 }
 
@@ -392,7 +409,7 @@ function consolidar(mes, lista) {
 
 // Todo lo que las hojas necesitan para el cliente y el mes. Ver la forma de
 // `Informe` en el reporte de la Task 4 (.superpowers/sdd/...).
-export function armarInformeMensual({ im, rv, rvData, mes }) {
+export function armarInformeMensual({ im, rv, mes }) {
   mes = mes || im.mes
   const cliente = im.cliente || {}
   const nombresLocales = cliente.locales?.length ? cliente.locales : Object.keys(im.auto || {})
@@ -404,8 +421,7 @@ export function armarInformeMensual({ im, rv, rvData, mes }) {
   const locales = nombresLocales.map((local) => {
     const nombre = cliente.nombres?.[local] || local
     const rvLocal = rv?.locales?.find((l) => l.local === local) || null
-    const rvAuto = rvData?.auto ? autoDeLocal({ reglas: [], ...rvData }, local) : null
-    const calc = (m) => pylMes({ local, mes: m, im, rv: { rvLocal, rvAuto } })
+    const calc = (m) => pylMes({ local, mes: m, im, rv: { rvLocal } })
     const porMes = Object.fromEntries(meses.map((m) => [m, calc(m)]))
     const porMesAnt = Object.fromEntries(mesesAnt.map((m) => [m, calc(m)]))
     const mesAnterior = previo in porMes ? porMes[previo] : calc(previo)
@@ -762,18 +778,20 @@ export function resumenDe(informe, local) {
     }
   }
   const ind = (k) => (m) => m.indicadores?.[k]
+  // Sin CMV cargado en el mes, sus partes tampoco son un dato (no "$ 0").
+  const parteCmv = (k) => (m) => (m.indicadores?.cmv == null ? null : m.valores?.cmv?.[k])
   filas.push(
     fila('venta', 'Venta', 'resultado', ind('venta')),
     fila('dias', 'Días de venta', 'resultado', ind('dias'), { formato: 'numero' }),
     fila('pax', 'Cubiertos', 'resultado', ind('pax'), { formato: 'numero' }),
     fila('prom_pax', 'Promedio por cubierto', 'resultado', ind('promPax')),
     fila('cmv', 'CMV general', 'costo', ind('cmv'), { conPct: true }),
-    fila('cmv_alimentos', 'CMV alimentos', 'costo', (m) => m.valores?.cmv?.alimentos, { conPct: true }),
-    fila('cmv_bebidas', 'CMV bebidas', 'costo', (m) => m.valores?.cmv?.bebidas, { conPct: true }),
-    fila('cmv_movstock', 'Mov. de stock', 'costo', (m) => m.valores?.cmv?.movstock, { conPct: true }),
+    fila('cmv_alimentos', 'CMV alimentos', 'costo', parteCmv('alimentos'), { conPct: true }),
+    fila('cmv_bebidas', 'CMV bebidas', 'costo', parteCmv('bebidas'), { conPct: true }),
+    fila('cmv_movstock', 'Mov. de stock', 'costo', parteCmv('movstock'), { conPct: true }),
   )
   for (const [k, titulo] of EGRESOS_RESUMEN) {
-    const f = fila(k, titulo, 'costo', (m) => m.valores?.egresos?.[k], { conPct: true })
+    const f = fila(k, titulo, 'costo', k === 'labor' ? ind('labor') : (m) => m.valores?.egresos?.[k], { conPct: true })
     if (f.actual || f.anterior) filas.push(f) // solo los egresos con dato en alguno de los dos meses
   }
   filas.push(

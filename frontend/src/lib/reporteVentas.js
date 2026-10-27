@@ -159,6 +159,10 @@ function mesPrevio(mes) {
   const [a, m] = mes.split('-').map(Number)
   return m === 1 ? mesDe(a - 1, 12) : mesDe(a, m - 1)
 }
+function mesSiguiente(mes) {
+  const [a, m] = mes.split('-').map(Number)
+  return m === 12 ? mesDe(a + 1, 1) : mesDe(a, m + 1)
+}
 function mesAnioAnterior(mes) {
   const [a, m] = mes.split('-').map(Number)
   return mesDe(a - 1, m)
@@ -357,11 +361,21 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
   const localCanal = canales[canales.length - 1]
   if (localCanal.valor != null && localCanal.valor < 0) alertas.push(`${local}: Local queda negativo`)
 
+  // Serie resuelta mes a mes (enero del año anterior .. mes, el rango que trae la API)
+  // con las mismas reglas que el reporte: cerrado > mano > auto > falta, y cubiertos
+  // en falta si los informó menos de la mitad de las cajas. La usa el Informe mensual
+  // para que los dos reportes muestren el mismo número. No entra en la foto del cierre.
+  const porMes = {}
+  for (let m = mesDe(anio - 1, 1); m <= mes; m = mesSiguiente(m)) {
+    const venta = datoBase(m, 'venta')
+    porMes[m] = { mes: m, venta, cubiertos: datoBase(m, 'cubiertos'), canales: m === mes ? canales : canalesDe(m, venta) }
+  }
+
   return {
     local,
     venta: actual.venta, cubiertos: actual.cubiertos, ordenes: actual.ordenes,
     promCubierto: actual.promCubierto, promOrden: actual.promOrden,
-    canales, historico, delivery, acumulado, alertas,
+    canales, historico, delivery, acumulado, alertas, porMes,
   }
 }
 

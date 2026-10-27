@@ -156,7 +156,7 @@ export default function InformeMensualPage() {
     if (!datos) return null
     const { im, rvData } = datos
     const rv = armarReporte({ cliente: rvData.cliente, mes, porLocal: armarPorLocal(rvData), ipc: rvData.ipc || {}, observaciones: {} })
-    return armarInformeMensual({ im, rv, rvData, mes })
+    return armarInformeMensual({ im, rv, mes })
   }, [datos, mes])
   const paginas = useMemo(() => (informe ? paginasDe(informe) : []), [informe])
   const hojas = useMemo(() => (informe ? hojasDe(informe) : []), [informe])

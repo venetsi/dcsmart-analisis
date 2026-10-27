@@ -90,10 +90,11 @@ export default async function (fastify) {
     // BigQuery no acepta un arreglo vacío como parámetro: sin locales no hay nada que consultar.
     const bq = cli.locales.length ? (q) => fastify.bq.query(q) : async () => [[]]
     const [[ventasRows], [gastosRows], [cajaRows], hojas, lineas, textos, valores, observaciones, cierres, reglas] = await Promise.all([
-      // Efectivo (columna 2 del P&L), PAX y días con venta por local y mes.
+      // Efectivo (columna 2 del P&L) y días con venta por local y mes. El pax del informe
+      // no sale de acá: son los cubiertos resueltos del Reporte de Ventas.
       bq({
         query: `SELECT local, FORMAT_DATE('%Y-%m', fecha_dia) mes,
-                       CAST(ROUND(SUM(efectivo)) AS INT64) efectivo, SUM(comensales) pax,
+                       CAST(ROUND(SUM(efectivo)) AS INT64) efectivo,
                        COUNT(DISTINCT IF(total > 0, fecha_dia, NULL)) dias
                   FROM ${DS}.vw_cajas WHERE ${where} AND fecha_dia BETWEEN @desde AND @hasta GROUP BY 1, 2`,
         params
@@ -126,7 +127,7 @@ export default async function (fastify) {
                  ORDER BY mes, local, clave`, [id, mDesde, mes]),
       db.query(`SELECT local, mes, dato, valor, original, actualizado_por, actualizado_at
                   FROM rv_valor WHERE cliente_id = $1 AND mes >= $2 AND mes <= $3
-                   AND (dato IN ('pax', 'dias') OR dato LIKE 'ind:%')
+                   AND (dato = 'dias' OR dato LIKE 'ind:%')
                  ORDER BY local, mes, dato`, [id, mDesde, mes]),
       db.query(`SELECT pagina, texto, actualizado_por, actualizado_at FROM rv_observacion
                  WHERE cliente_id = $1 AND mes = $2 AND reporte = 'informe'`, [id, mes]),
@@ -152,11 +153,11 @@ export default async function (fastify) {
     // auto[local][mes] para todos los meses del rango, aunque no tengan datos.
     const meses = mesesDe(desde, hasta)
     const auto = Object.fromEntries(cli.locales.map((l) => [l, Object.fromEntries(
-      meses.map((m) => [m, { efectivo: 0, dias: 0, pax: 0, gastos: [], cajaGastos: 0 }]))]))
+      meses.map((m) => [m, { efectivo: 0, dias: 0, gastos: [], cajaGastos: 0 }]))]))
     for (const r of plainRows(ventasRows)) {
       const a = auto[r.local]?.[r.mes]
       if (!a) continue
-      a.efectivo = num(r.efectivo); a.dias = num(r.dias); a.pax = num(r.pax)
+      a.efectivo = num(r.efectivo); a.dias = num(r.dias)
     }
     for (const r of plainRows(gastosRows)) {
       const a = auto[r.local]?.[r.mes]
@@ -261,7 +262,9 @@ export default async function (fastify) {
     } finally { c.release() }
   })
 
-  // Dato cargado a mano (pax, días o indicador propio). valor null = restaurar.
+  // Dato cargado a mano (cubiertos, días o indicador propio). valor null = restaurar.
+  // Los cubiertos son la misma fila de rv_valor que lee el Reporte de Ventas: el informe y el
+  // RV muestran el mismo número. Acá se respeta el cierre del informe (409), no el del RV.
   fastify.put('/:id/valor', pre, async (req, reply) => {
     const id = idDe(req)
     const b = req.body || {}

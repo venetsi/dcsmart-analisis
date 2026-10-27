@@ -65,7 +65,9 @@ test('textoOk', () => {
 })
 test('datoIm', () => {
   assert.equal(datoIm('ind:r50'), 'ind:r50')
-  assert.equal(datoIm('pax'), 'pax')
+  // El pax del informe es el dato 'cubiertos' del Reporte de Ventas (la misma fila de rv_valor).
+  assert.equal(datoIm('cubiertos'), 'cubiertos')
+  assert.equal(datoIm('pax'), null)
   assert.equal(datoIm('dias'), 'dias')
   assert.equal(datoIm('venta'), null)
   assert.equal(datoIm('ind:'), null)

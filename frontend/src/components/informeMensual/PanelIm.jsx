@@ -201,6 +201,9 @@ function PanelValores({ informe, im, pagina, interno, cerrado, ocupado, acciones
   )
 }
 
+// Avisos que se muestran con los indicadores (cubiertos, CMV y sueldos que faltan).
+const AVISOS_VALORES = new Set(['cubiertos', 'cmv', 'labor'])
+
 const claveIndicador = (nombre, usadas) => {
   const base = nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 26) || 'indicador'
@@ -250,6 +253,57 @@ function ValoresLocal({ l, informe, im, interno, cerrado, ocupado, acciones, onE
     )
   }
 
+  // Cubiertos (pax): el mismo dato del Reporte de Ventas (rv_valor 'cubiertos'), resuelto
+  // como allá: cierre del RV, carga a mano o gestión; si los informó menos de la mitad de
+  // las cajas, falta. Con el informe cerrado se ve el de su foto.
+  const filaCubiertos = () => {
+    const etiqueta = 'Cubiertos (pax)'
+    const cub = l.rv?.porMes?.[mes]?.cubiertos || null
+    const fuente = cerrado ? 'foto' : cub?.fuente === 'mano' || cub?.fuente === 'auto' || cub?.fuente === 'cerrado' ? cub.fuente : 'falta'
+    const valor = cerrado ? num(l.meses?.[mes]?.valores?.pax) : num(cub?.valor)
+    // Lo que queda debajo de una carga a mano: lo de gestión o lo del cierre del RV.
+    const base = cub?.fuente === 'mano' ? num(cub.original) : cub?.fuente === 'auto' || cub?.fuente === 'cerrado' ? num(cub.valor) : null
+    const guardar = (v) => acciones.valor({ local: l.local, dato: 'cubiertos', valor: v, original: base })
+    const p = cub?.parcial
+    const informaron = num(p?.cajas) != null && num(p?.sin) != null ? p.cajas - p.sin : null
+    return (
+      <tr key="cubiertos">
+        <td className="rve-dato">{etiqueta}</td>
+        <td className="rve-valor">
+          {editable
+            ? <CampoNum valor={valor} tieneCorreccion={fuente === 'mano'} escapeRestaura={false} disabled={ocupado} etiqueta={`${etiqueta} de ${l.nombre}`}
+                onGuardar={guardar} onRestaurar={() => guardar(null)} onError={onError} placeholder="Falta cargar" />
+            : <span>{valor == null ? '—' : fmtNumIm(valor)}</span>}
+        </td>
+        <td className="rve-src">
+          <div className="rve-fuente">
+            {fuente === 'mano' && <Etiqueta tipo="mano">A MANO</Etiqueta>}
+            {fuente === 'auto' && <Etiqueta tipo="auto">GESTIÓN</Etiqueta>}
+            {fuente === 'cerrado' && <Etiqueta tipo="cerrado">REPORTE DE VENTAS CERRADO</Etiqueta>}
+            {fuente === 'foto' && <Etiqueta tipo="cerrado">CIERRE DEL INFORME</Etiqueta>}
+            {fuente === 'falta' && <Etiqueta tipo="falta">FALTA CARGAR</Etiqueta>}
+            {fuente === 'mano' && base != null && <span className="rve-orig" title="Valor de gestión">{fmtNumIm(base)}</span>}
+            {fuente === 'mano' && cub?.por && <small>por {cub.por}{cub.at ? ` el ${fechaCorta(cub.at)}` : ''}</small>}
+            {fuente === 'falta' && p && (
+              <small className="rve-parcial">
+                {informaron != null ? `Solo ${fmtNumIm(informaron)} de ${fmtNumIm(p.cajas)} cajas los informaron (suman ${fmtNumIm(p.valor)}).` : 'Las cajas no los informaron.'}
+              </small>
+            )}
+            {fuente === 'auto' && cub?.sinInformar > 0 && (
+              <small>{fmtNumIm(cub.sinInformar)} {cub.sinInformar === 1 ? 'caja no los informó' : 'cajas no los informaron'}: el promedio por cubierto puede quedar alto</small>
+            )}
+            {fuente === 'foto' && <small>Si después se corrigen en el Reporte de Ventas, este mes no cambia hasta reabrirlo.</small>}
+          </div>
+          {editable && !ocupado && fuente === 'mano' && (
+            <button type="button" className="rve-volver" onClick={() => guardar(null)}>{base != null ? 'Volver al de gestión' : 'Quitar'}</button>
+          )}
+        </td>
+      </tr>
+    )
+  }
+
+  const avisos = (informe.avisos || []).filter((a) => a.local === l.local && AVISOS_VALORES.has(a.tipo))
+
   const agregar = async (e) => {
     e.preventDefault()
     const n = nombre.trim()
@@ -264,14 +318,16 @@ function ValoresLocal({ l, informe, im, interno, cerrado, ocupado, acciones, onE
   return (
     <div className="ime-bloque">
       <div className="ime-local">{l.nombre}</div>
+      <Avisos lista={avisos} />
       <table className="rve-tabla">
         <thead><tr><th>Dato</th><th>{mesEnPalabrasIm(mes)}</th><th>De dónde sale</th></tr></thead>
         <tbody>
-          {fila({ dato: 'pax', etiqueta: 'Cubiertos (pax)', original: auto.pax })}
+          {filaCubiertos()}
           {fila({ dato: 'dias', etiqueta: 'Días de venta', original: auto.dias })}
           {propios.map((i) => fila({ dato: `ind:${i.clave}`, etiqueta: i.nombre, original: null, formatoNum: i.formato }))}
         </tbody>
       </table>
+      {editable && <Vacio texto="Los cubiertos son los mismos del Reporte de Ventas: si los corregís acá, también cambian allá." />}
       {interno && propios.length > 0 && (
         <div className="ime-propios">
           {propios.map((i) => (
@@ -308,7 +364,7 @@ function ValoresLocal({ l, informe, im, interno, cerrado, ocupado, acciones, onE
 
 // ── P&L: líneas del local ────────────────────────────────────────────────────
 
-const AVISOS_LINEAS = new Set(['otros', 'tipo', 'caja', 'venta', 'canal', 'sinDatos'])
+const AVISOS_LINEAS = new Set(['otros', 'tipo', 'caja', 'venta', 'canal', 'sinDatos', 'cmv', 'labor'])
 
 function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones, onError }) {
   const [localElegido, setLocalElegido] = useState(null)
@@ -480,6 +536,9 @@ function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones,
         return (
           <section key={s.key} className="ime-sec">
             <div className="ime-sec-cab"><span>{s.num} · {s.titulo}</span><span>{fmtPesosIm(d?.total || null)}</span></div>
+            {s.key === 'ventas' && editable && (
+              <Vacio texto="Una venta corregida acá cambia solo el informe, no el Reporte de Ventas. Para que los dos muestren lo mismo, corregila en el Reporte de Ventas." />
+            )}
             {d?.lineas?.length ? d.lineas.map(linea) : <Vacio texto="Sin líneas este mes." />}
           </section>
         )
