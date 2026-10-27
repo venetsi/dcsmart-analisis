@@ -10,7 +10,7 @@ import GroupSelectPage from './pages/GroupSelectPage.jsx'
 import InicioPage from './pages/InicioPage.jsx'
 import ResumenPage from './pages/ResumenPage.jsx'
 import PyLPage from './pages/PyLPage.jsx'
-import InformePage from './pages/InformePage.jsx'
+import InformeMensualPage from './pages/InformeMensualPage.jsx'
 import ReporteVentasPage from './pages/ReporteVentasPage.jsx'
 import CostoImpositivoPage from './pages/CostoImpositivoPage.jsx'
 import AdminUsersPage from './pages/AdminUsersPage.jsx'
@@ -78,7 +78,8 @@ export default function App() {
         <Route index element={<InicioPage />} />
         <Route path="dashboard" element={<ResumenPage />} />
         <Route path="pyl" element={<PyLPage />} />
-        <Route path="reporte-mensual" element={<InformePage />} />
+        <Route path="informe-mensual" element={<InformeMensualPage />} />
+        <Route path="reporte-mensual" element={<Navigate to="/informe-mensual" replace />} />
         <Route path="reporte-ventas" element={<ReporteVentasPage />} />
         <Route path="costo-impositivo" element={<CostoImpositivoPage />} />
         <Route
