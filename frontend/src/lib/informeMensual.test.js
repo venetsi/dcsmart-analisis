@@ -5,6 +5,7 @@ import { armarPorLocal, armarReporte, autoDeLocal } from './reporteVentas.js'
 import {
   datosDeLineas, ventasDeLocal, pylMes, armarInformeMensual, pct, fotoDeMes,
   HOJAS_DEFECTO, GRUPOS_SECCION, hojasDe, paginasDe, resumenDe, detalleDe, aperturaDe, cmvDe, cashflowDe, deudaDe, snapshotIm,
+  trasladoDeCorrecciones,
 } from './informeMensual.js'
 
 const HOY = new Date('2026-10-20T12:00:00')
@@ -592,4 +593,35 @@ test('snapshotIm: foto de cada local con fotoDeMes; cerrado con esa foto da los 
   const soloL1 = armarInformeMensual({ im, rv: rvDe(rvData), rvData, mes: MES })
   assert.equal(soloL1.locales[1].meses[MES], null)
   assert.deepEqual(Object.keys(snapshotIm(soloL1).locales), ['L1'])
+})
+
+test('trasladoDeCorrecciones: mover una categoría corregida no deja la corrección huérfana', () => {
+  const vieja = claveLinea('otros', 'Alarma')
+  const lineas = [
+    { id: '7', local: 'L1', mes: '2026-02', hoja: 'pyl', seccion: 'otros', concepto: 'Alarma', corrige: vieja, monto: 100, monto2: null, oculta: false, sub: null, orden: 0 },
+    { id: '8', local: 'L1', mes: '2026-01', hoja: 'pyl', seccion: 'otros', concepto: 'Alarma', corrige: vieja, monto: 90, monto2: null, oculta: false, sub: null, orden: 0 },
+    { id: '9', local: 'L2', mes: '2026-02', hoja: 'pyl', seccion: 'otros', concepto: 'Alarma', corrige: vieja, monto: 5, monto2: null, oculta: true, sub: null, orden: 0 },
+    { id: '10', local: 'L2', mes: '2026-02', hoja: 'pyl', seccion: 'alquiler', concepto: 'Alarma', corrige: claveLinea('alquiler', 'Alarma'), monto: 1, monto2: null, oculta: false, sub: null, orden: 0 },
+    { id: '11', local: 'L1', mes: '2026-02', hoja: 'pyl', seccion: 'otros', concepto: 'Otra', corrige: claveLinea('otros', 'Otra'), monto: 1, monto2: null, oculta: false, sub: null, orden: 0 },
+    { id: '12', local: null, mes: '2026-02', hoja: 'cashflow', seccion: 'pagar', concepto: 'Alarma', corrige: null, monto: 1 },
+  ]
+  // enero cerrado: la foto no cambia y la API no deja tocarlo
+  const ops = trasladoDeCorrecciones({ lineas, claveVieja: vieja, seccionNueva: 'alquiler', concepto: 'Alarma', mesesCerrados: new Set(['2026-01']) })
+  assert.deepEqual(ops, [
+    { linea: { id: 7, local: 'L1', mes: '2026-02', hoja: 'pyl', seccion: 'alquiler', concepto: 'Alarma', corrige: claveLinea('alquiler', 'Alarma'), monto: 100, monto2: null, oculta: false, sub: null, orden: 0 } },
+    // L2 ya tenía una corrección con la clave nueva: la vieja se borra
+    { borrar: 9 },
+  ])
+  // a "No va en el P&L": la línea desaparece, las correcciones se borran
+  assert.deepEqual(trasladoDeCorrecciones({ lineas, claveVieja: vieja, seccionNueva: 'excluido', concepto: 'Alarma', mesesCerrados: new Set() }),
+    [{ borrar: 7 }, { borrar: 8 }, { borrar: 9 }])
+  // al CMV: lleva el tipo de CMV; desde el CMV a otra sección: sin tipo
+  const aCmv = trasladoDeCorrecciones({ lineas: [lineas[0]], claveVieja: vieja, seccionNueva: 'cmv', concepto: 'Alarma', sub: 'bebidas', mesesCerrados: new Set() })
+  assert.equal(aCmv[0].linea.sub, 'bebidas')
+  assert.equal(aCmv[0].linea.corrige, claveLinea('cmv', 'Alarma'))
+  const desdeCmv = trasladoDeCorrecciones({
+    lineas: [{ ...lineas[0], seccion: 'cmv', corrige: claveLinea('cmv', 'Alarma'), sub: 'bebidas' }],
+    claveVieja: claveLinea('cmv', 'Alarma'), seccionNueva: 'otros', concepto: 'Alarma', mesesCerrados: new Set(),
+  })
+  assert.equal(desdeCmv[0].linea.sub, null)
 })

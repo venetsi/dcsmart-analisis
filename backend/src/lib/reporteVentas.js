@@ -91,9 +91,9 @@ export const okOrigenRegla = (valor) => typeof valor === 'string' && valor.trim(
 export const datoLibre = (dato) => dato === 'cubiertos' || dato === 'ordenes' || /^tickets:/.test(dato || '')
 
 // Observación de una hoja: texto de hasta OBS_MAX caracteres (vacío = borrarla).
-// pagina = el id de la hoja ('sintesis', 'mes:LOCAL', ...).
+// pagina = el id de la hoja ('sintesis', 'mes:LOCAL', 'pyl_acumulado:LOCAL:1', ...).
 export const OBS_MAX = 280
-export const paginaOk = (p) => typeof p === 'string' && /^[a-zA-Z]+(:[^\n]{1,60})?$/.test(p)
+export const paginaOk = (p) => typeof p === 'string' && /^[a-zA-Z][a-zA-Z_]*(:[^\n]{1,60})?$/.test(p)
 export function obsOk (v) {
   if (typeof v !== 'string') return null
   const t = v.replace(/\r\n?/g, '\n').trim()
