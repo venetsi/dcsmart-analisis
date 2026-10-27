@@ -140,3 +140,20 @@ test('formatos de mes', () => {
   assert.equal(mesCorto('2026-08'), '08-26')
   assert.equal(nombreMes('2026-08'), 'agosto')
 })
+
+test('ventas por canal: una línea automática por canal, corregible por su clave', () => {
+  const inf = construirInforme({
+    auto: { ventas: { lineas: [
+      { canal: 'Local', total: 1000, col1: 900, col2: 100 },
+      { canal: 'Rappi', total: 200, col1: 200, col2: 0 },
+      { canal: 'Eventos', total: 50, col1: 50, col2: 0 },
+    ], dias: 20, comensales: 40 }, gastos: [] },
+    datos: { ajustes: { [claveLinea('ventas', 'Rappi')]: { col1: 250 } } },
+  })
+  const v = inf.secciones.find((s) => s.key === 'ventas')
+  assert.deepEqual(v.lineas.map((l) => [l.concepto, l.origen, l.total]), [['Eventos', 'auto', 50], ['Local', 'auto', 1000], ['Rappi', 'auto', 250]])
+  assert.deepEqual(inf.totales.ventas, { total: 1300, col1: 1200, col2: 100 })
+  assert.equal(inf.valores.ventasEvento, 50)
+  assert.equal(inf.valores.ventasLocal, 1250)
+  assert.equal(inf.valores.pax, 40)
+})
