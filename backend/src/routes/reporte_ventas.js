@@ -10,7 +10,7 @@ import { crearLogosLocales } from '../lib/logosLocales.js'
 import { crearIpc } from '../lib/ipc.js'
 import {
   okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk, logosOk, snapshotOk, datoEnSnapshot, okOrigenRegla,
-  datoLibre, obsOk, paginaOk, ipcOk, OBS_MAX,
+  datoLibre, datoRestaurable, obsOk, paginaOk, ipcOk, OBS_MAX,
 } from '../lib/reporteVentas.js'
 
 const txt = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -164,7 +164,7 @@ export default async function (fastify) {
       db.query(`SELECT local, mes, dato, antes, despues, por, at FROM rv_valor_historial
                  WHERE cliente_id = $1 AND mes = $2 ORDER BY at DESC, id DESC LIMIT 200`, [id, mes]),
       db.query(`SELECT pagina, texto, actualizado_por, actualizado_at FROM rv_observacion
-                 WHERE cliente_id = $1 AND mes = $2`, [id, mes]),
+                 WHERE cliente_id = $1 AND mes = $2 AND reporte = 'ventas'`, [id, mes]),
       ipcDe(desde.slice(0, 7), mes),
     ])
 
@@ -262,7 +262,6 @@ export default async function (fastify) {
     } finally { c.release() }
   })
 
-  // Borra todas las correcciones del mes (queda en el historial).
   // Observación opcional de una hoja. texto vacío = borrarla. Se puede escribir aunque
   // el mes esté cerrado: es un comentario, no cambia ningún número.
   fastify.put('/:id/observacion', pre, async (req, reply) => {
@@ -273,11 +272,11 @@ export default async function (fastify) {
     if (texto === null) return reply.code(400).send({ error: `La observación puede tener hasta ${OBS_MAX} caracteres.` })
     if (!(await getCli(id))) return reply.code(404).send({ error: 'Cliente no encontrado' })
     if (!texto) {
-      await db.query('DELETE FROM rv_observacion WHERE cliente_id = $1 AND mes = $2 AND pagina = $3', [id, b.mes, b.pagina])
+      await db.query(`DELETE FROM rv_observacion WHERE cliente_id = $1 AND mes = $2 AND pagina = $3 AND reporte = 'ventas'`, [id, b.mes, b.pagina])
     } else {
       await db.query(
-        `INSERT INTO rv_observacion (cliente_id, mes, pagina, texto, actualizado_por) VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (cliente_id, mes, pagina)
+        `INSERT INTO rv_observacion (cliente_id, mes, pagina, reporte, texto, actualizado_por) VALUES ($1,$2,$3,'ventas',$4,$5)
+         ON CONFLICT (cliente_id, mes, pagina, reporte)
          DO UPDATE SET texto = EXCLUDED.texto, actualizado_por = EXCLUDED.actualizado_por, actualizado_at = now()`,
         [id, b.mes, b.pagina, texto, quien(req)])
     }
@@ -303,6 +302,8 @@ export default async function (fastify) {
     return { ok: true }
   })
 
+  // Borra las correcciones del mes que son del Reporte de Ventas (quedan en el historial).
+  // Los datos del Informe mensual que viven en rv_valor (días, indicadores 'ind:*') no se tocan.
   fastify.post('/:id/restaurar', pre, async (req, reply) => {
     const id = idDe(req)
     const mes = req.body?.mes
@@ -312,8 +313,10 @@ export default async function (fastify) {
     try {
       await c.query('BEGIN')
       if (await mesCerrado(c, id, mes)) { await c.query('ROLLBACK'); return reply.code(409).send({ error: MSG_CERRADO }) }
+      const datos = (await c.query('SELECT DISTINCT dato FROM rv_valor WHERE cliente_id = $1 AND mes = $2', [id, mes]))
+        .rows.map((r) => r.dato).filter(datoRestaurable)
       const del = await c.query(
-        'DELETE FROM rv_valor WHERE cliente_id = $1 AND mes = $2 RETURNING local, dato, valor', [id, mes])
+        'DELETE FROM rv_valor WHERE cliente_id = $1 AND mes = $2 AND dato = ANY($3::text[]) RETURNING local, dato, valor', [id, mes, datos])
       for (const r of del.rows) {
         await c.query(
           `INSERT INTO rv_valor_historial (cliente_id, local, mes, dato, antes, despues, por)

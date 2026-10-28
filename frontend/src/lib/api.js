@@ -79,14 +79,6 @@ export const api = {
   getReporteManualAnterior: (query) => request(`/reporte-manual/anterior${toQueryString(query)}`),
   putReporteManual: (body) => request('/reporte-manual', { method: 'PUT', body }),
 
-  // Informe mensual (detalle + resumen + presentación), ver routes/informe.js
-  getInforme: (query) => request(`/informe${toQueryString(query)}`),
-  guardarInforme: (body) => request('/informe', { method: 'PUT', body }),
-  cerrarInforme: (body) => request('/informe/cerrar', { method: 'POST', body }),
-  reabrirInforme: (body) => request('/informe/reabrir', { method: 'POST', body }),
-  guardarRegla: (body) => request('/informe/regla', { method: 'PUT', body }),
-  guardarLocalInforme: (body) => request('/informe/local', { method: 'PUT', body }),
-
   // Reporte de Ventas mensual por cliente (ver routes/reporte_ventas.js)
   rvClientes: (grupo) => request(`/reporte-ventas/clientes${toQueryString({ grupo })}`),
   rvGet: (id, mes) => request(`/reporte-ventas/${id}${toQueryString({ mes })}`),
@@ -100,6 +92,19 @@ export const api = {
   rvGuardarCliente: (id, body) => request(`/reporte-ventas/clientes/${id}`, { method: 'PUT', body }),
   rvPutRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'PUT', body }),
   rvDelRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'DELETE', body }),
+  // Informe Mensual
+  imClientes: (grupo) => request(`/informe-mensual/clientes${toQueryString({ grupo })}`),
+  imGet: (id, mes) => request(`/informe-mensual/${id}${toQueryString({ mes })}`),
+  imPutLinea: (id, body) => request(`/informe-mensual/${id}/linea`, { method: 'PUT', body }),
+  imDelLinea: (id, lineaId) => request(`/informe-mensual/${id}/linea/${lineaId}`, { method: 'DELETE' }),
+  imPutValor: (id, body) => request(`/informe-mensual/${id}/valor`, { method: 'PUT', body }),
+  imPutTexto: (id, body) => request(`/informe-mensual/${id}/texto`, { method: 'PUT', body }),
+  imPutObs: (id, body) => request(`/informe-mensual/${id}/observacion`, { method: 'PUT', body }),
+  imPutHojas: (id, body) => request(`/informe-mensual/${id}/hojas`, { method: 'PUT', body }),
+  imPutRegla: (body) => request('/informe-mensual/regla', { method: 'PUT', body }),
+  imPutRazonSocial: (id, body) => request(`/informe-mensual/clientes/${id}/razon-social`, { method: 'PUT', body }),
+  imCerrar: (id, mes, snapshot) => request(`/informe-mensual/${id}/cerrar`, { method: 'POST', body: { mes, snapshot } }),
+  imReabrir: (id, mes) => request(`/informe-mensual/${id}/reabrir`, { method: 'POST', body: { mes } }),
 
   // periodo = { mes } o { desde, hasta }
   ciGet: (grupo, periodo) => request(`/costo-impositivo${toQueryString({ grupo, ...periodo })}`),

@@ -159,6 +159,10 @@ function mesPrevio(mes) {
   const [a, m] = mes.split('-').map(Number)
   return m === 1 ? mesDe(a - 1, 12) : mesDe(a, m - 1)
 }
+function mesSiguiente(mes) {
+  const [a, m] = mes.split('-').map(Number)
+  return m === 12 ? mesDe(a + 1, 1) : mesDe(a, m + 1)
+}
 function mesAnioAnterior(mes) {
   const [a, m] = mes.split('-').map(Number)
   return mesDe(a - 1, m)
@@ -357,11 +361,21 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
   const localCanal = canales[canales.length - 1]
   if (localCanal.valor != null && localCanal.valor < 0) alertas.push(`${local}: Local queda negativo`)
 
+  // Serie resuelta mes a mes (enero del año anterior .. mes, el rango que trae la API)
+  // con las mismas reglas que el reporte: cerrado > mano > auto > falta, y cubiertos
+  // en falta si los informó menos de la mitad de las cajas. La usa el Informe mensual
+  // para que los dos reportes muestren el mismo número. No entra en la foto del cierre.
+  const porMes = {}
+  for (let m = mesDe(anio - 1, 1); m <= mes; m = mesSiguiente(m)) {
+    const venta = datoBase(m, 'venta')
+    porMes[m] = { mes: m, venta, cubiertos: datoBase(m, 'cubiertos'), canales: m === mes ? canales : canalesDe(m, venta) }
+  }
+
   return {
     local,
     venta: actual.venta, cubiertos: actual.cubiertos, ordenes: actual.ordenes,
     promCubierto: actual.promCubierto, promOrden: actual.promOrden,
-    canales, historico, delivery, acumulado, alertas,
+    canales, historico, delivery, acumulado, alertas, porMes,
   }
 }
 
@@ -475,4 +489,42 @@ export function snapshotDe(reporte) {
     }
   }
   return { locales }
+}
+
+// Tickets de cada app y la venta de las líneas que los traen, como los espera armarLocal.
+export function ticketsDelMes(cantidades, reglas) {
+  const t = ticketsAuto({ cantidades, reglas })
+  return { tickets: t.tickets, ticketsBase: t.base }
+}
+
+// Datos de la API de un local → { meses, canales } con los canales automáticos de cada mes.
+// null si la API no trajo datos de ese local.
+export function autoDeLocal(data, local) {
+  const a = data.auto[local]
+  if (!a) return null
+  const reglas = data.reglas.filter((r) => r.local === local)
+  const meses = new Set([...Object.keys(a.detalles), ...Object.keys(a.cajasOrigen)])
+  const canales = {}
+  // Mayor a menor: el orden de BigQuery no es estable entre consultas.
+  for (const m of meses) {
+    canales[m] = canalesAuto({ detalles: a.detalles[m], cajasOrigen: a.cajasOrigen[m], reglas })
+      .sort((x, y) => (y.valor ?? 0) - (x.valor ?? 0) || x.nombre.localeCompare(y.nombre))
+  }
+  // Tickets de cada app: la cantidad de cobros que trae gestión, por mes.
+  const mesesAuto = { ...a.meses }
+  for (const [m, cantidades] of Object.entries(a.cantidades || {})) {
+    mesesAuto[m] = { ...mesesAuto[m], ...ticketsDelMes(cantidades, reglas) }
+  }
+  return { meses: mesesAuto, canales }
+}
+
+// Datos de la API → un LocalMes por local.
+export function armarPorLocal(data) {
+  const porLocal = {}
+  for (const local of data.cliente.locales) {
+    const auto = autoDeLocal(data, local)
+    if (!auto) continue
+    porLocal[local] = armarLocal({ local, mes: data.mes, auto, valores: data.valores, cierres: data.cierres })
+  }
+  return porLocal
 }

@@ -89,7 +89,7 @@ function IcoInicio() {
 export const TABLEROS = [
   { to: '/dashboard',       label: 'Dashboard',          sub: 'Ventas, pagos y CMV del período', Icon: IcoDashboard },
   { to: '/pyl',             label: 'P&L',                sub: 'Resultado mensual por rubro', Icon: IcoPyl },
-  { to: '/reporte-mensual', label: 'Informe Mensual',    sub: 'P&L, resumen y presentación del mes', Icon: IcoReporteMensual },
+  { to: '/informe-mensual', label: 'Informe mensual',    sub: 'P&L, gastos, cash flow y resumen del mes', Icon: IcoReporteMensual },
   { to: '/reporte-ventas',   label: 'Reporte de Ventas',  sub: 'Reporte mensual para el cliente, en PDF', Icon: IcoVentas },
   { to: '/costo-impositivo', label: 'Costo impositivo',   sub: 'IVA e IIBB a pagar e impuestos internos', Icon: IcoImpuestos },
 ]

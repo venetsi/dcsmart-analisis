@@ -90,10 +90,16 @@ export const okOrigenRegla = (valor) => typeof valor === 'string' && valor.trim(
 // cubiertos, órdenes y tickets de cada app. Lo corregido a mano le gana a la foto.
 export const datoLibre = (dato) => dato === 'cubiertos' || dato === 'ordenes' || /^tickets:/.test(dato || '')
 
+// Datos de rv_valor que son del Reporte de Ventas (los que "Restaurar originales" borra):
+// venta, cubiertos, órdenes, canales y tickets. Los del Informe mensual que viven en la
+// misma tabla (días, indicadores propios 'ind:*') no se tocan desde el RV.
+export const datoRestaurable = (dato) => typeof dato === 'string' &&
+  (dato === 'venta' || dato === 'cubiertos' || dato === 'ordenes' || /^(canal|tickets):./.test(dato))
+
 // Observación de una hoja: texto de hasta OBS_MAX caracteres (vacío = borrarla).
-// pagina = el id de la hoja ('sintesis', 'mes:LOCAL', ...).
+// pagina = el id de la hoja ('sintesis', 'mes:LOCAL', 'pyl_acumulado:LOCAL:1', ...).
 export const OBS_MAX = 280
-export const paginaOk = (p) => typeof p === 'string' && /^[a-zA-Z]+(:[^\n]{1,60})?$/.test(p)
+export const paginaOk = (p) => typeof p === 'string' && /^[a-zA-Z][a-zA-Z_]*(:[^\n]{1,120})?$/.test(p)
 export function obsOk (v) {
   if (typeof v !== 'string') return null
   const t = v.replace(/\r\n?/g, '\n').trim()

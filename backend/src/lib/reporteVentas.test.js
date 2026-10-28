@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla, datoLibre, obsOk, paginaOk, ipcOk, variacionesIpc } from './reporteVentas.js'
+import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla, datoLibre, obsOk, paginaOk, ipcOk, variacionesIpc, datoRestaurable } from './reporteVentas.js'
 
 test('esInterno: el is_admin externo no alcanza', () => {
   assert.equal(esInterno({ roles: ['dcsmart'] }), true)
@@ -100,6 +100,13 @@ test('observaciones: hasta 280 caracteres, recortadas; páginas con id válido',
   assert.equal(paginaOk('mes:LATINO TACUARI 185'), true)
   assert.equal(paginaOk('mes:'), false)
   assert.equal(paginaOk('../x'), false)
+  // hojas del informe mensual: claves con guion bajo y varias partes
+  assert.equal(paginaOk('pyl_acumulado:LATINO TACUARI 185:1'), true)
+  assert.equal(paginaOk('ind_locales'), true)
+  assert.equal(paginaOk('_x'), false)
+  // detalle:<local largo>:<grupo>:2 pasa de 60 caracteres después de la clave
+  assert.equal(paginaOk(`detalle:${'L'.repeat(80)}:impositivos:2`), true)
+  assert.equal(paginaOk(`detalle:${'L'.repeat(121)}`), false)
 })
 test('IPC: variación mensual desde el índice de INDEC, sin saltar huecos', () => {
   const v = variacionesIpc([['2025-08-01', 9193.2441], ['2025-09-01', 9384.0922], ['2025-11-01', 9841.3581]])
@@ -108,4 +115,9 @@ test('IPC: variación mensual desde el índice de INDEC, sin saltar huecos', () 
   assert.equal(ipcOk(null), true)
   assert.equal(ipcOk(150), false)
   assert.equal(ipcOk('2'), false)
+})
+
+test('datoRestaurable: "Restaurar originales" del RV solo toca los datos del RV, no los del informe', () => {
+  for (const d of ['venta', 'cubiertos', 'ordenes', 'canal:Eventos', 'tickets:Rappi']) assert.equal(datoRestaurable(d), true, d)
+  for (const d of ['dias', 'ind:r50', 'pax', 'otra', '', null, undefined, 5]) assert.equal(datoRestaurable(d), false, String(d))
 })

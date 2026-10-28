@@ -12,35 +12,6 @@ import { msgError } from './errores.js'
 const ORIGEN_MANUAL = 'DCSMART'
 const esOrigenManual = (o) => String(o ?? '').trim().toUpperCase() === ORIGEN_MANUAL
 
-// Logo que sube el usuario: se achica en el navegador (PNG, conserva transparencia) hasta que
-// pese menos que el límite del servidor, así no importa si la imagen original es enorme.
-const LOGO_MAX_CHARS = 380 * 1024
-const LOGO_TIPOS = ['image/png', 'image/jpeg', 'image/webp']
-function achicarLogo(archivo) {
-  return new Promise((resolve, reject) => {
-    if (!LOGO_TIPOS.includes(archivo.type)) { reject(new Error('El logo tiene que ser una imagen PNG, JPG o WEBP.')); return }
-    const url = URL.createObjectURL(archivo)
-    const img = new Image()
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No pudimos leer esa imagen.')) }
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      let lado = 640
-      for (;;) {
-        const k = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight))
-        const c = document.createElement('canvas')
-        c.width = Math.max(1, Math.round(img.naturalWidth * k))
-        c.height = Math.max(1, Math.round(img.naturalHeight * k))
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
-        const data = c.toDataURL('image/png')
-        if (data.length <= LOGO_MAX_CHARS) { resolve(data); return }
-        if (lado <= 120) { reject(new Error('El logo es demasiado pesado: probá con otra imagen.')); return }
-        lado = Math.round(lado * 0.75)
-      }
-    }
-    img.src = url
-  })
-}
-
 const verMonto = (v) => (v == null || !Number.isFinite(v) ? '—' : fmtAR(v, Number.isInteger(v) ? 0 : 2))
 
 // Una fila de regla: lo que cobró/entró, a qué canal va y si es delivery.
@@ -81,6 +52,7 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
   const [nombre, setNombre] = useState(cliente?.nombre ?? grupo ?? '')
   const [elegidos, setElegidos] = useState(cliente?.locales ?? [])
   const [nombres, setNombres] = useState(cliente?.nombres ?? {})
+  // Los reportes ya no muestran logos de los locales: los que había se guardan como estaban.
   const [logos, setLogos] = useState(cliente?.logos ?? {})
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
@@ -113,15 +85,6 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
 
   const limpiarNombres = (locales) => Object.fromEntries(
     Object.entries(nombres).map(([k, v]) => [k, (v || '').trim()]).filter(([k, v]) => v && locales.includes(k)))
-
-  const elegirLogo = (local, archivo) => {
-    if (!archivo) return
-    setError('')
-    achicarLogo(archivo)
-      .then((data) => { setLogos((l) => ({ ...l, [local]: data })); setGuardado(false) })
-      .catch((e) => setError(e.message))
-  }
-  const quitarLogo = (local) => { setLogos((l) => { const n = { ...l }; delete n[local]; return n }); setGuardado(false) }
 
   const crear = () => correr(async () => {
     const creado = await api.rvCrearCliente({ grupo, nombre: grupo, locales: opciones })
@@ -210,19 +173,6 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
                       aria-label={`Nombre de ${l} en el reporte`}
                       onChange={(e) => { setNombres((n) => ({ ...n, [l]: e.target.value })); setGuardado(false) }} />
                     <small>{(nombres[l] ?? '').length}/60</small>
-                  </div>
-                  <div className="rve-config-logo">
-                    {(logos[l] || cliente?.logosLocal?.[l])
-                      ? <img src={logos[l] || cliente.logosLocal[l]} alt={`Logo de ${nombres[l] || l}`} />
-                      : <span className="rve-chico">Sin logo</span>}
-                    {!logos[l] && cliente?.logosLocal?.[l] && <span className="rve-chico">Logo del local</span>}
-                    <label className={`btn-sec rve-logo-btn${elegidos.includes(l) ? '' : ' rve-logo-off'}`}>
-                      {(logos[l] || cliente?.logosLocal?.[l]) ? 'Cambiar logo' : 'Subir logo'}
-                      <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={!elegidos.includes(l)}
-                        aria-label={`Logo de ${nombres[l] || l}`}
-                        onChange={(e) => { elegirLogo(l, e.target.files?.[0]); e.target.value = '' }} />
-                    </label>
-                    {logos[l] && <button type="button" className="btn-sec" onClick={() => quitarLogo(l)}>Quitar</button>}
                   </div>
                 </div>
               ))}

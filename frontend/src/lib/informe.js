@@ -67,7 +67,8 @@ export const COLUMNA_POR_TIPO = {
 }
 export const columnaDeTipo = (tipo) => COLUMNA_POR_TIPO[tipo] ?? null
 
-const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+// Para comparar textos de gestión sin mayúsculas, acentos ni espacios de más.
+export const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 // Sección por defecto de un rubro/categoría de gestión. Una regla guardada
 // (informe_reglas) la pisa. Salió de comparar los pagos de Loreto de agosto
@@ -145,7 +146,17 @@ export function construirInforme({ auto = {}, reglas = [], datos = {} } = {}) {
   const v = auto.ventas || {}
   const ventasTotal = n(v.total)
   const ventasEfectivo = n(v.efectivo)
-  if (ventasTotal || ventasEfectivo) {
+  if (Array.isArray(v.lineas)) {
+    // Una línea automática por canal de venta (Informe Mensual nuevo):
+    // [{ canal, total, col1, col2 }], ya con el efectivo en la columna 2 de
+    // "Local". Se corrige con la misma clave que cualquier otra línea.
+    for (const c of v.lineas) {
+      const k = claveLinea('ventas', c.canal)
+      const l = lineas.get(k) || { clave: k, seccion: 'ventas', concepto: c.canal, origen: 'auto', rubros: new Map(), auto: cero() }
+      l.auto = suma(l.auto, { total: n(c.total), col1: n(c.col1), col2: n(c.col2) })
+      lineas.set(k, l)
+    }
+  } else if (ventasTotal || ventasEfectivo) {
     const k = claveLinea('ventas', 'Local')
     lineas.set(k, {
       clave: k, seccion: 'ventas', concepto: 'Local', origen: 'auto', rubros: new Map(),
