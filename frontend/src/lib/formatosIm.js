@@ -20,6 +20,15 @@ export function fmtNumIm(v, { dec = 0, signo = false } = {}) {
   return `${signoDe(v, abs, signo)}${abs}`
 }
 
+// Monto de las tablas del P&L: desde un millón, en millones con un decimal y la M al lado
+// ("4,5 M"); por debajo, el número completo ("65.000"). null → "—".
+export function fmtMontoIm(v) {
+  if (!esNum(v)) return '—'
+  if (Math.abs(v) < 999950) return fmtNumIm(v)
+  const abs = `${fmtAR(Math.abs(v) / 1e6, 1)}${NBSP}M`
+  return `${signoDe(v, abs, false)}${abs}`
+}
+
 // Pesos: "$ 1.234" y, en negativo, "−$ 1.234". null → "—".
 export function fmtPesosIm(v, { signo = false } = {}) {
   if (!esNum(v)) return '—'

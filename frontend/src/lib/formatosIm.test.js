@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { fmtNumIm, fmtPesosIm, fmtPctIm, fmtPtsIm, flechaIm, tonoIm, mesEnPalabrasIm, periodoIm, mesSiguienteIm } from './formatosIm.js'
+import { fmtNumIm, fmtMontoIm, fmtPesosIm, fmtPctIm, fmtPtsIm, flechaIm, tonoIm, mesEnPalabrasIm, periodoIm, mesSiguienteIm } from './formatosIm.js'
 
 const NB = String.fromCharCode(160)
 
@@ -44,4 +44,16 @@ test('meses', () => {
   assert.equal(periodoIm('2026-09'), '01/09/2026 – 30/09/2026')
   assert.equal(periodoIm('2028-02'), '01/02/2028 – 29/02/2028')
   assert.equal(mesSiguienteIm('2026-12'), '2027-01')
+})
+
+test('fmtMontoIm: millones con la M al lado; por debajo del millón, el número completo', () => {
+  const M = `${String.fromCharCode(160)}M`
+  assert.equal(fmtMontoIm(4469210), `4,5${M}`)
+  assert.equal(fmtMontoIm(133111122), `133,1${M}`)
+  assert.equal(fmtMontoIm(65000), '65.000')
+  assert.equal(fmtMontoIm(999949), '999.949')
+  assert.equal(fmtMontoIm(999950), `1,0${M}`)
+  assert.equal(fmtMontoIm(-7263909), `−7,3${M}`)
+  assert.equal(fmtMontoIm(0), '0')
+  assert.equal(fmtMontoIm(null), '—')
 })

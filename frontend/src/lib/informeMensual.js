@@ -11,7 +11,7 @@
 // Regla de oro (como en el Reporte de Ventas): lo que no está es null, nunca
 // 0. Un mes sin ventas ni gastos es null; un % sin base es null.
 
-import { construirInforme, sumarValores, armarResumen, claveLinea, SECCIONES, SECCION, EGRESOS_RESUMEN } from './informe.js'
+import { construirInforme, sumarValores, armarResumen, claveLinea, norm, SECCIONES, SECCION, EGRESOS_RESUMEN } from './informe.js'
 
 const LOCAL = 'Local' // el canal que queda como resto (igual que en lib/reporteVentas.js)
 
@@ -121,9 +121,10 @@ const hayLabor = (valores) => n0(valores?.egresos?.labor) !== 0
 
 // ── Salida del motor ─────────────────────────────────────────────────────────
 
+// Una línea a mano va en su lugar alfabético, entre las de gestión (no al final).
 const ORDEN_ORIGEN = { auto: 0, manual: 1 }
 const ordenar = (lineas) => lineas.sort((a, b) =>
-  (ORDEN_ORIGEN[a.origen] ?? 1) - (ORDEN_ORIGEN[b.origen] ?? 1) || a.concepto.localeCompare(b.concepto, 'es'))
+  a.concepto.localeCompare(b.concepto, 'es', { sensitivity: 'base' }) || (ORDEN_ORIGEN[a.origen] ?? 1) - (ORDEN_ORIGEN[b.origen] ?? 1))
 
 // Bases de los indicadores: lo que se suma entre meses o locales sin perder
 // qué falta. venta / ventaSalon / pax / dias son null si no hay dato (pax o
@@ -328,9 +329,9 @@ export function pylMes({ local, mes, im, rv = {} }) {
           sub: h.seccion === 'cmv' ? h.aj.sub || 'alimentos' : undefined,
           auto: { total: 0, col1: 0, col2: 0 }, rubros: [], editado: h.aj.col1 != null || h.aj.col2 != null, oculto: true, huerfana: true })
       }
-      ordenar(s.lineas)
     }
   }
+  for (const s of inf.secciones) ordenar(s.lineas)
 
   // Quién tocó cada línea (para el editor): clave de la línea → fila de im_linea.
   const editadoEnLineas = {}
@@ -859,4 +860,59 @@ export function snapshotIm(informe) {
     if (m) locales[l.local] = fotoDeMes(m)
   }
   return { locales }
+}
+
+// ── Buscador de líneas del panel ─────────────────────────────────────────────
+
+// Lo que coincide con `texto` para el P&L de un local en el mes del informe, solo en
+// las secciones `secciones` (null = todas). Sin texto, solo lo cargado a mano otros meses.
+//   enMes:   líneas que ya están en el mes (para ir a corregirlas)
+//   aMano:   líneas a mano de otros meses que no están en el mes, con sus montos de la última vez
+//   gestion: categorías de gestión de otros meses (del año y del anterior) que no están en el mes
+// Cada lista con `max` elementos como mucho.
+export function buscarLineas({ informe, im, local, texto = '', secciones = null, max = 8 }) {
+  const l = localDe(informe, local)
+  if (!l) return { enMes: [], aMano: [], gestion: [] }
+  const q = norm(texto)
+  const pide = (s) => !secciones || secciones.includes(s)
+  const coincide = (concepto) => !q || norm(concepto).includes(q)
+  const lineasDe = (m) => (m?.secciones || []).flatMap((s) => s.lineas)
+
+  const enMes = []
+  const vistas = new Set()
+  for (const x of lineasDe(l.meses?.[informe.mes])) {
+    vistas.add(claveLinea(x.seccion, x.concepto))
+    if (q && pide(x.seccion) && coincide(x.concepto)) {
+      enMes.push({ clave: x.clave, seccion: x.seccion, concepto: x.concepto, origen: x.origen, total: x.total ?? null })
+    }
+  }
+
+  // A mano: la última vez que se cargó cada concepto (los meses vienen en orden en im.lineas, igual se compara).
+  const ultimas = new Map()
+  for (const x of im?.lineas || []) {
+    if (x.hoja !== 'pyl' || x.local !== local || x.corrige || x.oculta || x.mes === informe.mes || x.mes > informe.mes) continue
+    if (x.seccion === 'ventas' || !pide(x.seccion) || !coincide(x.concepto)) continue
+    const k = claveLinea(x.seccion, x.concepto)
+    if (vistas.has(k)) continue
+    const previa = ultimas.get(k)
+    if (!previa || x.mes > previa.mes) {
+      ultimas.set(k, { seccion: x.seccion, concepto: x.concepto, sub: subDe(x), monto: num(x.monto), monto2: num(x.monto2), mes: x.mes })
+    }
+  }
+  const aMano = [...ultimas.values()].sort((a, b) => b.mes.localeCompare(a.mes) || a.concepto.localeCompare(b.concepto, 'es'))
+
+  const gestion = []
+  if (q) {
+    const otros = [...Object.values(l.meses || {}), ...Object.values(l.anioAnterior?.meses || {})]
+    const vistasG = new Set([...vistas, ...ultimas.keys()])
+    for (const x of otros.flatMap(lineasDe)) {
+      if (x.origen !== 'auto' || x.seccion === 'ventas' || !pide(x.seccion) || !coincide(x.concepto)) continue
+      const k = claveLinea(x.seccion, x.concepto)
+      if (vistasG.has(k)) continue
+      vistasG.add(k)
+      gestion.push({ seccion: x.seccion, concepto: x.concepto, sub: x.seccion === 'cmv' ? x.sub || 'alimentos' : null })
+    }
+    gestion.sort((a, b) => a.concepto.localeCompare(b.concepto, 'es'))
+  }
+  return { enMes: enMes.slice(0, max), aMano: aMano.slice(0, max), gestion: gestion.slice(0, max) }
 }

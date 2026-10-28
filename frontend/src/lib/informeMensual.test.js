@@ -4,7 +4,7 @@ import { claveLinea } from './informe.js'
 import { armarPorLocal, armarReporte } from './reporteVentas.js'
 import {
   datosDeLineas, ventasDeLocal, pylMes, armarInformeMensual, pct, fotoDeMes,
-  HOJAS_DEFECTO, GRUPOS_SECCION, hojasDe, paginasDe, resumenDe, detalleDe, aperturaDe, cmvDe, cashflowDe, deudaDe, snapshotIm,
+  HOJAS_DEFECTO, GRUPOS_SECCION, hojasDe, paginasDe, resumenDe, detalleDe, aperturaDe, cmvDe, cashflowDe, deudaDe, snapshotIm, buscarLineas,
 } from './informeMensual.js'
 
 const HOY = new Date('2026-10-20T12:00:00')
@@ -703,4 +703,44 @@ test('con CMV y sueldos: CMV % y Labor % se calculan y no hay aviso', () => {
   assert.equal(m.indicadores.labor, 250)
   assert.equal(m.indicadores.laborPct, pct(250, 1200))
   assert.ok(!m.avisos.some((a) => a.tipo === 'cmv' || a.tipo === 'labor'))
+})
+
+test('una línea a mano va en su lugar alfabético dentro de la sección, no al final', () => {
+  const im = imDe()
+  im.lineas = [
+    { id: 1, local: 'L1', mes: MES, hoja: 'pyl', seccion: 'cmv', concepto: 'Almacén', monto: 10, monto2: null, corrige: null, oculta: false },
+    { id: 2, local: 'L1', mes: MES, hoja: 'pyl', seccion: 'cmv', concepto: 'verduras', monto: 5, monto2: null, corrige: null, oculta: false },
+  ]
+  const m = pylMes({ local: 'L1', mes: MES, im, rv: rvDeL1() })
+  assert.deepEqual(m.secciones.find((s) => s.key === 'cmv').lineas.map((l) => l.concepto), ['Almacén', 'Carnes', 'verduras'])
+})
+
+test('buscarLineas: en el mes, a mano otros meses (con los montos de la última vez) y categorías de gestión', () => {
+  const manual = (id, mes, monto2) => ({ id, local: 'L1', mes, hoja: 'pyl', seccion: 'alquiler', concepto: 'Alquiler', monto: null, monto2, corrige: null, oculta: false })
+  const cambiar = (im) => {
+    im.lineas = [manual(1, '2025-12', 1000), manual(2, '2026-01', 1550)]
+    im.auto.L1['2025-02'] = { ...vacio(), gastos: [g('CMV Bebidas', 'Hielo', 'A', 30)] }
+    return im
+  }
+  const inf = informeDe(['L1'], cambiar)
+  const im = cambiar(imDe())
+  const buscar = (texto, secciones) => buscarLineas({ informe: inf, im, local: 'L1', texto, secciones })
+
+  assert.deepEqual(buscar('ALQ'), {
+    enMes: [], gestion: [],
+    aMano: [{ seccion: 'alquiler', concepto: 'Alquiler', sub: null, monto: null, monto2: 1550, mes: '2026-01' }],
+  })
+  // Sin texto: solo lo cargado a mano otros meses.
+  assert.equal(buscar('').aMano.length, 1)
+  assert.deepEqual(buscar('').enMes, [])
+  assert.deepEqual(buscar('car').enMes.map((x) => [x.seccion, x.concepto, x.total]), [['cmv', 'Carnes', 400]])
+  assert.deepEqual(buscar('hie').gestion, [{ seccion: 'cmv', concepto: 'Hielo', sub: 'bebidas' }])
+  // Solo las secciones de la hoja.
+  assert.deepEqual(buscar('alq', ['cmv']).aMano, [])
+  // Ya cargada en el mes: aparece en el mes, no como "a mano otros meses".
+  im.lineas.push(manual(3, MES, 1600))
+  const inf2 = armarInformeMensual({ im, rv: rvDe(rvDataDe(['L1'])), mes: MES })
+  const r = buscarLineas({ informe: inf2, im, local: 'L1', texto: 'alqui' })
+  assert.deepEqual(r.aMano, [])
+  assert.deepEqual(r.enMes.map((x) => [x.concepto, x.origen]), [['Alquiler', 'manual']])
 })

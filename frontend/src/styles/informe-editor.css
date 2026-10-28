@@ -117,3 +117,28 @@
   border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-input, var(--border)); color: var(--txt); font-size: 12.5px; line-height: 1.45; font-family: inherit; }
 .ime-texto-largo textarea:focus { outline: none; border-color: var(--teal); }
 .ime-obs { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* buscador de líneas del P&L */
+.ime-busca { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 10px; border: 1px solid var(--border-hi); background: var(--bg-elevated); }
+.ime-busca input[type="search"] { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-input); background: var(--bg-input); color: var(--txt); font: inherit; font-size: 13px; }
+.ime-busca input[type="search"]:focus { outline: 2px solid var(--teal); outline-offset: 0; }
+.ime-res { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; }
+.ime-res-k { margin-top: 6px; padding: 0 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--txt3); }
+.ime-res-it { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 7px; }
+.ime-res-it:hover { background: rgba(255,255,255,.04); }
+.ime-res-oro { background: rgba(201,176,134,.08); }
+.ime-res-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ime-res-tx span { font-size: 12.5px; font-weight: 700; }
+.ime-res-tx small { font-size: 10.5px; color: var(--txt3); }
+.ime-res-it .btn-sec { flex: none; padding: 4px 10px; font-size: 11.5px; }
+.ime-res-nueva { margin-top: 6px; text-align: left; background: transparent; border: 1px dashed rgba(255,255,255,.22); border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 12px; color: var(--teal-l); cursor: pointer; }
+.ime-res-nueva:disabled { opacity: .5; cursor: default; }
+.ime-form-tit { display: flex; flex-direction: column; gap: 1px; }
+.ime-form-tit b { font-size: 14px; }
+.ime-form-tit small { font-size: 11px; color: var(--txt3); }
+.ime-form-montos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ime-form-montos label { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-weight: 700; color: var(--txt2); }
+.ime-form-bot { display: flex; gap: 8px; flex-wrap: wrap; }
+.ime-secs { display: flex; flex-direction: column; gap: 14px; }
+.ime-ln-cols { padding: 0 2px; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--txt3); }
+.ime-ln.resaltada { background: rgba(201,176,134,.14); box-shadow: inset 3px 0 0 var(--teal); border-radius: 6px; transition: background .4s var(--ease); }

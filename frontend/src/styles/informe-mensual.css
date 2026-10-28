@@ -7,6 +7,9 @@
   --im-tx: #f0ede8; --im-tx-2: #a6a9ab; --im-tx-3: #7a8087;
   --im-oro: #c9b086; --im-oro-fondo: #2a2a22; --im-oro-borde: #605846;
   --im-verde: #5fcb92; --im-rojo: #f07b7b; --im-teal: #4fb3bb; --im-pista: #3a4a5c;
+  /* las del Reporte de Ventas, para los gráficos que se comparten (curvas del histórico) */
+  --rv-fondo: #19232f; --rv-tx: #f0ede8; --rv-tx-2: #a6a9ab; --rv-tx-3: #7a8087;
+  --rv-oro: #c9b086; --rv-verde: #5fcb92; --rv-rojo: #f07b7b; --rv-act: #dcd7ce; --rv-teal: #4fb3bb;
 
   position: relative; width: 1456px; height: 819px; overflow: hidden; box-sizing: border-box;
   background: var(--im-fondo); color: var(--im-tx); font-family: 'Montserrat', system-ui, sans-serif;
@@ -199,16 +202,9 @@
 .im-leyenda { display: flex; gap: 26px; align-items: center; font-size: 17px; color: var(--im-tx-2); padding-bottom: 8px; }
 .im-leyenda span { display: flex; align-items: center; gap: 9px; }
 .im-leyenda i { display: block; width: 18px; height: 18px; border-radius: 4px; }
-.im-leyenda-ch { gap: 24px; font-size: 16px; padding-bottom: 6px; }
-.im-leyenda-ch i { border-radius: 50%; }
-.im-leyenda-ch .im-leyenda-tx { color: #d6d2ca; }
 .im-leyenda-ap { gap: 22px; font-size: 15px; padding-bottom: 6px; }
 .im-leyenda-ap i.im-ley-ap { width: 16px; height: 9px; border-radius: 3px; }
-.im-pt-ant { width: 13px !important; height: 13px !important; background: #5b6b7d; }
-.im-pt-act { width: 15px !important; height: 15px !important; background: #c9b086; }
 .im-vacio-hoja { margin-top: 60px; font-size: 22px; color: var(--im-tx-3); }
-.im-hist-svg, .im-ph-svg { display: block; overflow: visible; margin-top: 20px; }
-.im-ph-svg { margin-top: 18px; }
 
 .im-t { width: 100%; border-collapse: collapse; font-size: 14.5px; margin-top: 18px; }
 .im-t th { background: var(--im-fondo-2); color: var(--im-oro); font-size: 14px; font-weight: 700; padding: 7px 8px; text-align: right; border: 1px solid #2c3743; }
@@ -238,12 +234,6 @@
 .im-t-ancha th { font-size: 12.5px; padding: 6px 4px; }
 .im-t-ancha td { padding: 2px 4px; }
 .im-t-ancha td small, .im-t-med td small { font-size: 10.5px; }
-.im-t-apilada td { padding-top: 1px; padding-bottom: 1px; line-height: 1.12; }
-.im-t-apilada tr.sec td { padding: 5px 6px 1px; }
-.im-t-in td small { display: inline-block; width: 46px; margin-left: 6px; text-align: right; }
-.im-t-in { margin-top: 16px; }
-.im-t-in td { padding: 2px 7px; line-height: 1.15; }
-.im-t-in .im-t-rot { width: 156px; }
 .im-ancha .im-cab { padding: 0 37px; }
 .im-t-cons { margin-top: 12px; }
 .im-t-cons td { padding: 2px 8px; }
@@ -291,17 +281,6 @@
 .im-bar i { display: block; height: 100%; background: var(--im-teal); }
 .im-bar s { display: block; height: 100%; background: var(--im-oro); text-decoration: none; flex: 1; }
 
-/* P&L histórico: tarjetas de resultado */
-.im-ph-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 30px; }
-.im-ph-card { padding: 16px 20px; }
-.im-ph-card .im-k { font-size: 14px; letter-spacing: .06em; }
-.im-ph-par { margin-top: 6px; display: flex; align-items: baseline; gap: 10px; }
-.im-ph-ant { font-size: 15px; color: var(--im-tx-2); }
-.im-ph-flecha { color: var(--im-tx-3); }
-.im-ph-act { font-size: 26px; font-weight: 800; white-space: nowrap; }
-.im-ph-par .pos { color: var(--im-verde); }
-.im-ph-par .neg { color: var(--im-rojo); }
-
 /* PDF: igual que el RV. En pantalla el mazo de impresión no se ve; al imprimir con
    body.imprimiendo-im se oculta la app (#root) y se muestra solo el mazo.
    Página con nombre (im) para no chocar con los @page de los otros informes. */
@@ -315,3 +294,29 @@
   .im-print .im-hoja { page: im; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
   .im-print .im-hoja:last-child { page-break-after: auto; break-after: auto; }
 }
+
+/* Histórico con las curvas del Reporte de Ventas */
+.im-hist { position: relative; margin-top: 12px; }
+.im-hist-rot { position: absolute; left: 0; font-size: 15px; font-weight: 700; letter-spacing: 1px; color: var(--im-tx-3); }
+.im-hist-filas { display: block; margin-top: 6px; overflow: visible; font-family: 'Montserrat', system-ui, sans-serif; }
+.im-leyenda-curvas { align-items: center; }
+.im-leyenda i.im-ley-curva { width: 30px; height: 0; border-radius: 0; border-top: 4px solid var(--im-oro); background: none; }
+.im-leyenda i.im-ley-curva-ant { border-top: 3px dashed #7d8da0; }
+.im-t tr.im-t-pct td { color: var(--im-tx-2); }
+.im-t tr.im-t-pct td:first-child { color: var(--im-tx); }
+.im-t tr.im-t-pct td.pos { color: var(--im-verde); }
+.im-t tr.im-t-pct td.neg { color: var(--im-rojo); }
+
+/* P&L histórico: cuánto pesa cada gasto (tabla 2025 vs 2026) */
+.im-t-ph { margin-top: 14px; }
+.im-t-ph th:nth-child(n+2), .im-t-ph td:nth-child(n+2) { width: 150px; }
+.im-t-ph th:nth-child(4), .im-t-ph td:nth-child(4) { width: 190px; }
+.im-t-ph td { padding-top: 6px; padding-bottom: 6px; font-size: 17px; }
+.im-t-ph-chica td { padding-top: 3px; padding-bottom: 3px; font-size: 15.5px; }
+.im-t-ph td.im-ph-ant { color: var(--im-tx-2); }
+.im-t-ph td.im-ph-m { font-size: 14.5px; color: var(--im-tx-3); }
+.im-t-ph tr.im-ph-primero td { border-top: 2px solid var(--im-pista); }
+.im-ph-chip { display: inline-block; padding: 2px 12px; border-radius: 99px; font-size: 15px; font-weight: 800; white-space: nowrap; }
+.im-ph-chip-mal { color: var(--im-rojo); background: rgba(240, 123, 123, .15); }
+.im-ph-chip-bien { color: var(--im-verde); background: rgba(95, 203, 146, .14); }
+.im-ph-chip-igual { color: var(--im-tx-2); background: rgba(166, 169, 171, .12); }

@@ -7,8 +7,9 @@ import { recortarLogo } from '../../lib/recorteLogo.js'
 import { EGRESOS_RESUMEN } from '../../lib/informe.js'
 import { aperturaDe, cashflowDe, cmvDe, deudaDe, detalleDe, FILAS_POR_HOJA, paginasDe, pct, resumenDe } from '../../lib/informeMensual.js'
 import {
-  fmtNumIm, fmtPctIm, fmtPesosIm, fmtPtsIm, flechaIm, mesEnPalabrasIm, nombreMesIm, periodoIm, tonoIm,
+  fmtMontoIm, fmtNumIm, fmtPctIm, fmtPesosIm, fmtPtsIm, flechaIm, mesEnPalabrasIm, nombreMesIm, periodoIm, tonoIm,
 } from '../../lib/formatosIm.js'
+import { Lineas } from '../reporteVentas/Paginas.jsx'
 import '../../styles/informe-mensual.css'
 
 const LOGO = '/logos/DC-MANAGEMENT.png'
@@ -553,8 +554,6 @@ const sumaNulos = (xs) => {
 }
 const signoClase = (v) => (esNum(v) && v > 0 ? 'pos' : esNum(v) && v < 0 ? 'neg' : '')
 const conDatos = (cols, get) => cols.some((c) => c && esNum(get(c)) && get(c) !== 0)
-// millones con un decimal; null → "—"
-const millones = (v) => (esNum(v) ? fmtNumIm(v / 1e6, { dec: 1 }) : '—')
 
 const CMV_FILAS = [['alimentos', 'Alimentos'], ['bebidas', 'Bebidas'], ['movstock', 'Mov. de stock']]
 
@@ -616,12 +615,15 @@ function Historico({ informe, m, pagina }) {
   const h = l.rv?.historico || []
   const anio = Number(String(informe.mes).slice(0, 4))
   const ceja = cejaLocal(informe, l, `Histórico de ventas · ${nombreMesIm(`${anio}-01`).toLowerCase()} – ${nombreMesIm(informe.mes).toLowerCase()} · millones de $`)
+  const hayAnterior = h.some((x) => esNum(x.anterior))
+  // La misma leyenda y las mismas curvas que el Reporte de Ventas (sin inflación: contra el año anterior a secas).
   const leyenda = (
-    <div className="im-leyenda">
-      <span><i style={{ background: '#5b6b7d' }} />{anio - 1}</span>
-      <span><i style={{ background: '#c9b086' }} />{anio}</span>
+    <div className="im-leyenda im-leyenda-curvas">
+      <span><i className="im-ley-curva" />{anio}</span>
+      {hayAnterior && <span><i className="im-ley-curva im-ley-curva-ant" />{anio - 1}</span>}
     </div>
   )
+  const notaPie = hayAnterior ? `Verde: vendió más que en ${anio - 1} · Rojo: vendió menos` : undefined
   const hayDatos = h.some((x) => esNum(x.venta?.valor) || esNum(x.anterior))
   if (!hayDatos) {
     return (
@@ -630,64 +632,41 @@ function Historico({ informe, m, pagina }) {
       </Marco>
     )
   }
-  const X0 = 150, ANCHO = 1262, BASE = 262, ALTO_MAX = 200
+  // Las filas de abajo van alineadas con los meses del gráfico: misma cuenta que Lineas
+  // (primer mes a 60 px, último a ancho - 170 con referencia, ancho - 60 sin ella).
+  const ROT = 170, ANCHO = 1262 - ROT
   const n = h.length
-  const paso = (ANCHO - X0) / n
-  const bw = Math.min(40, paso * 0.32)
-  const maxV = Math.max(0, ...h.flatMap((x) => [x.venta?.valor, x.anterior]).filter(esNum))
-  const alto = (v) => (esNum(v) && maxV > 0 ? Math.max(0, (v / maxV) * ALTO_MAX) : 0)
-  const pctUno = (v) => (esNum(v) ? `${fmtNumIm(v, { dec: 1, signo: true })}%` : '—')
+  const der = ANCHO - (hayAnterior ? 170 : 60)
+  const cx = (i) => ROT + (n > 1 ? 60 + (i * (der - 60)) / (n - 1) : (60 + der) / 2)
+  const pctUno = (v) => (esNum(v) ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmtNumIm(Math.abs(v), { dec: 1 })}%` : '—')
   const color = (v) => (v > 0 ? '#5fcb92' : v < 0 ? '#f07b7b' : '#a6a9ab')
-  const pw = Math.min(74, paso - 10)
-  const Barra = ({ x, v, previo }) => {
-    const ok = esNum(v) && v > 0
-    const a = alto(v)
-    return (
-      <>
-        {ok && <rect x={x} y={BASE - a} width={bw} height={a} rx="4" fill={previo ? '#5b6b7d' : '#c9b086'} />}
-        <text x={x + bw / 2} y={ok ? BASE - a - 9 : BASE - 9} textAnchor="middle" fontSize="15" fontWeight={previo ? 500 : 700}
-          fill={ok ? (previo ? '#a6a9ab' : '#f0ede8') : '#5b6570'}>{ok ? millones(v) : '—'}</text>
-      </>
-    )
-  }
-  const cx = (i) => X0 + paso * (i + 0.5)
+  const filasAbajo = [
+    { k: 'VS MES ANTERIOR', v: (x) => pctUno(x.varPct), fill: (x) => (esNum(x.varPct) ? color(x.varPct) : '#5b6570'), peso: 700 },
+    { k: 'CUBIERTOS', v: (x) => fmtNumIm(x.cubiertos?.valor), fill: (x) => (esNum(x.cubiertos?.valor) ? '#f0ede8' : '#5b6570'), peso: 600 },
+    { k: 'PROM. CUBIERTO', v: (x) => fmtNumIm(x.promCubierto), fill: (x) => (esNum(x.promCubierto) ? '#a6a9ab' : '#5b6570'), peso: 500 },
+  ]
+  const alto = m.obs ? 230 : 270
   return (
-    <Marco m={m} informe={informe} tam={40} arriba={84} ceja={ceja} titulo="Venta por mes comparada con el año anterior" derecha={leyenda}>
-      <svg width={ANCHO} height="480" viewBox={`0 0 ${ANCHO} 480`} role="img" className="im-hist-svg"
-        aria-label={`Columnas de venta mensual de ${l.nombre} en ${anio - 1} y ${anio}, con cubiertos, promedio por cubierto y variaciones por mes`}>
-        <line x1={X0} x2={ANCHO} y1={BASE} y2={BASE} stroke="#474f59" strokeWidth="2" />
-        {h.map((x, i) => (
-          <g key={x.mes}>
-            <Barra x={cx(i) - bw - 4} v={x.anterior} previo />
-            <Barra x={cx(i) + 4} v={x.venta?.valor} />
-            <text x={cx(i)} y="292" textAnchor="middle" fontSize="19" fill="#a6a9ab">{mes3(x.mes)}</text>
-          </g>
-        ))}
-        <line x1="0" x2={ANCHO} y1="314" y2="314" stroke="rgba(255,255,255,.08)" />
-        <text x="0" y="345" fontSize="15" fontWeight="700" letterSpacing="1" fill="#7a8087">{`VS ${anio - 1}`}</text>
-        {h.map((x, i) => {
-          const v = x.varAnual
-          return esNum(v) ? (
-            <g key={x.mes} fontSize="16" fontWeight="700" textAnchor="middle" fill={color(v)}>
-              <rect x={cx(i) - pw / 2} y="325" width={pw} height="28" rx="14" fill={v > 0 ? 'rgba(95,203,146,.15)' : v < 0 ? 'rgba(240,123,123,.15)' : 'rgba(166,169,171,.15)'} />
-              <text x={cx(i)} y="345">{pctUno(v)}</text>
+    <Marco m={m} informe={informe} tam={40} arriba={84} ceja={ceja} titulo="Venta por mes comparada con el año anterior" derecha={leyenda} notaPie={notaPie}>
+      <div className="im-hist" role="img"
+        aria-label={`Curvas de venta mensual de ${l.nombre} en ${anio} y ${anio - 1}, con la diferencia por mes, la variación contra el mes anterior, cubiertos y promedio por cubierto`}>
+        <div style={{ marginLeft: ROT }}>
+          <Lineas filas={h.map((x) => ({ mes: x.mes, venta: esNum(x.venta?.valor) ? x.venta.valor : null, ref: esNum(x.anterior) ? x.anterior : null }))}
+            refNombre={String(anio - 1)} conInflacion={false} ancho={ANCHO} alto={alto} />
+        </div>
+        {hayAnterior && <div className="im-hist-rot" style={{ top: alto + 56 }}>VS {anio - 1}</div>}
+        <svg width="1262" height={filasAbajo.length * 40 + 8} viewBox={`0 0 1262 ${filasAbajo.length * 40 + 8}`} className="im-hist-filas" aria-hidden="true">
+          {filasAbajo.map((f, j) => (
+            <g key={f.k}>
+              <line x1="0" x2="1262" y1={j * 40 + 4} y2={j * 40 + 4} stroke="rgba(255,255,255,.08)" />
+              <text x="0" y={j * 40 + 30} fontSize="15" fontWeight="700" letterSpacing="1" fill="#7a8087">{f.k}</text>
+              {h.map((x, i) => (
+                <text key={x.mes} x={cx(i)} y={j * 40 + 30} textAnchor="middle" fontSize="17" fontWeight={f.peso} fill={f.fill(x)}>{f.v(x)}</text>
+              ))}
             </g>
-          ) : <text key={x.mes} x={cx(i)} y="345" textAnchor="middle" fontSize="16" fill="#5b6570">—</text>
-        })}
-        <text x="0" y="388" fontSize="15" fontWeight="700" letterSpacing="1" fill="#7a8087">VS MES ANTERIOR</text>
-        {h.map((x, i) => (
-          <text key={x.mes} x={cx(i)} y="388" textAnchor="middle" fontSize="17" fontWeight="700" fill={esNum(x.varPct) ? color(x.varPct) : '#5b6570'}>{pctUno(x.varPct)}</text>
-        ))}
-        <line x1="0" x2={ANCHO} y1="404" y2="404" stroke="rgba(255,255,255,.08)" />
-        <text x="0" y="432" fontSize="15" fontWeight="700" letterSpacing="1" fill="#7a8087">CUBIERTOS</text>
-        {h.map((x, i) => (
-          <text key={x.mes} x={cx(i)} y="432" textAnchor="middle" fontSize="18" fontWeight="600" fill={esNum(x.cubiertos?.valor) ? '#f0ede8' : '#5b6570'}>{fmtNumIm(x.cubiertos?.valor)}</text>
-        ))}
-        <text x="0" y="468" fontSize="15" fontWeight="700" letterSpacing="1" fill="#7a8087">PROM. CUBIERTO</text>
-        {h.map((x, i) => (
-          <text key={x.mes} x={cx(i)} y="468" textAnchor="middle" fontSize="18" fontWeight="500" fill={esNum(x.promCubierto) ? '#a6a9ab' : '#5b6570'}>{fmtNumIm(x.promCubierto)}</text>
-        ))}
-      </svg>
+          ))}
+        </svg>
+      </div>
     </Marco>
   )
 }
@@ -695,13 +674,13 @@ function Historico({ informe, m, pagina }) {
 // ---------------------------------------------------------------------------
 // P&L acumulado: meses del año + total. Parte 1: ventas, operación y CMV. Parte 2: egresos y resultado.
 
-// Celda de un monto con su % sobre la venta de la columna. `cero`: mostrar 0 (totales y resultados);
-// en los renglones sueltos un 0 es "—".
-function CeldaPyl({ valor, venta, cur, tono, cero, pctOn }) {
+// Celda de un monto (en millones con M desde el millón). `cero`: mostrar 0 (totales y resultados);
+// en los renglones sueltos un 0 es "—". El % sobre la venta no va en la celda: va en el bloque
+// "% sobre la venta" del pie de la tabla, solo para los totales y resultados.
+function CeldaPyl({ valor, cur, tono, cero }) {
   const ok = esNum(valor) && (cero || valor !== 0)
-  const p = ok && pctOn ? pct(valor, venta) : null
   const cls = [cur ? 'cur' : '', ok ? (tono ? signoClase(valor) : '') : 'n'].filter(Boolean).join(' ')
-  return <td className={cls}>{ok ? fmtNumIm(valor) : '—'}{p != null && <small>{fmtPctIm(p)}</small>}</td>
+  return <td className={cls}>{ok ? fmtMontoIm(valor) : '—'}</td>
 }
 
 // Renglones de una tabla de P&L. t: 'sec' | 'fila' | 'var' | 'op'.
@@ -738,13 +717,15 @@ function specsEgresos(todas) {
   ].filter((s) => s.t !== 'fila' || s.tipo || conDatos(todas, s.get))
 }
 
-function TablaPyl({ specs, cols, total, informe, inline, apilada, etiquetaTotal, variaciones }) {
+function TablaPyl({ specs, cols, total, informe, etiquetaTotal, variaciones }) {
   const mesesIm = informe.meses
   // Con más meses la letra baja para que entren las columnas (con 10 a 12 meses, más todavía).
   const tam = mesesIm.length > 9 ? ` im-t-ancha` : mesesIm.length > 6 ? ` im-t-med` : ''
   const esActual = (j) => j < mesesIm.length && mesesIm[j] === informe.mes
+  // Totales y resultados con % (menos la venta, que es el 100%), en su propio bloque al pie.
+  const pcts = specs.filter((s) => s.t === 'fila' && s.pctOn && s.tipo)
   return (
-    <table className={`im-t${inline ? ' im-t-in' : ''}${apilada ? ' im-t-apilada' : ''}${tam}`}>
+    <table className={`im-t${tam}`}>
       <thead>
         <tr>
           <th className="im-t-rot">$</th>
@@ -788,12 +769,23 @@ function TablaPyl({ specs, cols, total, informe, inline, apilada, etiquetaTotal,
             <tr key={i} className={s.tipo || undefined}>
               <td style={s.oro ? { color: '#c9b086' } : undefined}>{s.label}</td>
               {[...cols, total].map((x, j) => (
-                <CeldaPyl key={j} valor={x ? s.get(x) : null} venta={x?.venta} cur={esActual(j)}
-                  tono={s.tipo === 'res'} cero={!!s.cero} pctOn={!!s.pctOn} />
+                <CeldaPyl key={j} valor={x ? s.get(x) : null} cur={esActual(j)} tono={s.tipo === 'res'} cero={!!s.cero} />
               ))}
             </tr>
           )
         })}
+        {pcts.length > 0 && <tr className="sec"><td colSpan={mesesIm.length + 2}>% sobre la venta</td></tr>}
+        {pcts.map((s) => (
+          <tr key={`pct-${s.label}`} className="im-t-pct">
+            <td style={s.oro ? { color: '#c9b086' } : undefined}>{s.label}</td>
+            {[...cols, total].map((x, j) => {
+              const v = x ? s.get(x) : null
+              const p = esNum(v) && (s.cero || v !== 0) ? pct(v, x.venta) : null
+              const cls = [esActual(j) ? 'cur' : '', p == null ? 'n' : s.tipo === 'res' ? signoClase(p) : ''].filter(Boolean).join(' ')
+              return <td key={j} className={cls}>{p == null ? '—' : fmtPctIm(p)}</td>
+            })}
+          </tr>
+        ))}
       </tbody>
     </table>
   )
@@ -823,15 +815,13 @@ function PylAcumulado({ informe, m, pagina }) {
     sinVenta.length ? `Total sin ${sinVenta.map(mes3).join(', ')}: sin ventas cargadas` : null,
   ].filter(Boolean).join(' · ') || undefined
   const ancha = informe.meses.length > 6
-  // El % al lado del monto solo entra con pocos meses; con más, va debajo como en la parte 1.
-  const alLado = parte === 2 && informe.meses.length <= 6
   const titulo = parte === 1 ? 'Ventas, operación y costo de mercadería' : 'Egresos y resultado'
-  const nota = parte === 1 ? 'Debajo de cada monto: % sobre la venta del mes' : 'Al lado de cada monto: % sobre la venta del mes'
+  const nota = 'M = millones · sin M, el número completo'
   return (
     <Marco m={m} informe={informe} tam={34} arriba={parte === 1 ? 64 : 58} lados={ancha ? 60 : 97} compacto clase={ancha ? 'im-ancha' : ''} notaPie={notaPie}
       ceja={ceja} titulo={titulo} derecha={<div className="im-nota-cab">{nota}</div>}>
       {total ? (
-        <TablaPyl cols={cols} total={total} informe={informe} inline={alLado} apilada={parte === 2 && !alLado} variaciones={variaciones} etiquetaTotal={`Total ${anio}`}
+        <TablaPyl cols={cols} total={total} informe={informe} variaciones={variaciones} etiquetaTotal={`Total ${anio}`}
           specs={parte === 1 ? specsVentasOperacion(cols, total) : specsEgresos([...cols, total])} />
       ) : (
         <div className="im-vacio-hoja">Todavía no hay datos de {esGrupo ? 'ningún local' : l.nombre} en {anio}.</div>
@@ -861,94 +851,63 @@ function PylHistorico({ informe, m, pagina }) {
     ...CMV_FILAS.map(([k, label]) => ({ k, label: k === 'alimentos' ? 'CMV alimentos' : k === 'bebidas' ? 'CMV bebidas' : label, get: (x) => x.cmv[k] })),
     ...EGRESOS_RESUMEN.map(([k, label]) => ({ k, label, get: (x) => x.egresos[k] })),
   ].filter((r) => conDatos([act, ant], r.get))
-  const n = rubros.length
-  const filaAlto = n > 14 ? 24 : 27
-  const datos = rubros.map((r) => {
-    // Sin monto (null o 0) no hay dato: ni punto ni % ni diferencia, igual que la columna de montos.
-    const monto = (x) => { const v = r.get(x); return esNum(v) && v !== 0 ? v : null }
-    const a = monto(act)
-    const b = monto(ant)
-    return { ...r, a, b, pa: pct(a, act.venta), pb: pct(b, ant.venta) }
-  })
-  const maxPct = Math.max(0, ...datos.flatMap((d) => [d.pa, d.pb]).filter(esNum))
-  const eje = Math.max(10, Math.ceil((maxPct * 1.2) / 10) * 10)
-  const X0 = 600, ANCHO_P = 520
-  const px = (p) => X0 + (p / eje) * ANCHO_P
-  const alto = 45 + Math.max(0, n - 1) * filaAlto + 40
-  const ticks = Array.from({ length: Math.floor(eje / 10) + 1 }, (_, i) => i * 10)
+  // Sin monto (null o 0) no hay dato: ni % ni diferencia.
+  const monto = (x, get) => { const v = get(x); return esNum(v) && v !== 0 ? v : null }
+  const fila = (r, costo) => {
+    const a = monto(act, r.get)
+    const b = monto(ant, r.get)
+    const pa = pct(a, act.venta)
+    const pb = pct(b, ant.venta)
+    return { ...r, a, b, pa, pb, dif: esNum(pa) && esNum(pb) ? pa - pb : null, costo }
+  }
+  // De lo que más pesa este año a lo que menos.
+  const gastos = rubros.map((r) => fila(r, true)).sort((x, y) => (y.pa ?? -1) - (x.pa ?? -1) || (y.pb ?? -1) - (x.pb ?? -1))
+  const resultados = [
+    { k: 'bruto', label: 'Resultado bruto', get: (x) => x.bruto },
+    { k: 'eco', label: 'Resultado económico', get: (x) => x.eco, oro: true },
+    { k: 'final', label: 'Resultado final', get: (x) => x.final },
+  ].map((r) => fila(r, false))
+  const n = gastos.length + resultados.length
   const faltan = l.anioAnterior?.faltan || []
   const notaPie = [
     faltan.length ? `${anio - 1}: sin datos en ${faltan.map(mes3).join(', ')}` : null,
     ant.sinVenta.length ? `${anio - 1} sin ${ant.sinVenta.map(mes3).join(', ')}: sin ventas` : null,
     act.sinVenta.length ? `${anio} sin ${act.sinVenta.map(mes3).join(', ')}: sin ventas` : null,
   ].filter(Boolean).join(' · ') || undefined
-  const tarjeta = (k, a, b, { oro = false, pesos = false } = {}) => (
-    <div className={`im-card im-ph-card${oro ? ' im-card-oro' : ''}`}>
-      <div className="im-k">{k}</div>
-      <div className="im-ph-par">
-        <span className={`im-ph-ant ${pesos ? '' : signoClase(b)}`}>{pesos ? `${millones(b)} M` : fmtPctIm(b)}</span>
-        <span className="im-ph-flecha">→</span>
-        <span className={`im-ph-act ${pesos ? '' : signoClase(a)}`}>{pesos ? `${millones(a)} M` : fmtPctIm(a)}</span>
-      </div>
-    </div>
+  // Diferencia en puntos: en un gasto, subir es malo (rojo); en un resultado, subir es bueno (verde).
+  const Dif = ({ f }) => {
+    if (!esNum(f.dif)) return <td className="n">—</td>
+    if (Math.abs(f.dif) < 0.05) return <td><span className="im-ph-chip im-ph-chip-igual">=</span></td>
+    const malo = f.costo ? f.dif > 0 : f.dif < 0
+    return <td><span className={`im-ph-chip ${malo ? 'im-ph-chip-mal' : 'im-ph-chip-bien'}`}>{f.dif > 0 ? '▲' : '▼'} {fmtPtsIm(Math.abs(f.dif))}</span></td>
+  }
+  const renglon = (f, clase) => (
+    <tr key={f.k} className={clase}>
+      <td style={f.oro ? { color: '#c9b086' } : undefined}>{f.label}</td>
+      <td className={esNum(f.pb) ? 'im-ph-ant' : 'n'}>{fmtPctIm(f.pb)}</td>
+      <td className={esNum(f.pa) ? 'cur' : 'cur n'}>{fmtPctIm(f.pa)}</td>
+      <Dif f={f} />
+      <td className="im-ph-m">{f.b == null ? '—' : fmtMontoIm(f.b)}</td>
+      <td className="im-ph-m">{f.a == null ? '—' : fmtMontoIm(f.a)}</td>
+    </tr>
   )
-  const pctBruto = (x) => pct(x.bruto, x.venta)
-  const pctEco = (x) => pct(x.eco, x.venta)
-  const pctFin = (x) => pct(x.final, x.venta)
   return (
     <Marco m={m} informe={informe} tam={34} arriba={64} compacto notaPie={notaPie} ceja={ceja} titulo="Cuánto pesa cada gasto sobre la venta"
       derecha={(
-        <div className="im-leyenda im-leyenda-ch">
-          <span><i className="im-pt-ant" />{anio - 1}</span>
-          <span><i className="im-pt-act" />{anio}</span>
-          <span className="im-leyenda-tx">verde = pesa menos que en {anio - 1}</span>
+        <div className="im-nota-cab">
+          Venta: {fmtMontoIm(ant.venta)} en {anio - 1} y {fmtMontoIm(act.venta)} en {anio}<br />
+          Rojo = pesa más que en {anio - 1} · verde = pesa menos
         </div>
       )}>
-      <svg width="1262" height={alto} viewBox={`0 0 1262 ${alto}`} role="img" className="im-ph-svg"
-        aria-label={`Para cada rubro del P&L de ${l.nombre}, el monto de ${anio - 1} y de ${anio} y su porcentaje sobre la venta, con la diferencia en puntos`}>
-        <g fontSize="13" fontWeight="700" letterSpacing="1" fill="#7a8087">
-          <text x="0" y="12">RUBRO</text>
-          <text x="330" y="12" textAnchor="end">{`${anio - 1} $`}</text>
-          <text x="520" y="12" textAnchor="end">{`${anio} $`}</text>
-          <text x="600" y="12">% SOBRE LA VENTA</text>
-          <text x="1262" y="12" textAnchor="end">DIFERENCIA</text>
-        </g>
-        <g fontSize="12" fill="#5b6570">
-          {ticks.map((t) => <text key={t} x={px(t)} y={alto - 2} textAnchor="middle">{t}%</text>)}
-        </g>
-        {datos.map((d, i) => {
-          const y = 45 + i * filaAlto
-          const dif = esNum(d.pa) && esNum(d.pb) ? d.pa - d.pb : null
-          const tono = dif == null || Math.abs(dif) < 0.005 ? '#7a8087' : dif < 0 ? '#5fcb92' : '#f07b7b'
-          const xa = esNum(d.pa) ? px(d.pa) : null
-          const xb = esNum(d.pb) ? px(d.pb) : null
-          const xMax = Math.max(xa ?? 0, xb ?? 0)
-          const derecha = xMax > 1050
-          return (
-            <g key={d.k}>
-              <text x="0" y={y} fontSize="16" fontWeight="600" fill="#dcd7ce">{d.label}</text>
-              <text x="330" y={y} textAnchor="end" fontSize="15" fill={d.b ? '#a6a9ab' : '#5b6570'}>{d.b ? fmtNumIm(d.b) : '—'}</text>
-              <text x="520" y={y} textAnchor="end" fontSize="15" fontWeight="600" fill={d.a ? '#f0ede8' : '#5b6570'}>{d.a ? fmtNumIm(d.a) : '—'}</text>
-              <line x1={X0} x2={X0 + ANCHO_P} y1={y - 5} y2={y - 5} stroke="#2a3644" strokeWidth="2" />
-              {xa != null && xb != null && Math.abs(xa - xb) > 0.5 && (
-                <line x1={xa} x2={xb} y1={y - 5} y2={y - 5} stroke={tono} strokeWidth="4" opacity=".55" />
-              )}
-              {xb != null && <circle cx={xb} cy={y - 5} r="7" fill="#5b6b7d" stroke="#19232f" strokeWidth="2" />}
-              {xa != null && <circle cx={xa} cy={y - 5} r="8" fill="#c9b086" stroke="#19232f" strokeWidth="2" />}
-              {xa != null && (
-                <text x={derecha ? Math.min(xa, xb ?? xa) - 14 : xMax + 14} y={y} textAnchor={derecha ? 'end' : 'start'} fontSize="14" fontWeight="700" fill="#c9b086">{fmtPctIm(d.pa)}</text>
-              )}
-              <text x="1262" y={y} textAnchor="end" fontSize="15" fontWeight="700" fill={tono}>{dif == null ? '—' : fmtPtsIm(dif, { signo: true })}</text>
-            </g>
-          )
-        })}
-      </svg>
-      <div className="im-ph-cards">
-        {tarjeta('Venta', act.venta, ant.venta, { pesos: true })}
-        {tarjeta('Resultado bruto', pctBruto(act), pctBruto(ant))}
-        {tarjeta('Resultado económico', pctEco(act), pctEco(ant), { oro: true })}
-        {tarjeta('Resultado final', pctFin(act), pctFin(ant))}
-      </div>
+      <table className={`im-t im-t-ph${n > 15 ? ' im-t-ph-chica' : ''}`}>
+        <thead>
+          <tr><th>Rubro</th><th>{anio - 1}</th><th className="cur">{anio}</th><th>Diferencia</th><th>$ {anio - 1}</th><th>$ {anio}</th></tr>
+        </thead>
+        <tbody>
+          {gastos.map((f) => renglon(f))}
+          {resultados.map((f, i) => renglon(f, `tot${i === 0 ? ' im-ph-primero' : ''}`))}
+        </tbody>
+      </table>
     </Marco>
   )
 }
@@ -1014,7 +973,7 @@ function Consolidado({ informe, m }) {
                   const cur = x.esGrupo ? 'cur ' : ''
                   const tono = ok && s.tipo === 'res' ? signoClase(v) : ''
                   return [
-                    <td key={`${j}a`} className={`${cur}${tono}${ok ? '' : ' n'}`.trim()}>{ok ? fmtNumIm(v) : '—'}</td>,
+                    <td key={`${j}a`} className={`${cur}${tono}${ok ? '' : ' n'}`.trim()}>{ok ? fmtMontoIm(v) : '—'}</td>,
                     <td key={`${j}b`} className={`pc ${cur}`.trim()}>{p != null ? fmtPctIm(p) : ''}</td>,
                   ]
                 })}

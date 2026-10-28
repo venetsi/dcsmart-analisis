@@ -148,7 +148,7 @@ function tramosDe(n, ok) {
 // espacio entre las dos va verde donde el año le ganó a la referencia y rojo donde
 // le perdió; debajo de cada mes, ese % (real si la referencia tiene inflación).
 //   filas: [{ mes, venta, ref }]
-function Lineas({ filas, refNombre, conInflacion, ancho = 1262, alto = 300 }) {
+export function Lineas({ filas, refNombre, conInflacion, ancho = 1262, alto = 300 }) {
   const id = useId().replace(/:/g, '')
   const n = filas.length
   const conRef = filas.some((f) => esNum(f.ref))

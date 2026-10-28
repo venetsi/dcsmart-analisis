@@ -5,17 +5,17 @@
 // Regla de oro: lo que no está se ve "—" o "Falta cargar", nunca 0.
 // Mes cerrado: todo lo que cambia números queda deshabilitado; textos,
 // observaciones y hojas se siguen editando. Solo el equipo DC edita.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CampoNum } from '../reporteVentas/PanelDatos.jsx'
-import { SECCIONES, SECCION } from '../../lib/informe.js'
-import { GRUPOS_SECCION, cashflowDe, deudaDe, resumenDe } from '../../lib/informeMensual.js'
+import { SECCIONES, SECCION, claveLinea } from '../../lib/informe.js'
+import { GRUPOS_SECCION, buscarLineas, cashflowDe, deudaDe, resumenDe } from '../../lib/informeMensual.js'
 import { fmtNumIm, fmtPesosIm, mesEnPalabrasIm } from '../../lib/formatosIm.js'
 
 export const MSG_CERRADO = 'El mes está cerrado. Reabrilo para hacer cambios.'
 const OBS_MAX = 280
 const COMENTARIO_MAX = 400
 const CONCEPTO_MAX = 80
-const MSG_SIN_MONTO = 'Escribí el monto en la columna 1, en la 2 o en las dos.'
+const MSG_SIN_MONTO = 'Escribí el monto con factura, sin factura o los dos.'
 
 const num = (v) => {
   if (v == null || v === '') return null
@@ -423,6 +423,18 @@ function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones,
 
   const avisos = (informe.avisos || []).filter((a) => a.local === local && AVISOS_LINEAS.has(a.tipo))
 
+  // Línea elegida en el buscador (o recién agregada): se la muestra y se la resalta un momento.
+  // Se busca otra vez cuando cambia el informe, porque una línea recién agregada llega después.
+  const [resaltada, setResaltada] = useState(null)
+  const listaRef = useRef(null)
+  useEffect(() => {
+    if (!resaltada) return undefined
+    const el = [...(listaRef.current?.querySelectorAll('[data-ln]') || [])].find((x) => x.dataset.ln === resaltada)
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    const t = setTimeout(() => setResaltada(null), 3500)
+    return () => clearTimeout(t)
+  }, [resaltada, informe])
+
   // Un monto puesto a propósito (columna corregida o escrita en una línea a mano) se ve
   // aunque sea 0; un 0 que nadie cargó (gestión sin nada en esa columna, o columna de una
   // línea a mano que quedó vacía) se ve "—".
@@ -434,7 +446,7 @@ function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones,
     const valor = (col) => (cargado(col) ? l[col] ?? null : l[col] || null)
     // Escape solo cancela lo escrito; para volver atrás se vacía el campo (o "Volver al de gestión").
     const campo = (col) => (
-      <CampoNum key={`${col}:${vuelta}`} valor={valor(col)} tieneCorreccion={cargado(col)} escapeRestaura={false} disabled={ocupado} etiqueta={`${l.concepto}, columna ${col === 'col1' ? 1 : 2}`}
+      <CampoNum key={`${col}:${vuelta}`} valor={valor(col)} tieneCorreccion={cargado(col)} escapeRestaura={false} disabled={ocupado} etiqueta={`${l.concepto}, ${col === 'col1' ? (l.seccion === 'ventas' ? 'bancarizado' : 'con factura') : (l.seccion === 'ventas' ? 'efectivo' : 'sin factura')}`}
         placeholder="—" onError={onError}
         onGuardar={(v) => (manual ? guardarManual(l, { [campoDe(col)]: v }) : corregir(l, { [col]: v }))}
         onRestaurar={() => (manual ? guardarManual(l, { [campoDe(col)]: null }) : corregir(l, { [col]: null }))} />
@@ -461,7 +473,8 @@ function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones,
     const origenes = l.rubros?.length ? l.rubros.map((r) => `${r.rubro} / ${r.categoria}`).join(' · ') : null
     const puedeMover = editable && !manual && l.seccion !== 'ventas' && l.rubros?.length > 0
     return (
-      <div key={l.clave} className={`ime-ln${l.oculto ? ' oculta' : ''}`}>
+      <div key={l.clave} data-ln={claveLinea(l.seccion, l.concepto)}
+        className={`ime-ln${l.oculto ? ' oculta' : ''}${resaltada === claveLinea(l.seccion, l.concepto) ? ' resaltada' : ''}`}>
         <div className="ime-ln-cab">
           {manual && editable
             ? <CampoTexto valor={l.concepto} max={CONCEPTO_MAX} etiqueta="Concepto de la línea" disabled={ocupado} obligatorio
@@ -527,44 +540,117 @@ function PanelLineas({ informe, im, pagina, interno, cerrado, ocupado, acciones,
         </div>
       )}
       <div className="ime-local">{L?.nombre || local} · {mesEnPalabrasIm(mes)}</div>
-      <Vacio texto={`Se corrige ${mesEnPalabrasIm(mes)}. Columna 1: bancarizado o facturado. Columna 2: efectivo o sin factura.`} />
       {interno && cerrado && <AvisoCerrado />}
-      <Avisos lista={avisos} />
-      {!mesInf && <Vacio texto="Este local no tiene ventas ni gastos en el mes. Podés agregar líneas a mano." />}
-      {mostradas.map((s) => {
-        const d = datosSec(s.key)
-        return (
-          <section key={s.key} className="ime-sec">
-            <div className="ime-sec-cab"><span>{s.num} · {s.titulo}</span><span>{fmtPesosIm(d?.total || null)}</span></div>
-            {s.key === 'ventas' && editable && (
-              <Vacio texto="Una venta corregida acá cambia solo el informe, no el Reporte de Ventas. Para que los dos muestren lo mismo, corregila en el Reporte de Ventas." />
-            )}
-            {d?.lineas?.length ? d.lineas.map(linea) : <Vacio texto="Sin líneas este mes." />}
-          </section>
-        )
-      })}
-      {mesInf && !filtro && mostradas.length === 0 && <Vacio texto="No hay líneas este mes." />}
       {editable && L && (
-        <NuevaLineaPyl key={`${local}:${filtro?.join(',') || 'todo'}`} secciones={secciones} ocupado={ocupado} onError={onError}
+        <BuscadorLineas key={`${local}:${filtro?.join(',') || 'todo'}`} informe={informe} im={im} local={local} secciones={secciones}
+          ocupado={ocupado} onError={onError} onIr={setResaltada}
           onAgregar={(b) => acciones.linea({ local, mes, hoja: 'pyl', oculta: false, orden: 0, ...b })} />
       )}
+      <Avisos lista={avisos} />
+      {!mesInf && <Vacio texto="Este local no tiene ventas ni gastos en el mes. Podés agregar líneas con el buscador." />}
+      <div ref={listaRef} className="ime-secs">
+        {mostradas.map((s) => {
+          const d = datosSec(s.key)
+          const [c1, c2] = s.key === 'ventas' ? ['Bancarizado', 'Efectivo'] : ['Con factura', 'Sin factura']
+          return (
+            <section key={s.key} className="ime-sec">
+              <div className="ime-sec-cab"><span>{s.num} · {s.titulo}</span><span>{fmtPesosIm(d?.total || null)}</span></div>
+              {s.key === 'ventas' && editable && (
+                <Vacio texto="Una venta corregida acá cambia solo el informe, no el Reporte de Ventas. Para que los dos muestren lo mismo, corregila en el Reporte de Ventas." />
+              )}
+              {d?.lineas?.length
+                ? <><div className="ime-ln-montos ime-ln-cols" aria-hidden="true"><span>{c1}</span><span>{c2}</span><span>Total</span></div>{d.lineas.map(linea)}</>
+                : <Vacio texto="Sin líneas este mes." />}
+            </section>
+          )
+        })}
+      </div>
+      {mesInf && !filtro && mostradas.length === 0 && <Vacio texto="No hay líneas este mes." />}
       {editable && <Vacio texto="Mover una categoría de sección vale para todo el grupo y para los meses abiertos. Si tenía una corrección, se pasa a la sección nueva." />}
     </>
   )
 }
 
-function NuevaLineaPyl({ secciones, ocupado, onError, onAgregar }) {
-  const [seccion, setSeccion] = useState(secciones.find((s) => s.key !== 'ventas')?.key || secciones[0]?.key)
-  const [concepto, setConcepto] = useState('')
-  const [col1, setCol1] = useState(null)
-  const [col2, setCol2] = useState(null)
-  const [sub, setSub] = useState('alimentos')
-  const [vuelta, setVuelta] = useState(0)
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+const mesCortoIm = (mes) => `${MESES_CORTOS[Number(mes.slice(5, 7)) - 1]} ${mes.slice(2, 4)}`
+
+// Buscador del P&L: lo que ya está en el mes (para ir a corregirlo), lo que se cargó a mano
+// otros meses y las categorías de gestión de otros meses (para agregarlas sin escribir el
+// nombre), o una línea nueva. Elegir algo abre el formulario con los montos.
+function BuscadorLineas({ informe, im, local, secciones, ocupado, onError, onIr, onAgregar }) {
+  const [texto, setTexto] = useState('')
+  const [elegida, setElegida] = useState(null)
+  const claves = secciones.map((s) => s.key).join(',')
+  const r = useMemo(() => buscarLineas({ informe, im, local, texto, secciones: claves.split(',') }), [informe, im, local, texto, claves])
+  const t = texto.trim()
+  const seccionesNuevas = secciones.filter((s) => s.key !== 'ventas')
+  const nombreSec = (k) => `${SECCION[k].num} · ${SECCION[k].titulo}`
+  const montos = (a, b) => [num(a) != null ? `con factura ${fmtNumIm(a)}` : null, num(b) != null ? `sin factura ${fmtNumIm(b)}` : null].filter(Boolean).join(' · ')
+  const elegir = (x) => { setElegida(x); setTexto('') }
+
+  if (elegida) {
+    return (
+      <FormLinea key={`${elegida.seccion}|${elegida.concepto}`} inicial={elegida} secciones={seccionesNuevas} ocupado={ocupado} onError={onError}
+        onCancelar={() => setElegida(null)}
+        onAgregar={async (b) => {
+          const ok = await onAgregar(b)
+          if (ok) { setElegida(null); onIr(claveLinea(b.seccion, b.concepto)) }
+          return ok
+        }} />
+    )
+  }
+  const hay = r.enMes.length || r.aMano.length || r.gestion.length || t
+  return (
+    <div className="ime-busca">
+      <label className="rve-k" htmlFor="ime-busca-in">Buscar o agregar una línea</label>
+      <input id="ime-busca-in" type="search" value={texto} maxLength={CONCEPTO_MAX} autoComplete="off"
+        placeholder="Ej.: alquiler, edenor, carnes" onChange={(e) => setTexto(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Escape') setTexto('') }} />
+      {hay ? (
+        <div className="ime-res">
+          {r.enMes.length > 0 && <div className="ime-res-k">Ya está en el mes</div>}
+          {r.enMes.map((x) => (
+            <div key={x.clave} className="ime-res-it">
+              <div className="ime-res-tx"><span>{x.concepto}</span><small>{nombreSec(x.seccion)} · {fmtPesosIm(x.total || null)}</small></div>
+              <button type="button" className="btn-sec" onClick={() => { onIr(claveLinea(x.seccion, x.concepto)); setTexto('') }}>Ir</button>
+            </div>
+          ))}
+          {r.aMano.length > 0 && <div className="ime-res-k">{t ? 'Se cargó a mano otros meses' : 'Cargadas a mano otros meses'}</div>}
+          {r.aMano.map((x) => (
+            <div key={`m|${x.seccion}|${x.concepto}`} className="ime-res-it ime-res-oro">
+              <div className="ime-res-tx"><span>{x.concepto}</span><small>{nombreSec(x.seccion)} · {mesCortoIm(x.mes)}: {montos(x.monto, x.monto2) || '—'}</small></div>
+              <button type="button" className="btn-sec" disabled={ocupado} onClick={() => elegir({ ...x, de: mesCortoIm(x.mes) })}>Agregar</button>
+            </div>
+          ))}
+          {r.gestion.length > 0 && <div className="ime-res-k">De gestión, otros meses</div>}
+          {r.gestion.map((x) => (
+            <div key={`g|${x.seccion}|${x.concepto}`} className="ime-res-it">
+              <div className="ime-res-tx"><span>{x.concepto}</span><small>{nombreSec(x.seccion)}</small></div>
+              <button type="button" className="btn-sec" disabled={ocupado} onClick={() => elegir({ ...x, monto: null, monto2: null })}>Agregar</button>
+            </div>
+          ))}
+          {t && seccionesNuevas.length > 0 && (
+            <button type="button" className="ime-res-nueva" disabled={ocupado}
+              onClick={() => elegir({ seccion: seccionesNuevas[0].key, concepto: t, sub: 'alimentos', monto: null, monto2: null, nueva: true })}>
+              + Crear «{t}» como línea nueva
+            </button>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+// Formulario de la línea elegida en el buscador: sección (solo si es nueva), parte del CMV y montos.
+function FormLinea({ inicial, secciones, ocupado, onError, onCancelar, onAgregar }) {
+  const [seccion, setSeccion] = useState(inicial.seccion)
+  const [concepto, setConcepto] = useState(inicial.concepto)
+  const [sub, setSub] = useState(inicial.sub || 'alimentos')
+  const [col1, setCol1] = useState(num(inicial.monto))
+  const [col2, setCol2] = useState(num(inicial.monto2))
   const [err, setErr] = useState('')
   const enviando = useRef(false)
-  // `extra`: el monto recién escrito cuando se aprieta Enter en una columna (todavía no está
-  // en el estado). Enter puede disparar también el envío del formulario: `enviando` evita
-  // que la línea se agregue dos veces.
+  // `extra`: el monto recién escrito cuando se aprieta Enter (todavía no está en el estado).
   const enviar = async (e, extra = {}) => {
     e?.preventDefault()
     if (enviando.current) return
@@ -576,37 +662,47 @@ function NuevaLineaPyl({ secciones, ocupado, onError, onAgregar }) {
     setErr('')
     enviando.current = true
     try {
-      // La columna que queda vacía se guarda vacía (null): suma 0 y se ve "—".
-      const ok = await onAgregar({ seccion, concepto: c, monto: v1, monto2: v2, sub: seccion === 'cmv' ? sub : null })
-      if (ok) { setConcepto(''); setCol1(null); setCol2(null); setVuelta((v) => v + 1) }
+      await onAgregar({ seccion, concepto: c, monto: v1, monto2: v2, sub: seccion === 'cmv' ? sub : null })
     } finally { enviando.current = false }
   }
   return (
-    <form className="rve-agregar" onSubmit={enviar}>
-      <div className="rve-k">+ Agregar línea a mano</div>
-      <div className="ime-nueva">
-        <select className="ime-select" value={seccion} onChange={(e) => setSeccion(e.target.value)} aria-label="Sección de la línea nueva">
-          {secciones.map((s) => <option key={s.key} value={s.key}>{s.num} · {SECCION[s.key].titulo}</option>)}
-        </select>
-        {seccion === 'cmv' && (
-          <select className="ime-select" value={sub} onChange={(e) => setSub(e.target.value)} aria-label="Tipo de CMV">
-            {SUBS_CMV.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+    <form className="ime-busca ime-form" onSubmit={enviar}>
+      <div className="rve-k">{inicial.nueva ? 'Línea nueva' : 'Agregar al mes'}</div>
+      {inicial.nueva ? (
+        <>
+          <label className="rve-nom ime-nueva-con">
+            <input type="text" maxLength={CONCEPTO_MAX} value={concepto} aria-label="Concepto de la línea nueva" autoComplete="off"
+              onChange={(e) => setConcepto(e.target.value)} />
+            <small>{concepto.length}/{CONCEPTO_MAX}</small>
+          </label>
+          <select className="ime-select ime-select-ancho" value={seccion} onChange={(e) => setSeccion(e.target.value)} aria-label="Sección de la línea nueva">
+            {secciones.map((s) => <option key={s.key} value={s.key}>{s.num} · {SECCION[s.key].titulo}</option>)}
           </select>
-        )}
-        <label className="rve-nom ime-nueva-con">
-          <input type="text" maxLength={CONCEPTO_MAX} value={concepto} placeholder="Concepto (ej. IVA 09-26)" aria-label="Concepto de la línea nueva"
-            autoComplete="off" onChange={(e) => setConcepto(e.target.value)} />
-          <small>{concepto.length}/{CONCEPTO_MAX}</small>
-        </label>
-        <div className="ime-ln-montos">
-          <CampoNum key={`a${vuelta}`} valor={null} etiqueta="Columna 1 de la línea nueva" placeholder="Columna 1"
+        </>
+      ) : (
+        <div className="ime-form-tit"><b>{concepto}</b><small>{SECCION[seccion].num} · {SECCION[seccion].titulo}</small></div>
+      )}
+      {seccion === 'cmv' && (
+        <select className="ime-select" value={sub} onChange={(e) => setSub(e.target.value)} aria-label="Tipo de CMV">
+          {SUBS_CMV.map(([k, tx]) => <option key={k} value={k}>{tx}</option>)}
+        </select>
+      )}
+      <div className="ime-form-montos">
+        <label><span>Con factura</span>
+          <CampoNum valor={col1} etiqueta={`${concepto}, con factura`} placeholder="—" escapeRestaura={false}
             onGuardar={setCol1} onRestaurar={() => setCol1(null)} onEnter={(n) => enviar(null, { col1: n })} onError={onError} />
-          <CampoNum key={`b${vuelta}`} valor={null} etiqueta="Columna 2 de la línea nueva" placeholder="Columna 2"
+        </label>
+        <label><span>Sin factura</span>
+          <CampoNum valor={col2} etiqueta={`${concepto}, sin factura`} placeholder="—" escapeRestaura={false}
             onGuardar={setCol2} onRestaurar={() => setCol2(null)} onEnter={(n) => enviar(null, { col2: n })} onError={onError} />
-          <button type="submit" className="btn-sec" disabled={ocupado}>Agregar</button>
-        </div>
+        </label>
       </div>
+      {inicial.de && <small className="ime-ln-nota">Los montos son los de {inicial.de}: cambialos si este mes es distinto.</small>}
       {err && <div className="rve-err-chico">{err}</div>}
+      <div className="ime-form-bot">
+        <button type="submit" className="btn-pri" disabled={ocupado}>Agregar «{concepto.trim() || '…'}»</button>
+        <button type="button" className="btn-sec" disabled={ocupado} onClick={onCancelar}>Cancelar</button>
+      </div>
     </form>
   )
 }
