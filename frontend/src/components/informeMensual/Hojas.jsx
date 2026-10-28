@@ -2,8 +2,6 @@
 // Entrada: el Informe de lib/informeMensual.js (armarInformeMensual) y las páginas de paginasDe.
 // Regla de oro: solo datos reales; un null se muestra "—", nunca 0 (formatos en lib/formatosIm.js).
 // Cada hoja es un div.im-hoja de 1456×819 px. Todas las claves de HOJAS_DEFECTO están en el mapa HOJAS_IM_COMPONENTES.
-import { useEffect, useState } from 'react'
-import { recortarLogo } from '../../lib/recorteLogo.js'
 import { EGRESOS_RESUMEN } from '../../lib/informe.js'
 import { aperturaDe, cashflowDe, cmvDe, deudaDe, detalleDe, FILAS_POR_HOJA, paginasDe, pct, resumenDe } from '../../lib/informeMensual.js'
 import {
@@ -96,25 +94,10 @@ function RombosPortada() {
   )
 }
 
-// Logo sin los márgenes vacíos del archivo, para que se vea del tamaño del dibujo.
-function LogoLocal({ src, alt }) {
-  const [recortado, setRecortado] = useState(null)
-  useEffect(() => {
-    let vivo = true
-    recortarLogo(src).then((r) => { if (vivo) setRecortado(r) })
-    return () => { vivo = false }
-  }, [src])
-  return <img src={recortado || src} alt={alt} />
-}
-
 function Portada({ informe, m }) {
   const nombre = nombreCliente(informe)
-  // Logo de cada local: el que se subió para el reporte o, si no hay, el que tiene en gestión.
-  // Locales con el mismo logo van una sola vez.
-  const logos = informe.locales
-    .map((l) => ({ local: l.local, nombre: l.nombre, src: informe.cliente?.logos?.[l.local] || informe.cliente?.logosLocal?.[l.local] }))
-    .filter((x) => x.src)
-    .filter((x, i, todos) => todos.findIndex((y) => y.src === x.src) === i)
+  // Sin logos de los locales: a la izquierda, el nombre del cliente y, si son varios, sus locales.
+  const varios = informe.locales.length > 1
   return (
     <div className="im-hoja im-portada">
       <div className="im-portada-cuna" />
@@ -127,16 +110,8 @@ function Portada({ informe, m }) {
         <div className="im-ceja">Informe mensual · {mesEnPalabrasIm(informe.mes)}</div>
         <h1 className={`im-portada-tit${nombre.length > 18 ? ' im-portada-tit-largo' : ''}`}>{nombre}</h1>
         {informe.razonSocial && <div className="im-portada-razon">{informe.razonSocial}</div>}
+        {varios && <div className="im-portada-locales">{informe.locales.map((l) => l.nombre).join(' · ')}</div>}
       </div>
-      {logos.length > 0 ? (
-        <div className={`im-portada-logos im-logos-${Math.min(logos.length, 6)}`}>
-          {logos.map((x) => <LogoLocal key={x.local} src={x.src} alt={`Logo de ${x.nombre}`} />)}
-        </div>
-      ) : (
-        <div className="im-portada-nombres">
-          {informe.locales.map((l) => <div key={l.local}>{l.nombre}</div>)}
-        </div>
-      )}
       <div className="im-portada-pie">
         <div className="im-portada-lema">Tu rentabilidad, nuestra gestión</div>
         <div className="im-portada-periodo">Período {periodoIm(informe.mes)}</div>

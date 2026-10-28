@@ -183,20 +183,12 @@
 /* portada */
 .rv-portada-logo { position: absolute; left: 147px; top: 97px; width: 189px; height: auto; }
 .rv-portada-txt { position: absolute; left: 97px; top: 218px; max-width: 900px; }
-.rv-portada-txt-angosto { max-width: 780px; }
 .rv-portada-ceja { font-size: 22px; letter-spacing: .16em; }
 .rv-hoja h1.rv-portada-tit { margin: 22px 0 0; font-size: 116px; font-weight: 800; line-height: 1.05; letter-spacing: -.02em; color: var(--rv-tx); }
 .rv-hoja h1.rv-portada-tit-largo { font-size: 84px; }
 .rv-portada-mes { margin-top: 30px; font-size: 40px; font-weight: 400; color: #c9c7c2; }
 .rv-portada-locales { margin-top: 26px; font-size: 21px; color: var(--rv-tx-2); letter-spacing: .02em; }
 .rv-portada-pie { position: absolute; left: 97px; right: 97px; bottom: 50px; display: flex; justify-content: space-between; font-size: 19px; color: #8b9097; }
-/* logos de los locales: sobre blanco para que se vean sea cual sea su color */
-.rv-portada-logos { position: absolute; right: 97px; top: 50%; transform: translateY(-50%); max-width: 460px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 22px 28px; padding: 30px 34px; background: #f4f1ea; border-radius: 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); }
-.rv-portada-logos img { display: block; object-fit: contain; max-width: 100%; }
-.rv-logos-1 img { max-height: 220px; max-width: 380px; }
-.rv-logos-2 img { max-height: 140px; max-width: 360px; }
-.rv-logos-3 img, .rv-logos-4 img { max-height: 100px; max-width: 180px; }
-.rv-logos-5 img, .rv-logos-6 img { max-height: 74px; max-width: 136px; }
 
 /* contraportada */
 .rv-contra-brillo { position: absolute; inset: 0; background: radial-gradient(ellipse 560px 420px at 50% 44%, rgba(201, 176, 134, .1), rgba(201, 176, 134, 0) 70%), radial-gradient(ellipse 900px 600px at 50% 50%, rgba(30, 43, 58, .9), rgba(30, 43, 58, 0) 80%); }

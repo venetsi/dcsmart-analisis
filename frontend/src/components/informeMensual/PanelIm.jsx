@@ -181,7 +181,7 @@ function PanelPortada({ informe, im, interno, ocupado, acciones, onError }) {
       <Vacio texto={deGestion
         ? `En gestión figura "${deGestion}". Si dejás el campo vacío, sale esa.`
         : 'Gestión no tiene una razón social para este cliente. Si la dejás vacía, la portada sale sin razón social.'} />
-      <Vacio texto="Los logos y los nombres de los locales se cambian en Configurar." />
+      <Vacio texto="Los nombres de los locales se cambian en Configurar." />
     </div>
   )
 }

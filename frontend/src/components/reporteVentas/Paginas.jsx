@@ -4,9 +4,8 @@
 // lib/titularesReporte.js y solo repiten los números de la hoja.
 // Diseño oscuro de oct-26 (referencia: "Reporte de ventas · 3 Monos · Septiembre 2026").
 // Cada hoja es un div.rv-hoja de 1456×819 px; los gráficos son SVG o divs para que impriman nítidos.
-import { useEffect, useId, useState } from 'react'
+import { useId } from 'react'
 import { fmtAR } from '../../lib/reporteVentas.js'
-import { recortarLogo } from '../../lib/recorteLogo.js'
 import { enMillones, titularCanales, titularConsolidado, titularSintesis } from '../../lib/titularesReporte.js'
 import { anteriorActualizado, inflacionDelAcumulado } from '../../lib/inflacion.js'
 import '../../styles/reporte-ventas.css'
@@ -329,40 +328,19 @@ function Participacion({ filas, total, frase, grande, abajo, totalNombre = 'Tota
 // ---------------------------------------------------------------------------
 // Hojas
 
-// Logo sin los márgenes vacíos del archivo, para que se vea del tamaño del dibujo.
-function LogoLocal({ src, alt }) {
-  const [recortado, setRecortado] = useState(null)
-  useEffect(() => {
-    let vivo = true
-    recortarLogo(src).then((r) => { if (vivo) setRecortado(r) })
-    return () => { vivo = false }
-  }, [src])
-  return <img src={recortado || src} alt={alt} />
-}
-
 function Portada({ reporte, ...m }) {
-  // Logo de cada local, en el orden de las hojas: el que se subió para el reporte o,
-  // si no hay, el que el local tiene cargado en gestión. Los que no tienen ninguno no salen.
-  const logos = reporte.locales
-    .map((l) => ({ local: l.local, src: reporte.cliente?.logos?.[l.local] || reporte.cliente?.logosLocal?.[l.local] }))
-    // Locales con el mismo logo (Gran Latino tiene uno solo para los cuatro): va una vez.
-    .filter((x, i, todos) => x.src && todos.findIndex((y) => y.src === x.src) === i)
+  // Sin logos de los locales: a la izquierda, el nombre del cliente y, si son varios, sus locales.
   const varios = reporte.locales.length > 1
   return (
     <Marco m={{ reporte, ...m }} clase="rv-portada" pie={false}>
       <div className="rv-portada-brillo" />
       <img className="rv-portada-logo" src={LOGO} alt="DCSMART Analytics" />
-      <div className={`rv-portada-txt${logos.length ? ' rv-portada-txt-angosto' : ''}`}>
+      <div className="rv-portada-txt">
         <div className="rv-ceja rv-portada-ceja">Reporte de ventas</div>
         <h1 className={`rv-portada-tit${(reporte.cliente?.nombre || '').length > 16 ? ' rv-portada-tit-largo' : ''}`}>{reporte.cliente?.nombre}</h1>
         <div className="rv-portada-mes">{mesEnPalabras(reporte.mes)}</div>
         {varios && <div className="rv-portada-locales">{reporte.locales.map((l) => nom(reporte, l.local)).join(' · ')}</div>}
       </div>
-      {logos.length > 0 && (
-        <div className={`rv-portada-logos rv-logos-${Math.min(logos.length, 6)}`}>
-          {logos.map((x) => <LogoLocal key={x.local} src={x.src} alt={`Logo de ${nom(reporte, x.local)}`} />)}
-        </div>
-      )}
       <div className="rv-portada-pie">
         <span>Tu rentabilidad, nuestra gestión</span>
         <span>{mesEnPalabras(mesSiguiente(reporte.mes))}</span>
