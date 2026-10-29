@@ -39,6 +39,13 @@ export const ES_APP_RE = /^(rappi|pedidos\s*ya|peya|mp\s*delivery|uber\s*eats)(\
 
 const LOCAL = 'Local'
 
+// Canales que traían los reportes de ejemplo (decks de Canva), para agregarlos con un
+// clic. Uno nuevo se sigue pudiendo escribir a mano.
+export const CANALES_EJEMPLO = [
+  'Rappi', 'Pedidos Ya', 'MP Delivery', 'Cheaf', 'Ecommerce', 'Eventos',
+  'BigBox', 'Mostrador', 'Morfi', 'NoShow', 'Planta Producción',
+]
+
 // Fudo escribe 'Pedido Ya' (singular), que ES_APP_RE (igual a gestión) no toma.
 const ALIAS_APP_RE = /^pedido\s*ya(\s+efectivo)?$/i
 

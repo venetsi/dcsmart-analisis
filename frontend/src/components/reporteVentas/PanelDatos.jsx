@@ -2,7 +2,7 @@
 // hoja con su valor y de dónde sale (automático, calculado, a mano, falta o cerrado).
 // Regla de oro: un dato que no está se ve "—" y FALTA, nunca 0.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { datoLibre, fmtAR, parseNumeroAR } from '../../lib/reporteVentas.js'
+import { CANALES_EJEMPLO, datoLibre, fmtAR, parseNumeroAR } from '../../lib/reporteVentas.js'
 import { mesEnPalabras } from './Paginas.jsx'
 
 const esNum = (v) => v != null && Number.isFinite(v)
@@ -234,6 +234,7 @@ function DatosHoja({ reporte, pagina, data, interno, cerradoMes, ocupado, onGuar
   const [nuevoImporte, setNuevoImporte] = useState(null)
   const [claveImporte, setClaveImporte] = useState(0)
   const [errNuevo, setErrNuevo] = useState('')
+  const filaNuevo = useRef(null)
 
   const l = pagina?.local ? reporte.locales.find((x) => x.local === pagina.local) : null
   const mesesCerrados = new Set(data.cierres.map((c) => c.mes))
@@ -312,12 +313,26 @@ function DatosHoja({ reporte, pagina, data, interno, cerradoMes, ocupado, onGuar
           if (ok) { setNuevoNombre(''); setNuevoImporte(null); setClaveImporte((k) => k + 1) }
         })
       }
+      // Los canales de ejemplo que la hoja todavía no tiene: un clic pone el nombre y salta al importe.
+      const faltan = CANALES_EJEMPLO.filter((n) => !l.canales.some((c) => c.nombre.toLowerCase() === n.toLowerCase()))
+      const elegir = (n) => {
+        setNuevoNombre(n)
+        setErrNuevo('')
+        filaNuevo.current?.querySelector('input.rve-campo')?.focus()
+      }
       agregar = (
         <form className="rve-agregar" onSubmit={agregarCanal}>
           <div className="rve-k">+ Agregar canal</div>
-          <div className="rve-agregar-fila">
+          {faltan.length > 0 && (
+            <div className="rve-canales-ej" role="group" aria-label="Canales de ejemplo">
+              {faltan.map((n) => (
+                <button key={n} type="button" className={`rve-canal-ej${nuevoNombre === n ? ' on' : ''}`} disabled={ocupado} onClick={() => elegir(n)}>{n}</button>
+              ))}
+            </div>
+          )}
+          <div className="rve-agregar-fila" ref={filaNuevo}>
             <label className="rve-nom">
-              <input type="text" maxLength={40} placeholder="Nombre (ej. Eventos)" value={nuevoNombre} aria-label="Nombre del canal"
+              <input type="text" maxLength={40} placeholder="Elegí uno de arriba o escribí otro" value={nuevoNombre} aria-label="Nombre del canal"
                 autoComplete="off" onChange={(e) => setNuevoNombre(e.target.value)} />
               <small>{nuevoNombre.length}/40</small>
             </label>

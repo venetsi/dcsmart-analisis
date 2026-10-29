@@ -57,6 +57,11 @@
 .rve-nom input, .rve-config input[type=text] { padding: 5px 8px; border-radius: 7px; background: var(--bg-input); border: 1px solid var(--border-input); color: var(--txt); font-size: 12px; width: 100%; }
 .rve-nom small, .rve-config small { font-size: 10px; color: var(--txt3); text-align: right; }
 .rve-err-chico { margin-top: 6px; font-size: 11.5px; color: var(--bad); }
+.rve-canales-ej { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.rve-canal-ej { padding: 4px 10px; border-radius: 999px; font-size: 11.5px; background: var(--bg-input); border: 1px solid var(--border-input); color: var(--txt2); cursor: pointer; }
+.rve-canal-ej:hover:not(:disabled) { color: var(--txt); border-color: var(--txt3); }
+.rve-canal-ej.on { color: var(--txt); background: rgba(201,176,134,.16); border-color: rgba(201,176,134,.55); }
+.rve-canal-ej:disabled { opacity: .5; cursor: default; }
 
 /* Configuración */
 .rve-config { display: grid; gap: 16px; margin-bottom: 18px; }

@@ -3,7 +3,7 @@
 // Solo lista lo que trajo la consulta del mes: no inventa métodos ni montos.
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../lib/api.js'
-import { canalesAuto, fmtAR } from '../../lib/reporteVentas.js'
+import { CANALES_EJEMPLO, canalesAuto, fmtAR } from '../../lib/reporteVentas.js'
 import { mesEnPalabras } from './Paginas.jsx'
 import { msgError } from './errores.js'
 
@@ -103,7 +103,7 @@ export default function ConfigCliente({ grupo, cliente, data, onGuardado, onCerr
   // ── reglas ──
   const reglas = data?.reglas || []
   const sugerencias = useMemo(() => {
-    const s = new Set(reglas.map((r) => r.canal))
+    const s = new Set([...CANALES_EJEMPLO, ...reglas.map((r) => r.canal)])
     for (const l of data?.cliente?.locales || []) {
       const a = data.auto[l]
       for (const m of Object.keys(a?.detalles || {})) {
