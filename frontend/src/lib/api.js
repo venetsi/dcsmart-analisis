@@ -23,8 +23,22 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn
 }
 
+// Lo que se muestra cuando el servidor no da un motivo propio: nunca un código ni inglés.
+export const MSG_ERROR_GENERICO = 'No se pudo completar la operación. Probá de nuevo en un momento.'
+
+// Las rutas propias responden { error: 'motivo en castellano' }. Los errores del framework
+// (Fastify) traen además statusCode y code, con un error en inglés ("Bad Request"): esos no
+// se muestran tal cual.
+function mensajeDe(data) {
+  if (!data || typeof data.error !== 'string' || !data.error.trim()) return MSG_ERROR_GENERICO
+  if ('statusCode' in data || 'code' in data) return MSG_ERROR_GENERICO
+  return data.error
+}
+
 async function request(path, { method = 'GET', body, auth = true } = {}) {
-  const headers = { 'Content-Type': 'application/json' }
+  // Content-Type JSON solo si hay cuerpo: con el encabezado y sin cuerpo (un DELETE),
+  // Fastify responde 400 "Bad Request" (FST_ERR_CTP_EMPTY_JSON_BODY) sin llegar a la ruta.
+  const headers = body !== undefined ? { 'Content-Type': 'application/json' } : {}
   if (auth) {
     const token = getToken()
     if (token) headers.Authorization = `Bearer ${token}`
@@ -47,7 +61,7 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   try { data = await resp.json() } catch { /* respuesta sin body */ }
 
   if (!resp.ok) {
-    throw new ApiError(resp.status, data?.error || `Error ${resp.status}`)
+    throw new ApiError(resp.status, mensajeDe(data))
   }
   return data
 }

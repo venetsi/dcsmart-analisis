@@ -19,6 +19,7 @@ import reporteVentasRoutes from './routes/reporte_ventas.js'
 import informeMensualRoutes from './routes/informe_mensual.js'
 import tvRoutes from './routes/tv.js'
 import costoImpositivoRoutes from './routes/costo_impositivo.js'
+import { aceptarJsonVacio } from './lib/jsonVacio.js'
 
 // trustProxy: Cloud Run/Firebase Hosting están delante nuestro — sin esto, req.ip
 // (y por lo tanto el rate limit) vería siempre la IP del proxy, no la del cliente real.
@@ -26,6 +27,8 @@ import costoImpositivoRoutes from './routes/costo_impositivo.js'
 // con prefix '/api/reporte-manual') solo matcheaban con la barra final por defecto,
 // mientras el frontend llama sin ella -> 404 en producción.
 const app = Fastify({ logger: true, trustProxy: true, ignoreTrailingSlash: true })
+// Un DELETE con Content-Type JSON y sin cuerpo no es un error (ver lib/jsonVacio.js, #296).
+aceptarJsonVacio(app)
 
 await app.register(cors, {
   origin: (origin, cb) => {

@@ -135,6 +135,7 @@
 .im-il-tri small { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--im-tx-3); }
 .im-il-tri b { display: block; font-size: 20px; font-weight: 800; margin-top: 2px; white-space: nowrap; }
 .im-il-tri b.im-chico { font-size: 16px; }
+.im-il-tri b.im-largo { font-size: 14px; white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
 .im-il-chicos .im-il-card { padding: 16px 14px; }
 .im-il-chicos .im-il-nm { font-size: 19px; }
 .im-il-chicos .im-il-vt { font-size: 22px; }
