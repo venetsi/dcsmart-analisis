@@ -1,6 +1,7 @@
 // Consulta las vistas de BigQuery con filtros PARAMETRIZADOS.
 // Los filtros del UI se traducen acá con whitelist (nunca SQL armado afuera).
 // Todas las consultas filtran por fecha → escanean solo particiones necesarias (FinOps).
+import { armarFrescura, SIN_DATO } from '../lib/frescura.js'
 
 // Vistas que alimentan los desplegables (locales, rubros, etc.) de las pantallas.
 // Las pantallas Pagos, Ventas y Cashflow, que traían las filas crudas de estas
@@ -300,16 +301,29 @@ export default async function (fastify) {
     return out
   })
 
-  // GET /api/data/etl/status — último corte y cuadratura para el header
-  fastify.get('/etl/status', { preHandler: [fastify.authenticate] }, async () => {
-    const [rows] = await fastify.bq.query({
-      query: `SELECT corte, MAX(finished_at) AS ultimo,
-                     COUNTIF(estado='MISMATCH') AS mismatches,
-                     COUNTIF(estado='ERROR') AS errores
-              FROM ${fastify.bqDataset}.etl_runs
-              WHERE started_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 DAY)
-              GROUP BY corte ORDER BY ultimo DESC LIMIT 1`
-    })
-    return plainRows(rows)[0] || { corte: null }
+  // GET /api/data/frescura — hora del último movimiento de gestión que ya está
+  // en la réplica en vivo (Datastream, la misma de la que leen las vistas vw_*).
+  //
+  // Antes (/etl/status) se informaba el último corte del Job dcsmart-etl, que
+  // corre cada hora y ya no alimenta ninguna pantalla: la barra decía "se
+  // actualiza cada 1 hora" y los usuarios creían que los datos tenían una hora
+  // de atraso cuando en realidad llegan en ~5 minutos (Trello #301).
+  // source_timestamp es INT64 en milisegundos (hora del cambio en Postgres).
+  fastify.get('/frescura', { preHandler: [fastify.authenticate] }, async (req) => {
+    const CDC = fastify.bqDatasetCdc
+    try {
+      const [rows] = await fastify.bq.query({
+        query: `SELECT TIMESTAMP_MILLIS(MAX(ts)) AS ultimo_dato FROM (
+                  SELECT MAX(datastream_metadata.source_timestamp) AS ts FROM ${CDC}.public_pagos
+                  UNION ALL
+                  SELECT MAX(datastream_metadata.source_timestamp) AS ts FROM ${CDC}.public_cajas
+                )`
+      })
+      return armarFrescura(plain(rows[0]?.ultimo_dato))
+    } catch (err) {
+      // El badge es informativo: si BigQuery no responde, la barra simplemente no lo muestra.
+      req.log.warn({ err }, 'frescura: no se pudo consultar la réplica')
+      return { ...SIN_DATO }
+    }
   })
 }
