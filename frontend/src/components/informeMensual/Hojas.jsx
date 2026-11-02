@@ -8,6 +8,7 @@ import {
   fmtMontoIm, fmtNumIm, fmtPctIm, fmtPesosIm, fmtPtsIm, flechaIm, mesEnPalabrasIm, nombreMesIm, periodoIm, tonoIm,
 } from '../../lib/formatosIm.js'
 import { Lineas } from '../reporteVentas/Paginas.jsx'
+import { anteriorActualizado } from '../../lib/inflacion.js'
 import '../../styles/informe-mensual.css'
 
 const LOGO = '/logos/DC-MANAGEMENT.png'
@@ -591,14 +592,20 @@ function Historico({ informe, m, pagina }) {
   const anio = Number(String(informe.mes).slice(0, 4))
   const ceja = cejaLocal(informe, l, `Histórico de ventas · ${nombreMesIm(`${anio}-01`).toLowerCase()} – ${nombreMesIm(informe.mes).toLowerCase()} · millones de $`)
   const hayAnterior = h.some((x) => esNum(x.anterior))
-  // La misma leyenda y las mismas curvas que el Reporte de Ventas (sin inflación: contra el año anterior a secas).
+  // La misma cuenta, leyenda y curvas que el Reporte de Ventas: contra el año anterior actualizado
+  // por inflación (IPC de INDEC). Si no hay inflación cargada, contra el año anterior a secas.
+  const actualizado = h.map((x) => anteriorActualizado(informe.ipc, x.mes, x.anterior))
+  const conInflacion = actualizado.some(esNum)
+  const refDe = (x, i) => (conInflacion ? actualizado[i] : esNum(x.anterior) ? x.anterior : null)
   const leyenda = (
     <div className="im-leyenda im-leyenda-curvas">
       <span><i className="im-ley-curva" />{anio}</span>
-      {hayAnterior && <span><i className="im-ley-curva im-ley-curva-ant" />{anio - 1}</span>}
+      {hayAnterior && <span><i className={conInflacion ? 'im-ley-curva im-ley-curva-inf' : 'im-ley-curva im-ley-curva-ant'} />{conInflacion ? `${anio - 1} actualizado por inflación` : anio - 1}</span>}
     </div>
   )
-  const notaPie = hayAnterior ? `Verde: vendió más que en ${anio - 1} · Rojo: vendió menos` : undefined
+  const notaPie = hayAnterior
+    ? (conInflacion ? 'Verde: le ganó a la inflación · Rojo: le perdió · Inflación: IPC de INDEC' : `Verde: vendió más que en ${anio - 1} · Rojo: vendió menos`)
+    : undefined
   const hayDatos = h.some((x) => esNum(x.venta?.valor) || esNum(x.anterior))
   if (!hayDatos) {
     return (
@@ -626,8 +633,8 @@ function Historico({ informe, m, pagina }) {
       <div className="im-hist" role="img"
         aria-label={`Curvas de venta mensual de ${l.nombre} en ${anio} y ${anio - 1}, con la diferencia por mes, la variación contra el mes anterior, cubiertos y promedio por cubierto`}>
         <div style={{ marginLeft: ROT }}>
-          <Lineas filas={h.map((x) => ({ mes: x.mes, venta: esNum(x.venta?.valor) ? x.venta.valor : null, ref: esNum(x.anterior) ? x.anterior : null }))}
-            refNombre={String(anio - 1)} conInflacion={false} ancho={ANCHO} alto={alto} />
+          <Lineas filas={h.map((x, i) => ({ mes: x.mes, venta: esNum(x.venta?.valor) ? x.venta.valor : null, ref: refDe(x, i) }))}
+            refNombre={conInflacion ? `${anio - 1} + inflación` : String(anio - 1)} conInflacion={conInflacion} ancho={ANCHO} alto={alto} />
         </div>
         {hayAnterior && <div className="im-hist-rot" style={{ top: alto + 56 }}>VS {anio - 1}</div>}
         <svg width="1262" height={filasAbajo.length * 40 + 8} viewBox={`0 0 1262 ${filasAbajo.length * 40 + 8}`} className="im-hist-filas" aria-hidden="true">

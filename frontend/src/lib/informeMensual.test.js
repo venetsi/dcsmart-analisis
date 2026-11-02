@@ -744,3 +744,21 @@ test('buscarLineas: en el mes, a mano otros meses (con los montos de la última 
   assert.deepEqual(r.aMano, [])
   assert.deepEqual(r.enMes.map((x) => [x.concepto, x.origen]), [['Alquiler', 'manual']])
 })
+
+// #293: el histórico del informe compara contra el año anterior actualizado por inflación, con el
+// mismo IPC que el Reporte de Ventas (antes comparaba contra el año anterior a secas).
+test('el informe trae el IPC del Reporte de Ventas para actualizar el año anterior', async () => {
+  const { anteriorActualizado } = await import('./inflacion.js')
+  const rvData = rvDataDe(['L1'])
+  const ipc = {}
+  for (const m of ['2025-02', '2025-03', '2025-04', '2025-05', '2025-06', '2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01']) ipc[m] = { variacion: 2 }
+  const rv = armarReporte({ cliente: rvData.cliente, mes: MES, porLocal: armarPorLocal(rvData), ipc, hoy: HOY })
+  const inf = armarInformeMensual({ im: imDe(['L1']), rv, mes: MES })
+  assert.deepEqual(inf.ipc, ipc)
+  const ene = inf.locales[0].rv.historico.find((h) => h.mes === '2026-01')
+  assert.equal(ene.anterior, 800)
+  // 12 meses al 2 %: 800 × 1,02^12 ≈ 1014,59; 2026 vendió 1000 → perdió contra la inflación.
+  assert.ok(Math.abs(anteriorActualizado(inf.ipc, ene.mes, ene.anterior) - 800 * 1.02 ** 12) < 0.01)
+  // Sin IPC cargado: objeto vacío (el histórico vuelve a comparar contra el año anterior a secas).
+  assert.deepEqual(informeDe().ipc, {})
+})
