@@ -252,6 +252,15 @@ function Indicadores({ informe, m, pagina }) {
 // ---------------------------------------------------------------------------
 // Indicadores por local (grupo)
 
+// % de la terna CMV / Labor / EERR de cada local. Uno que no entra en la cajita (p. ej.
+// "1.543.138,96%" con un CMV mucho mayor que la venta) se achica y parte en dos renglones:
+// recortado se leía "1.543.1", otro número (#294).
+function PctTri({ v, tono }) {
+  const txt = fmtPctIm(v)
+  const clase = [esNum(v) ? claseTono(tono) : 'im-nulo', txt.length > 8 ? 'im-largo' : null].filter(Boolean).join(' ')
+  return <b className={clase || undefined}>{txt}</b>
+}
+
 function IndLocales({ informe, m }) {
   const g = informe.grupo?.meses?.[informe.mes]?.indicadores || {}
   const locales = informe.locales
@@ -313,12 +322,12 @@ function IndLocales({ informe, m }) {
                     ))}
                   </div>
                   <div className="im-il-tri">
-                    <div><small>CMV</small><b className={esNum(a.cmvPct) ? undefined : 'im-nulo'}>{fmtPctIm(a.cmvPct)}</b></div>
-                    <div><small>Labor</small><b className={esNum(a.laborPct) ? undefined : 'im-nulo'}>{fmtPctIm(a.laborPct)}</b></div>
+                    <div><small>CMV</small><PctTri v={a.cmvPct} /></div>
+                    <div><small>Labor</small><PctTri v={a.laborPct} /></div>
                     <div>
                       <small>EERR</small>
                       {esNum(a.eerrPct)
-                        ? <b className={claseTono(tonoIm(a.eerrPct))}>{fmtPctIm(a.eerrPct)}</b>
+                        ? <PctTri v={a.eerrPct} tono={tonoIm(a.eerrPct)} />
                         : esNum(a.eerr)
                           // sin venta no hay %, pero el resultado en pesos sí es un dato
                           ? <b className={`im-chico ${claseTono(tonoIm(a.eerr)) || ''}`}>{fmtPesosIm(a.eerr)}</b>
