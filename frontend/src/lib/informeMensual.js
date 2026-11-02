@@ -456,6 +456,8 @@ export function armarInformeMensual({ im, rv, mes }) {
 
   return {
     cliente, mes, meses,
+    // IPC del Reporte de Ventas: el histórico compara contra el año anterior actualizado por inflación.
+    ipc: rv?.ipc || {},
     razonSocial: cliente.razon_social || im.razonSocialGestion || null,
     locales, grupo,
     hojasConfig: im.hojas?.hojas || null,
