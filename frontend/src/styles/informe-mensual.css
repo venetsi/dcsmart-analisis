@@ -294,6 +294,7 @@
 .im-leyenda-curvas { align-items: center; }
 .im-leyenda i.im-ley-curva { width: 30px; height: 0; border-radius: 0; border-top: 4px solid var(--im-oro); background: none; }
 .im-leyenda i.im-ley-curva-ant { border-top: 3px dashed #7d8da0; }
+.im-leyenda i.im-ley-curva-inf { border-top: 3px solid var(--rv-teal, #4fb3bb); }
 .im-t tr.im-t-pct td { color: var(--im-tx-2); }
 .im-t tr.im-t-pct td:first-child { color: var(--im-tx); }
 .im-t tr.im-t-pct td.pos { color: var(--im-verde); }
