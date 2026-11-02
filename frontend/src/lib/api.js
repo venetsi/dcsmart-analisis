@@ -85,7 +85,7 @@ export const api = {
   getDashboard: (query) => request(`/data/dashboard${toQueryString(query)}`),
   getPyl: (query) => request(`/data/pyl${toQueryString(query)}`),
   getDatasetOptions: (dataset, query) => request(`/data/${dataset}/options${toQueryString(query)}`),
-  getEtlStatus: () => request('/data/etl/status'),
+  getFrescura: () => request('/data/frescura'),
 
   // Reporte de Ventas Mensuales (P&L por tipo de comprobante)
   getReporteMensual: (query) => request(`/data/reporte-mensual${toQueryString(query)}`),
