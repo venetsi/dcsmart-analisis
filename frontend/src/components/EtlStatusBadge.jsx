@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 
-// A partir de cuántos minutos sin novedades se avisa (la réplica tarda ~5 min).
-const ATRASO_AVISO_MIN = 20
-
 function IcoRefresh() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -13,11 +10,16 @@ function IcoRefresh() {
   )
 }
 
-// Hora Argentina en HH:MM, sin importar el huso de la PC que mira.
-export function horaArgentina(iso) {
+// Hora Argentina en HH:MM, sin importar el huso de la PC que mira. Si el último
+// movimiento no es de hoy (de madrugada o un feriado no hay novedades), se
+// antepone el día para que no parezca que los datos están atrasados.
+export function horaArgentina(iso, ahora = new Date()) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' })
+  const TZ = 'America/Argentina/Buenos_Aires'
+  const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ })
+  const dia = (x) => x.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', timeZone: TZ })
+  return dia(d) === dia(ahora) ? hora : `${dia(d)} ${hora}`
 }
 
 // Hasta qué hora llegan los datos de gestión y un botón para volver a pedirlos.
@@ -41,18 +43,14 @@ export default function EtlStatusBadge() {
   const hora = frescura?.ultimoDato ? horaArgentina(frescura.ultimoDato) : null
   if (!hora) return null
 
-  const demora = Number(frescura.demoraMin)
-  const atrasado = Number.isFinite(demora) && demora > ATRASO_AVISO_MIN
   return (
     <div className="etl-badge" title="Hora del último movimiento de gestión que ya se ve acá. Los datos llegan solos cada 5 minutos.">
       <div className="etl-badge-row">
-        <span className={'etl-dot' + (atrasado ? ' warn' : '')} />
+        <span className="etl-dot" />
         <span>Datos al <b>{hora}</b></span>
       </div>
       <div className="etl-badge-foot">
-        {atrasado
-          ? <small className="warn">Con {demora} min de atraso</small>
-          : <small>Se actualizan solos cada 5 min</small>}
+        <small>Se actualizan solos cada 5 min</small>
         <button
           type="button"
           className={'etl-badge-refresh' + (actualizando ? ' girando' : '')}
