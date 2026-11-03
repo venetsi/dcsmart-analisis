@@ -71,6 +71,17 @@ test('canalesAuto: \'Pedido Ya\' de Fudo (singular) es Pedidos Ya y no queda en 
   const l = armarLocal({ local: 'F', mes: '2026-09', auto: { meses: { '2026-09': { venta: 1000 } }, canales: { '2026-09': c } }, valores: [], cierres: [] })
   assert.equal(l.canales.find((x) => x.nombre === 'Local').valor, 875)
 })
+test('canalesAuto: \'Online Rappi\' de Fudo es Rappi (delivery) y suma con el Rappi cargado a mano', () => {
+  const c = canalesAuto({ detalles: [{ metodo: 'Online Rappi', monto: 14362480 }, { metodo: 'Rappi', monto: 100 },
+    { metodo: 'online pedidos ya efectivo', monto: 30 }, { metodo: 'Online', monto: 50 }], cajasOrigen: [], reglas: [] })
+  assert.deepEqual(c, [{ nombre: 'Rappi', valor: 14362580, delivery: true }, { nombre: 'Pedidos Ya', valor: 30, delivery: true }])
+  // La regla manda también sobre el nombre de Fudo.
+  const r = canalesAuto({ detalles: [{ metodo: 'Online Rappi', monto: 10 }], cajasOrigen: [],
+    reglas: [{ match: 'metodo', valor: 'online rappi', canal: 'Ecommerce', delivery: false }] })
+  assert.deepEqual(r, [{ nombre: 'Ecommerce', valor: 10, delivery: false }])
+  const t = ticketsAuto({ cantidades: [{ metodo: 'Online Rappi', cantidad: 36, filas: 36, conCantidad: 36, montoConCantidad: 14362480 }] })
+  assert.deepEqual(t.tickets, { Rappi: 36 })
+})
 test('mes cerrado con un canal a mano: Local se recalcula', () => {
   const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: {}, canales: {} },
     valores: [{ local: 'P', mes: '2026-09', dato: 'canal:Eventos', valor: 20 }],

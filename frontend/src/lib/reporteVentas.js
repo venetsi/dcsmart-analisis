@@ -39,8 +39,9 @@ export const ES_APP_RE = /^(rappi|pedidos\s*ya|peya|mp\s*delivery|uber\s*eats)(\
 
 const LOCAL = 'Local'
 
-// Fudo escribe 'Pedido Ya' (singular), que ES_APP_RE (igual a gestión) no toma.
-const ALIAS_APP_RE = /^pedido\s*ya(\s+efectivo)?$/i
+// Fudo escribe 'Pedido Ya' (singular) y antepone 'Online' a lo cobrado por la app
+// ('Online Rappi'): ES_APP_RE (igual a gestión) no toma ninguno de los dos.
+const ALIAS_APP_RE = /^(online\s+)?(rappi|pedidos?\s*ya|peya|mp\s*delivery|uber\s*eats)(\s+efectivo)?$/i
 
 // ¿El método de cobro es una app de delivery?
 export function esApp(metodo) {
@@ -80,7 +81,7 @@ function dividir(a, b) {
 }
 
 function nombreApp(metodo) {
-  const base = metodo.trim().replace(/\s+efectivo$/i, '').toLowerCase().replace(/\s+/g, '')
+  const base = metodo.trim().replace(/^online\s+/i, '').replace(/\s+efectivo$/i, '').toLowerCase().replace(/\s+/g, '')
   if (base === 'rappi') return 'Rappi'
   if (base === 'pedidosya' || base === 'pedidoya' || base === 'peya') return 'Pedidos Ya'
   if (base === 'mpdelivery') return 'MP Delivery'
