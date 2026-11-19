@@ -163,7 +163,9 @@ export default async function (fastify) {
 
   // GET /api/data/pyl?mes=YYYY-MM&grupo=&local= — Estado de Resultados (P&L) mensual.
   // Ventas de vw_cajas (con split efectivo/fiscal nativo). Gastos = pagos EGRESO por
-  // rubro+categoria, split fiscal (metodo != Efectivo) vs efectivo. El frontend arma
+  // rubro+categoria, split fiscal (metodo != Efectivo) vs efectivo. Los gastos van al mes
+  // del PERÍODO del pago; si no tiene, al de la fecha de factura (igual que Costo
+  // impositivo; Trello #361). El frontend arma
   // la estructura de secciones del P&L; el backend devuelve los agregados.
   fastify.get('/pyl', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const mes = /^\d{4}-\d{2}$/.test(req.query.mes || '') ? req.query.mes : null
@@ -200,7 +202,7 @@ export default async function (fastify) {
                        CAST(ROUND(SUM(IF(metodo != 'Efectivo' OR metodo IS NULL, importe, 0))) AS INT64) fiscal,
                        CAST(ROUND(SUM(IF(metodo = 'Efectivo', importe, 0))) AS INT64) efectivo
                 FROM ${DS}.vw_pagos
-                WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desde AND @hasta${scopeCond}
+                WHERE ingresa_egreso = 'EGRESO' AND COALESCE(periodo_dia, fecha_dia) BETWEEN @desde AND @hasta${scopeCond}
                 GROUP BY 1, 2 ORDER BY total DESC`,
         params
       })
