@@ -24,6 +24,13 @@ function plainRows (rows) {
   return rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, plain(v)])))
 }
 
+// Gastos NETOS de vw_pagos: los egresos suman y las notas de crédito (vienen como
+// INGRESO con tipo NC*) restan, igual que el Informe Mensual y que gestión (Trello #367).
+const ES_GASTO = `(ingresa_egreso = 'EGRESO' OR STARTS_WITH(tipo, 'NC'))`
+const GASTO_NETO = `(CASE WHEN ingresa_egreso = 'EGRESO' THEN importe WHEN STARTS_WITH(tipo, 'NC') THEN -importe ELSE 0 END)`
+// El mes al que se imputa el gasto: el PERÍODO; si no tiene, la fecha de factura (Trello #361/#367).
+const FECHA_PERIODO = 'COALESCE(periodo_dia, fecha_dia)'
+
 export default async function (fastify) {
   const DS = fastify.bqDataset
 
@@ -44,7 +51,9 @@ export default async function (fastify) {
   })
 
   // GET /api/data/dashboard?grupo=&desde=&hasta= — KPIs + serie semanal + proyección 60 días.
-  // Pagos por fecha factura (fecha_dia de vw_pagos), Ventas por fecha inicio (fecha_dia de vw_cajas).
+  // Ventas por fecha inicio (fecha_dia de vw_cajas). Los totales de pagos van por PERÍODO;
+  // la serie semanal, por fecha de factura (el período es un mes entero: por período todo
+  // caería en la primera semana). En los dos las NC restan (Trello #367).
   fastify.get('/dashboard', { preHandler: [fastify.authenticate] }, async (req) => {
     const hoy = new Date().toISOString().slice(0, 10)
     const desde = req.query.desde || new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)
@@ -63,10 +72,10 @@ export default async function (fastify) {
         params: base
       }),
       fastify.bq.query({
-        query: `SELECT COUNT(*) AS n, COALESCE(SUM(importe),0) AS total,
-                       COALESCE(SUM(IF(STARTS_WITH(UPPER(rubro),'CMV'), importe, 0)),0) AS cmv
+        query: `SELECT COUNTIF(ingresa_egreso = 'EGRESO') AS n, COALESCE(SUM(${GASTO_NETO}),0) AS total,
+                       COALESCE(SUM(IF(STARTS_WITH(UPPER(rubro),'CMV'), ${GASTO_NETO}, 0)),0) AS cmv
                 FROM ${DS}.vw_pagos
-                WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desde AND @hasta${gCond}`,
+                WHERE ${ES_GASTO} AND ${FECHA_PERIODO} BETWEEN @desde AND @hasta${gCond}`,
         params: base
       }),
       fastify.bq.query({
@@ -76,10 +85,10 @@ export default async function (fastify) {
         params: base
       }),
       fastify.bq.query({
-        query: `SELECT DATE_TRUNC(fecha_dia, WEEK(MONDAY)) AS semana, SUM(importe) AS pagos,
-                       SUM(IF(STARTS_WITH(UPPER(rubro),'CMV'), importe, 0)) AS cmv
+        query: `SELECT DATE_TRUNC(fecha_dia, WEEK(MONDAY)) AS semana, SUM(${GASTO_NETO}) AS pagos,
+                       SUM(IF(STARTS_WITH(UPPER(rubro),'CMV'), ${GASTO_NETO}, 0)) AS cmv
                 FROM ${DS}.vw_pagos
-                WHERE ingresa_egreso = 'EGRESO' AND fecha_dia BETWEEN @desdeLb AND @hasta${gCond}
+                WHERE ${ES_GASTO} AND fecha_dia BETWEEN @desdeLb AND @hasta${gCond}
                 GROUP BY 1 ORDER BY 1`,
         params: base
       })
@@ -165,7 +174,7 @@ export default async function (fastify) {
   // Ventas de vw_cajas (con split efectivo/fiscal nativo). Gastos = pagos EGRESO por
   // rubro+categoria, split fiscal (metodo != Efectivo) vs efectivo. Los gastos van al mes
   // del PERÍODO del pago; si no tiene, al de la fecha de factura (igual que Costo
-  // impositivo; Trello #361). El frontend arma
+  // impositivo; Trello #361). Las notas de crédito restan (Trello #367). El frontend arma
   // la estructura de secciones del P&L; el backend devuelve los agregados.
   fastify.get('/pyl', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const mes = /^\d{4}-\d{2}$/.test(req.query.mes || '') ? req.query.mes : null
@@ -198,12 +207,12 @@ export default async function (fastify) {
       }),
       fastify.bq.query({
         query: `SELECT rubro, categoria,
-                       CAST(ROUND(SUM(importe)) AS INT64) total,
-                       CAST(ROUND(SUM(IF(metodo != 'Efectivo' OR metodo IS NULL, importe, 0))) AS INT64) fiscal,
-                       CAST(ROUND(SUM(IF(metodo = 'Efectivo', importe, 0))) AS INT64) efectivo
+                       CAST(ROUND(SUM(${GASTO_NETO})) AS INT64) total,
+                       CAST(ROUND(SUM(IF(metodo != 'Efectivo' OR metodo IS NULL, ${GASTO_NETO}, 0))) AS INT64) fiscal,
+                       CAST(ROUND(SUM(IF(metodo = 'Efectivo', ${GASTO_NETO}, 0))) AS INT64) efectivo
                 FROM ${DS}.vw_pagos
-                WHERE ingresa_egreso = 'EGRESO' AND COALESCE(periodo_dia, fecha_dia) BETWEEN @desde AND @hasta${scopeCond}
-                GROUP BY 1, 2 ORDER BY total DESC`,
+                WHERE ${ES_GASTO} AND ${FECHA_PERIODO} BETWEEN @desde AND @hasta${scopeCond}
+                GROUP BY 1, 2 HAVING total != 0 ORDER BY total DESC`,
         params
       })
     ])

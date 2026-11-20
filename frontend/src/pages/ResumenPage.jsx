@@ -109,7 +109,7 @@ export default function ResumenPage() {
       <PageHeader
         title="Dashboard"
         chips={[grupo]}
-        sub='Pagos por fecha factura · Ventas por fecha inicio · CMV = rubros que comienzan con "CMV". Proyección estacional estimada a 60 días.'
+        sub='Ventas por fecha inicio · Totales de pagos por período (el gráfico semanal, por fecha de factura) · Las notas de crédito restan · CMV = rubros que comienzan con "CMV". Proyección estacional estimada a 60 días.'
       />
 
       <section className="filters dash-filters">
