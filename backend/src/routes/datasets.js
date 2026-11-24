@@ -2,6 +2,11 @@
 // Los filtros del UI se traducen acá con whitelist (nunca SQL armado afuera).
 // Todas las consultas filtran por fecha → escanean solo particiones necesarias (FinOps).
 import { armarFrescura, SIN_DATO } from '../lib/frescura.js'
+// Trello #374: el cuadro de ingresos (espejo de gestión 2.0) y el IPC por división para el P&L.
+import { armarTotalIngresos, ES_APP_CANAL } from '../lib/totalIngresos.js'
+import { crearIpcDivisiones } from '../lib/ipcDivisiones.js'
+
+const leerIpcDivisiones = crearIpcDivisiones()
 
 // Vistas que alimentan los desplegables (locales, rubros, etc.) de las pantallas.
 // Las pantallas Pagos, Ventas y Cashflow, que traían las filas crudas de estas
@@ -189,7 +194,17 @@ export default async function (fastify) {
     if (local) params.local = local
     else if (grupo) params.grupo = grupo
 
-    const [[ventasRows], [origenRows], [gastosRows]] = await Promise.all([
+    const CDC = fastify.bqDatasetCdc
+    // Mismo alcance que vw_*: el local o el grupo por NOMBRE (dim_locales / dim_apps).
+    const scopeLA = local ? ' AND l.nombre = @local' : (grupo ? ' AND a.nombre = @grupo' : '')
+    const JOIN_LA = `JOIN ${CDC}.dim_locales l ON l.id = c.id_local JOIN ${CDC}.dim_apps a ON a.id = l.id_app`
+    // El gasto con su Clasificación P&L (rubcat.clasificacion_pyl, Trello #372): vw_pagos + el rubcat del pago.
+    const PAGOS_CLASIF = `(SELECT v.*, r.clasificacion_pyl FROM ${DS}.vw_pagos v
+                            LEFT JOIN ${CDC}.raw_pagos rp ON rp.id = v.id
+                            LEFT JOIN ${CDC}.public_rubcat r ON r.id = rp.id_rubcat)`
+    const APP_RE = ES_APP_CANAL.source // la misma regex sirve en BigQuery (RE2); el nombre va en minúsculas
+
+    const [[ventasRows], [origenRows], [gastosRows], [cajasRows], [cobrosRows], [ingresosRows], [tiposRows]] = await Promise.all([
       fastify.bq.query({
         query: `SELECT CAST(ROUND(SUM(total)) AS INT64) total,
                        CAST(ROUND(SUM(efectivo)) AS INT64) efectivo,
@@ -206,18 +221,58 @@ export default async function (fastify) {
         params
       }),
       fastify.bq.query({
-        query: `SELECT rubro, categoria,
+        query: `SELECT clasificacion_pyl, rubro, categoria,
                        CAST(ROUND(SUM(${GASTO_NETO})) AS INT64) total,
                        CAST(ROUND(SUM(IF(metodo != 'Efectivo' OR metodo IS NULL, ${GASTO_NETO}, 0))) AS INT64) fiscal,
                        CAST(ROUND(SUM(IF(metodo = 'Efectivo', ${GASTO_NETO}, 0))) AS INT64) efectivo
-                FROM ${DS}.vw_pagos
+                FROM ${PAGOS_CLASIF}
                 WHERE ${ES_GASTO} AND ${FECHA_PERIODO} BETWEEN @desde AND @hasta${scopeCond}
-                GROUP BY 1, 2 HAVING total != 0 ORDER BY total DESC`,
+                GROUP BY 1, 2, 3 HAVING total != 0 ORDER BY total DESC`,
+        params
+      }),
+      // Trello #374: el cuadro de ingresos. Cajas una por una (turno Evento o no) ...
+      fastify.bq.query({
+        query: `SELECT c.id, pc.tipo_turno, c.total, c.efectivo, c.fiscal
+                FROM ${CDC}.raw_cajas c LEFT JOIN ${CDC}.public_cajas pc ON pc.id = c.id ${JOIN_LA}
+                WHERE c.fecha_dia BETWEEN @desde AND @hasta${scopeLA}`,
+        params
+      }),
+      // ... lo cobrado por apps en esas cajas ...
+      fastify.bq.query({
+        query: `SELECT d.id_caja, TRIM(d.nombre) AS nombre, SUM(d.monto) AS monto
+                FROM ${CDC}.raw_caja_detalles d JOIN ${CDC}.raw_cajas c ON c.id = d.id_caja ${JOIN_LA}
+                WHERE c.fecha_dia BETWEEN @desde AND @hasta${scopeLA} AND d.tipo = 'cobro'
+                  AND REGEXP_CONTAINS(LOWER(TRIM(d.nombre)), @appRe)
+                GROUP BY 1, 2`,
+        params: { ...params, appRe: APP_RE }
+      }),
+      // ... y los ingresos cargados en gestión, por período (si no tiene, fecha), con su clasificación.
+      fastify.bq.query({
+        query: `SELECT importe, tipo AS id_tipo, metodo, rubro, categoria, clasificacion_pyl
+                FROM ${PAGOS_CLASIF}
+                WHERE ingresa_egreso = 'INGRESO' AND ${FECHA_PERIODO} BETWEEN @desde AND @hasta${scopeCond}`,
+        params
+      }),
+      // Tipo de local (Gastronomía, Indumentaria…) para elegir las divisiones del IPC.
+      fastify.bq.query({
+        query: `SELECT DISTINCT pl.tipo_local FROM ${CDC}.public_locales pl
+                JOIN ${CDC}.dim_locales l ON l.id = pl.id JOIN ${CDC}.dim_apps a ON a.id = l.id_app
+                WHERE pl.tipo_local IS NOT NULL${scopeLA}`,
         params
       })
     ])
 
     const v = plainRows(ventasRows)[0] || {}
+    const tiposLocal = plainRows(tiposRows).map((r) => r.tipo_local)
+    const cajas = plainRows(cajasRows).map((r) => ({ ...r, total: Number(r.total || 0), efectivo: Number(r.efectivo || 0), fiscal: Number(r.fiscal || 0) }))
+    const ingresos = armarTotalIngresos({
+      cajas,
+      cobros: plainRows(cobrosRows).map((r) => ({ ...r, monto: Number(r.monto || 0) })),
+      partes: plainRows(ingresosRows).map((r) => ({ ...r, importe: Number(r.importe || 0) })),
+    })
+    // IPC de INDEC: si no responde, el P&L sale igual sin los indicadores.
+    let ipc = null
+    try { ipc = await leerIpcDivisiones(mes, tiposLocal) } catch (err) { req.log.warn({ err }, 'pyl: no se pudo leer el IPC de INDEC') }
     return {
       mes, scope: { grupo, local },
       ventas: {
@@ -228,7 +283,11 @@ export default async function (fastify) {
           fiscal: Number(r.fiscal || 0), efectivo: Number(r.efectivo || 0)
         }))
       },
+      ingresos,
+      tipos_local: tiposLocal,
+      ipc,
       gastos: plainRows(gastosRows).map(r => ({
+        clasificacion: r.clasificacion_pyl || null,
         rubro: r.rubro || '(sin rubro)', categoria: r.categoria || '(sin categoría)',
         total: Number(r.total || 0), fiscal: Number(r.fiscal || 0), efectivo: Number(r.efectivo || 0)
       }))
