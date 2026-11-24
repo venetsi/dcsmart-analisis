@@ -10,6 +10,52 @@ import { Storage } from '@google-cloud/storage'
 import { crearLogosLocales } from '../lib/logosLocales.js'
 import { okMes, esInterno, mesCerrable, snapshotOk, obsOk, paginaOk, OBS_MAX } from '../lib/reporteVentas.js'
 import { rangoInforme, lineaOk, hojasOk, indicadoresOk, textoOk, datoIm, trasladoOk, accionTraslado } from '../lib/informeMensual.js'
+// Trello #374: el IVA del informe es el del costo impositivo (débito − crédito), por local y mes.
+import { TIPOS as TIPOS_FISCALES, calcularLocal } from '../lib/costoImpositivo.js'
+
+// { [nombre del local]: { 'YYYY-MM': iva AP } } con la misma cuenta que la pantalla Costo impositivo (facturas por
+// período, cajas por fecha de inicio). Un mes sin cajas ni facturas fiscales no tiene número (queda lo de gestión).
+async function ivaPorLocalMes ({ ro, grupo, locales, desde, hasta }) {
+  const { rows: ls } = await ro.query(
+    `SELECT l.id, l.nombre FROM locales l JOIN apps a ON a.id = l.id_app WHERE a.nombre = $1 AND l.nombre = ANY($2::text[])`,
+    [grupo, locales])
+  if (!ls.length) return {}
+  const ids = ls.map((l) => l.id)
+  const [cajas, facturas] = await Promise.all([
+    ro.query(
+      `SELECT id_local, to_char(fecha_inicio, 'YYYY-MM') AS mes, sum(fiscal) AS z FROM cajas
+        WHERE id_local = ANY($1::text[]) AND fecha_inicio >= $2::date AND fecha_inicio < ($3::date + 1)
+        GROUP BY 1, 2`, [ids, desde, hasta]),
+    ro.query(
+      `SELECT p.id_local, to_char(coalesce(p.periodo, p.fecha), 'YYYY-MM') AS mes, p.ingresa_egreso,
+              sum(p.importe_neto) AS neto, sum(t.iva) AS iva, sum(t.perc_iva) AS perc_iva
+         FROM pagos p
+         LEFT JOIN LATERAL (
+           SELECT sum(monto) FILTER (WHERE tipo::text IN ('IVA21', 'IVA10', 'IVA27')) AS iva,
+                  sum(monto) FILTER (WHERE tipo::text = 'PERC_IVA') AS perc_iva
+             FROM impuestos WHERE id_pago = p.id) t ON true
+        WHERE p.id_local = ANY($1::text[]) AND p.id_tipo::text = ANY($2::text[])
+          AND coalesce(p.periodo, p.fecha) >= $3::date AND coalesce(p.periodo, p.fecha) < ($4::date + 1)
+        GROUP BY 1, 2, 3`, [ids, TIPOS_FISCALES, desde, hasta]),
+  ])
+  const nombre = new Map(ls.map((l) => [l.id, l.nombre]))
+  const acc = new Map()
+  const de = (id, mes) => {
+    const k = `${id}|${mes}`
+    if (!acc.has(k)) acc.set(k, { id, mes, z: 0, ingresos: {}, egresos: {} })
+    return acc.get(k)
+  }
+  for (const r of cajas.rows) de(r.id_local, r.mes).z = Number(r.z || 0)
+  for (const r of facturas.rows) {
+    de(r.id_local, r.mes)[r.ingresa_egreso ? 'ingresos' : 'egresos'] = { neto: Number(r.neto || 0), iva: Number(r.iva || 0), percIva: Number(r.perc_iva || 0) }
+  }
+  const out = {}
+  for (const x of acc.values()) {
+    const ap = calcularLocal({ z: x.z, ingresos: x.ingresos, egresos: x.egresos, alicuota: null }).iva.ap
+    ;(out[nombre.get(x.id)] ||= {})[x.mes] = Math.round(ap)
+  }
+  return out
+}
 
 const txt = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
@@ -167,6 +213,15 @@ export default async function (fastify) {
     for (const r of plainRows(cajaRows)) {
       const a = auto[r.local]?.[r.mes]
       if (a) a.cajaGastos = num(r.total)
+    }
+    // Trello #374: IVA del costo impositivo. Si gestión no responde, el informe sale con el IVA cargado como pago.
+    try {
+      const iva = cli.locales.length ? await ivaPorLocalMes({ ro: fastify.gestionLectura, grupo: cli.grupo, locales: cli.locales, desde, hasta }) : {}
+      for (const [local, porMes] of Object.entries(iva)) {
+        for (const [m, ap] of Object.entries(porMes)) if (auto[local]?.[m]) auto[local][m].ivaAp = ap
+      }
+    } catch (err) {
+      req.log.warn({ err }, 'informe-mensual: sin el IVA del costo impositivo')
     }
 
     const h = hojas.rows[0]

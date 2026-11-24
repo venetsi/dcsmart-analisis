@@ -3,7 +3,11 @@
 // Regla de oro: solo datos reales; un null se muestra "—", nunca 0 (formatos en lib/formatosIm.js).
 // Cada hoja es un div.im-hoja de 1456×819 px. Todas las claves de HOJAS_DEFECTO están en el mapa HOJAS_IM_COMPONENTES.
 import { EGRESOS_RESUMEN } from '../../lib/informe.js'
-import { aperturaDe, cashflowDe, cmvDe, deudaDe, detalleDe, FILAS_POR_HOJA, paginasDe, pct, resumenDe } from '../../lib/informeMensual.js'
+import { aperturaDe, areaHojaDe, cashflowDe, cmvDe, deudaDe, detalleDe, FILAS_POR_HOJA, paginasDe, pct, resumenDe } from '../../lib/informeMensual.js'
+
+// Trello #374: un Fijos/Variables sin factura al cierre, estimado con el mes anterior.
+const NOTA_ESTIMADO = '(⚠️) Valores estimados según el período anterior por falta de comprobante al cierre'
+const Estimado = ({ si }) => (si ? <span className="im-estimado" title="Estimado con el mes anterior: falta el comprobante"> ⚠️</span> : null)
 import {
   fmtMontoIm, fmtNumIm, fmtPctIm, fmtPesosIm, fmtPtsIm, flechaIm, mesEnPalabrasIm, nombreMesIm, periodoIm, tonoIm,
 } from '../../lib/formatosIm.js'
@@ -1096,7 +1100,7 @@ function TablaDetalle({ unidades, nombreAnt, nombreAct, pie }) {
           ? <tr className="g" key={`t${i}`}><td colSpan={6}>{u.titulo}</td></tr>
           : (
             <tr key={u.fila.clave}>
-              <td>{u.fila.concepto}</td>
+              <td>{u.fila.concepto}<Estimado si={u.fila.estimado} /></td>
               <td className={esNum(u.fila.anterior) ? '' : 'n'}>{fmtNumIm(u.fila.anterior)}</td>
               <td className="pc">{pc(u.fila.anterior, u.fila.pctAnterior)}</td>
               <td className={`cur${esNum(u.fila.actual) ? '' : ' n'}`}>{fmtNumIm(u.fila.actual)}</td>
@@ -1144,7 +1148,7 @@ function Detalle({ informe, m, pagina }) {
     <Marco m={m} informe={informe} tam={34} arriba={52} compacto ceja={ceja}
       titulo={`${nombreAct} contra ${nombreAnt.toLowerCase()}, ${cmv ? 'categoría por categoría' : 'concepto por concepto'}`}
       derecha={<div className="im-nota-cab">Rojo = gastó más que en {nombreAnt.toLowerCase()}{partes > 1 && !ultima ? ' · sigue en la hoja siguiente' : ''}</div>}
-      notaPie="% sobre la venta de cada mes">
+      notaPie={`% sobre la venta de cada mes${filas.some((f) => f.estimado) ? ` · ${NOTA_ESTIMADO}` : ''}`}>
       <div className={`im-det${hayDos ? ' im-det-dos' : ''}`}>
         <TablaDetalle unidades={izq} pie={hayDos ? [] : pie} nombreAnt={nombreAnt} nombreAct={nombreAct} />
         {hayDos && <TablaDetalle unidades={der} pie={pie} nombreAnt={nombreAnt} nombreAct={nombreAct} />}
@@ -1190,7 +1194,7 @@ function Apertura({ informe, m, pagina }) {
           <span><i className="im-ley-ap" style={{ background: '#c9b086' }} />Sin factura (venta {fmtPesosIm(a.venta.col2)})</span>
         </div>
       )}
-      notaPie="% sobre la venta de cada columna">
+      notaPie={`% sobre la venta de cada columna${a.filas.some((f) => f.estimado) ? ` · ${NOTA_ESTIMADO}` : ''}`}>
       <table className="im-t im-t-ap">
         <thead>
           <tr><th>Categoría</th><th>Total</th><th>%</th><th>Con factura</th><th>%</th><th>Sin factura</th><th>%</th><th>Reparto</th></tr>
@@ -1200,7 +1204,7 @@ function Apertura({ informe, m, pagina }) {
             const out = []
             if (conTitulos && f.bloque !== previo && titulos[f.bloque]) out.push(<tr className="g" key={`g${f.clave}`}><td colSpan={8}>{titulos[f.bloque]}</td></tr>)
             previo = f.bloque
-            out.push(<tr key={f.clave}><td>{f.concepto}</td>{celdas(f)}<BarraReparto r={f.reparto} /></tr>)
+            out.push(<tr key={f.clave}><td>{f.concepto}<Estimado si={f.estimado} /></td>{celdas(f)}<BarraReparto r={f.reparto} /></tr>)
             return out
           })}
           {ultima && (
@@ -1216,6 +1220,59 @@ function Apertura({ informe, m, pagina }) {
     </Marco>
   )
 }
+
+// ---------------------------------------------------------------------------
+// A.R.E.A. · Ajuste de Resultados de Ejercicios Anteriores (Trello #374, una hoja por local, antes del resumen)
+//
+// El mes anterior se cerró con lo que había (y Fijos/Variables estimados con el mes previo). Lo que llegó después
+// no cambia ese informe: la diferencia se suma o resta en este mes y se detalla acá.
+
+function Area({ informe, m, pagina }) {
+  const l = localDe(informe, pagina)
+  if (!l) return null
+  const a = areaHojaDe(informe, l.local)
+  if (!a) return null
+  const nombreAnt = nombreMesIm(a.mesAnterior)
+  const nombreAct = nombreMesIm(informe.mes)
+  const fila = (f) => (
+    <tr key={f.clave}>
+      <td>{f.concepto}{f.eraEstimado ? <span className="im-estimado" title="Se había estimado con el mes previo"> ⚠️</span> : null}</td>
+      <td className={esNum(f.estimado) && f.estimado !== 0 ? '' : 'n'}>{f.estimado ? fmtNumIm(f.estimado) : '—'}</td>
+      <td>{fmtNumIm(f.real)}</td>
+      <td className={f.diferencia > 0 ? 'up' : 'dn'}>{f.diferencia > 0 ? '+' : '−'}{fmtNumIm(Math.abs(f.diferencia))}</td>
+    </tr>
+  )
+  const fijos = a.filas.filter((f) => f.seccion === 'alquiler')
+  const iva = a.filas.filter((f) => f.seccion !== 'alquiler')
+  const signo = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmtPesosIm(Math.abs(v))}`
+  return (
+    <Marco m={m} informe={informe} tam={34} arriba={60} compacto ceja={cejaLocal(informe, l, 'A.R.E.A. · Ajuste de resultados de ejercicios anteriores')}
+      titulo={`Lo que llegó de ${nombreAnt.toLowerCase()} después de su cierre`}
+      derecha={<div className="im-nota-cab">El informe de {nombreAnt.toLowerCase()} no se modifica</div>}
+      notaPie={`La diferencia se imputa en ${nombreAct.toLowerCase()}`}>
+      <table className="im-t im-t-area">
+        <thead><tr><th>Concepto / proveedor</th><th>Informado en {nombreAnt.toLowerCase()}</th><th>Real recibido</th><th>Ajuste a imputar</th></tr></thead>
+        <tbody>
+          {fijos.length > 0 && <tr className="g"><td colSpan={4}>Fijos y variables</td></tr>}
+          {fijos.map(fila)}
+          {fijos.length > 0 && (
+            <tr className="tot"><td>Ajuste en Fijos y variables de {nombreAct.toLowerCase()}</td><td /><td /><td>{signo(a.fijos)}</td></tr>
+          )}
+          {iva.length > 0 && <tr className="g"><td colSpan={4}>IVA (costo impositivo)</td></tr>}
+          {iva.map(fila)}
+          {iva.length > 0 && (
+            <tr className="tot"><td>Ajuste en Impositivos de {nombreAct.toLowerCase()}</td><td /><td /><td>{signo(a.iva)}</td></tr>
+          )}
+        </tbody>
+      </table>
+      <div className="im-area-nota">
+        Informado = lo que salió en el informe de {nombreAnt.toLowerCase()} (⚠️ si fue estimado con el mes previo; — si no había comprobante).
+        Real = lo cargado hoy en gestión para ese mes. El ajuste ya está sumado en el P&amp;L de {nombreAct.toLowerCase()}.
+      </div>
+    </Marco>
+  )
+}
+
 
 // ---------------------------------------------------------------------------
 // Mapa de hojas y contenedores
@@ -1235,6 +1292,7 @@ export const HOJAS_IM_COMPONENTES = {
   apertura: Apertura,
   cashflow: CashFlow,
   deuda: Deuda,
+  area: Area,
   resumen: Resumen,
   contraportada: Contraportada,
 }

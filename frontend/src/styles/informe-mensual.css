@@ -313,3 +313,9 @@
 .im-ph-chip-mal { color: var(--im-rojo); background: rgba(240, 123, 123, .15); }
 .im-ph-chip-bien { color: var(--im-verde); background: rgba(95, 203, 146, .14); }
 .im-ph-chip-igual { color: var(--im-tx-2); background: rgba(166, 169, 171, .12); }
+
+/* Trello #374: estimados (⚠️) y la hoja A.R.E.A. */
+.im-estimado { font-size: .9em; }
+.im-t-area { width: 100%; margin-top: 18px; }
+.im-t-area th:not(:first-child), .im-t-area td:not(:first-child) { text-align: right; }
+.im-area-nota { margin-top: 18px; font-size: 12px; line-height: 1.5; color: #8a8f96; max-width: 760px; }
