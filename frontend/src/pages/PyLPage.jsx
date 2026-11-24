@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
@@ -188,11 +188,11 @@ export default function PyLPage() {
     return n
   })
   const todasAbiertas = pyl && pyl.secciones.every(s => abiertas.has(s.key))
-  const abrirTodo = () => setAbiertas(todasAbiertas ? new Set() : new Set(pyl.secciones.map(s => s.key)))
+  const abrirTodo = () => setAbiertas(todasAbiertas ? new Set() : new Set(['ventas', ...pyl.secciones.map(s => s.key)]))
 
   const ticketProm = pyl?.ventas.tickets ? t.ventas / pyl.ventas.tickets : null
   const cubiertoProm = pyl?.ventas.comensales ? t.ventas / pyl.ventas.comensales : null
-  const labor = pyl?.secciones.find(s => s.labor)?.total || 0
+  const labor = t?.laborKpi || 0 // Labor + rubro Sueldos en gastos operativos (ver lib/pyl.js)
 
   return (
     <div className="page pyl">
@@ -220,6 +220,8 @@ export default function PyLPage() {
           {loading ? <><span className="pyl-spinner" /> Calculando…</> : data ? `${fmtNum(data.gastos.length)} líneas de gasto` : ''}
         </div>
       </section>
+
+      {data?.ipc && <IndicadoresIpc ipc={data.ipc} mes={mes} />}
 
       {error && <div className="pyl-error">No se pudo calcular el resultado. Probá de nuevo en un momento.</div>}
 
@@ -251,7 +253,7 @@ export default function PyLPage() {
 
             <div className={`pyl-kpi ${t.resultadoEconomico >= 0 ? 'positivo' : 'negativo'}`}>
               <div className="pyl-kpi-head">
-                <span className="pyl-kpi-label">Resultado económico</span>
+                <span className="pyl-kpi-label">EBITDA</span>
                 <span className="pyl-kpi-icon"><IcoResultado /></span>
               </div>
               <div className="pyl-kpi-value big">{fmtPesosCorto(t.resultadoEconomico)}</div>
@@ -278,7 +280,7 @@ export default function PyLPage() {
               <span className="pyl-tira-sub">{fmtPct(pyl.pct(t.resultadoBruto))} de las ventas</span>
             </div>
             <div className="pyl-tira-item">
-              <span className="pyl-tira-label">Gastos operativos</span>
+              <span className="pyl-tira-label">Labor y gastos operativos</span>
               <span className="pyl-tira-val">{fmtPesosCorto(t.gastosOperativos)}</span>
               <span className="pyl-tira-sub">sin CMV · {fmtPct(pyl.pct(t.gastosOperativos))}</span>
             </div>
@@ -298,16 +300,16 @@ export default function PyLPage() {
               <span className="pyl-tira-sub">{fmtNum(pyl.ventas.comensales)} cubiertos</span>
             </div>
             <div className="pyl-tira-item">
-              <span className="pyl-tira-label">Resultado del mes</span>
-              <span className={`pyl-tira-val ${t.resultadoMes >= 0 ? 'pos' : 'neg'}`}>{fmtPesosCorto(t.resultadoMes)}</span>
-              <span className="pyl-tira-sub">después de préstamos</span>
+              <span className="pyl-tira-label">Resultado remanente</span>
+              <span className={`pyl-tira-val ${t.remanente >= 0 ? 'pos' : 'neg'}`}>{fmtPesosCorto(t.remanente)}</span>
+              <span className="pyl-tira-sub">después de capex, retiros e impuestos</span>
             </div>
           </section>
 
           <section className="pyl-graficos">
             <div className="pyl-card pyl-card-oscura">
               <div className="pyl-card-titulo">De las ventas al resultado</div>
-              <div className="pyl-card-sub">Cada barra coral es un gasto que se resta. Arriba, el % sobre las ventas.</div>
+              <div className="pyl-card-sub">Hasta el EBITDA. Cada barra coral es un gasto que se resta; arriba, el % sobre las ventas.</div>
               <div className="pyl-puente">
                 {puente && (
                   <Bar
@@ -337,7 +339,7 @@ export default function PyLPage() {
 
             <div className="pyl-card">
               <div className="pyl-card-titulo">En qué se van las ventas</div>
-              <div className="pyl-card-sub">Cada gasto operativo como % de lo vendido, y lo que queda.</div>
+              <div className="pyl-card-sub">CMV, labor y gastos operativos como % de lo vendido, y lo que queda.</div>
               {reparto && (
                 <Barras
                   filas={reparto.filas}
@@ -345,7 +347,7 @@ export default function PyLPage() {
                   color={C_GASTO}
                   total={
                     <div className={`pyl-queda ${reparto.resultado.valor >= 0 ? 'pos' : 'neg'}`}>
-                      <span>{reparto.resultado.valor >= 0 ? 'Queda de resultado' : 'Los gastos superan las ventas'}</span>
+                      <span>{reparto.resultado.valor >= 0 ? 'Queda de EBITDA' : 'Los gastos superan las ventas'}</span>
                       <strong>{fmtPesosCorto(reparto.resultado.valor)}</strong>
                       <em>{fmtPct(reparto.resultado.pct)}</em>
                     </div>
@@ -402,7 +404,7 @@ export default function PyLPage() {
             <div className="pyl-tabla-head">
               <div>
                 <div className="pyl-card-titulo">Detalle del resultado</div>
-                <div className="pyl-card-sub">Tocá un rubro para ver sus categorías.</div>
+                <div className="pyl-card-sub">Clasificación P&amp;L › Rubro › Categoría, por período. Tocá una fila para abrirla.</div>
               </div>
               <button type="button" className="pyl-btn-sec pyl-noprint" onClick={abrirTodo}>
                 {todasAbiertas ? 'Cerrar todo' : 'Abrir todo'}
@@ -414,38 +416,54 @@ export default function PyLPage() {
                   <tr><th>Concepto</th><th>Total</th><th className="col-pct">% de ventas</th><th>Fiscal</th><th>Efectivo</th></tr>
                 </thead>
                 <tbody>
-                  <tr className="fila-ventas">
-                    <td>Ventas</td>
+                  {/* Ventas = el cuadro de Ingresos (Trello #374): punto de venta, eventos, apps y ventas de gestión. */}
+                  <tr className={`fila-sec fila-ventas${tieneSeccion('ventas') ? ' abierta' : ''}`} onClick={() => alternar('ventas')}>
+                    <td>
+                      <button type="button" className="pyl-toggle" aria-expanded={tieneSeccion('ventas')}>
+                        <span className="chev"><IcoChevron /></span>Ventas
+                        <span className="pyl-cuenta">{pyl.ventas.lineas?.length || 0}</span>
+                      </button>
+                    </td>
                     <td className="num">{fmtPesos(t.ventas)}</td>
                     <td className="num col-pct"><Pct v={100} /></td>
                     <td className="num">{fmtPesos(pyl.ventas.fiscal)}</td>
                     <td className="num">{fmtPesos(pyl.ventas.efectivo)}</td>
                   </tr>
-                  {pyl.ventas.por_origen.map((o) => (
-                    <tr className="fila-cat" key={o.origen}>
-                      <td>{o.origen}</td>
-                      <td className="num">{fmtPesos(o.total)}</td>
-                      <td className="num col-pct"><Pct v={pyl.pct(o.total)} /></td>
-                      <td className="num">{fmtPesos(o.fiscal)}</td>
-                      <td className="num">{fmtPesos(o.efectivo)}</td>
+                  {tieneSeccion('ventas') && (pyl.ventas.lineas || []).map((l) => (
+                    <tr className="fila-cat" key={l.key}>
+                      <td>{l.label}</td>
+                      <td className="num">{fmtPesos(l.total)}</td>
+                      <td className="num col-pct"><Pct v={pyl.pct(l.total)} /></td>
+                      <td className="num">{fmtPesos(l.fiscal)}</td>
+                      <td className="num">{fmtPesos(l.efectivo)}</td>
                     </tr>
                   ))}
 
-                  {pyl.operativas.map((s) => (
-                    <Seccion key={s.key} s={s} pyl={pyl} abierta={tieneSeccion(s.key)} onToggle={() => alternar(s.key)}
-                      despues={s.cmv ? <Resultado cls="bruto" label="Resultado bruto" val={t.resultadoBruto} pct={pyl.pct(t.resultadoBruto)} /> : null} />
-                  ))}
-                  <Resultado cls={`econ ${t.resultadoEconomico >= 0 ? 'pos' : 'neg'}`} label="Resultado económico" val={t.resultadoEconomico} pct={t.margenPct} />
+                  <SeccionP clave="CMV" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <Resultado cls="bruto" label="Resultado Bruto" ayuda="Ventas − CMV" val={t.resultadoBruto} pct={pyl.pct(t.resultadoBruto)} />
+                  <SeccionP clave="Labor" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <SeccionP clave="Gastos Operativos" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <SeccionP clave="Sin Clasificación P&L" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <Resultado cls={`econ ${t.ebitda >= 0 ? 'pos' : 'neg'}`} label="EBITDA" ayuda="Resultado Bruto − Labor − Gastos Operativos" val={t.ebitda} pct={pyl.pct(t.ebitda)} />
+                  <tr className="fila-sec fila-da">
+                    <td><span className="pyl-toggle sin-chev">Depreciaciones y Amortizaciones <span className="pyl-nota">falta clasificar</span></span></td>
+                    <td className="num">—</td><td className="num col-pct" /><td /><td />
+                  </tr>
+                  <Resultado cls="bruto" label="EBIT" ayuda="EBITDA − Depreciaciones y Amortizaciones" val={t.ebit} pct={pyl.pct(t.ebit)} />
+                  <SeccionP clave="Resultado Financiero" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <Resultado cls="bruto" label="RFN · Resultado Financiero Neto" ayuda="EBIT − Resultado Financiero" val={t.rfn} pct={pyl.pct(t.rfn)} />
+                  <SeccionP clave="Imp. Ganancias" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <Resultado cls={`econ ${t.utilidad >= 0 ? 'pos' : 'neg'}`} label="Utilidad" ayuda="RFN − Impuesto a las Ganancias" val={t.utilidad} pct={pyl.pct(t.utilidad)} />
+                  <SeccionP clave="Capex" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <SeccionP clave="Retiro Socios" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <SeccionP clave="Aportes de Capital" pyl={pyl} abiertas={abiertas} alternar={alternar} suma />
+                  <SeccionP clave="Impuestos" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                  <Resultado cls={`final ${t.remanente >= 0 ? 'pos' : 'neg'}`} label="Resultado Remanente" ayuda="Utilidad − Capex − Retiro Socios + Aportes de Capital − Impuestos" val={t.remanente} pct={pyl.pct(t.remanente)} />
 
-                  {pyl.noOperativas.length > 0 && (
-                    <tr className="fila-linea"><td colSpan={5}>Debajo de la línea · movimientos que no son gasto del negocio</td></tr>
+                  {pyl.sec('No P&L').lineas.length > 0 && (
+                    <tr className="fila-linea"><td colSpan={5}>Fuera del P&amp;L · movimientos de tesorería que no son resultado (no suman)</td></tr>
                   )}
-                  {pyl.noOperativas.map((s) => (
-                    <Seccion key={s.key} s={s} pyl={pyl} memo abierta={tieneSeccion(s.key)} onToggle={() => alternar(s.key)} />
-                  ))}
-                  {pyl.noOperativas.some(s => s.fin) && (
-                    <Resultado cls={`final ${t.resultadoMes >= 0 ? 'pos' : 'neg'}`} label="Resultado del mes (después de préstamos)" val={t.resultadoMes} pct={pyl.pct(t.resultadoMes)} />
-                  )}
+                  <SeccionP clave="No P&L" pyl={pyl} abiertas={abiertas} alternar={alternar} memo />
                 </tbody>
               </table>
             </div>
@@ -465,14 +483,18 @@ function Pct({ v }) {
   )
 }
 
-function Seccion({ s, pyl, memo, abierta, onToggle, despues }) {
+// Una Clasificación P&L › Rubro › Categoría (Trello #374). Sin líneas no se muestra (el resultado igual la cuenta).
+function SeccionP({ clave, pyl, abiertas, alternar, memo, suma }) {
+  const s = pyl.sec(clave)
+  if (!s || !s.lineas.length) return null
+  const abierta = abiertas.has(s.key)
   return (
     <>
-      <tr className={`fila-sec${memo ? ' memo' : ''}${abierta ? ' abierta' : ''}`} onClick={onToggle}>
+      <tr className={`fila-sec${memo ? ' memo' : ''}${abierta ? ' abierta' : ''}`} onClick={() => alternar(s.key)}>
         <td>
           <button type="button" className="pyl-toggle" aria-expanded={abierta}>
-            <span className="chev"><IcoChevron /></span>{s.titulo}
-            <span className="pyl-cuenta">{s.lineas.length}</span>
+            <span className="chev"><IcoChevron /></span>{suma ? '(+) ' : ''}{s.titulo}
+            <span className="pyl-cuenta">{s.rubros.length}</span>
           </button>
         </td>
         <td className="num">{fmtPesos(s.total)}</td>
@@ -480,27 +502,118 @@ function Seccion({ s, pyl, memo, abierta, onToggle, despues }) {
         <td className="num">{fmtPesos(s.fiscal)}</td>
         <td className="num">{fmtPesos(s.efectivo)}</td>
       </tr>
-      {abierta && s.lineas.map((l, i) => (
-        <tr className="fila-cat" key={l.rubro + l.categoria + i}>
-          <td>{l.categoria}{s.cajon ? <span className="pyl-rubro"> · {l.rubro}</span> : ''}</td>
-          <td className="num">{fmtPesos(l.total)}</td>
-          <td className="num col-pct"><Pct v={pyl.pct(l.total)} /></td>
-          <td className="num">{fmtPesos(l.fiscal)}</td>
-          <td className="num">{fmtPesos(l.efectivo)}</td>
-        </tr>
-      ))}
-      {despues}
+      {abierta && s.rubros.map((r) => {
+        const kr = `${s.key}|${r.rubro}`
+        const rAbierto = abiertas.has(kr)
+        return (
+          <Fragment key={kr}>
+            <tr className={`fila-rubro${rAbierto ? ' abierta' : ''}`} onClick={(e) => { e.stopPropagation(); alternar(kr) }}>
+              <td>
+                <button type="button" className="pyl-toggle" aria-expanded={rAbierto}>
+                  <span className="chev"><IcoChevron /></span>{r.rubro}
+                  <span className="pyl-cuenta">{r.categorias.length}</span>
+                </button>
+              </td>
+              <td className="num">{fmtPesos(r.total)}</td>
+              <td className="num col-pct"><Pct v={pyl.pct(r.total)} /></td>
+              <td className="num">{fmtPesos(r.fiscal)}</td>
+              <td className="num">{fmtPesos(r.efectivo)}</td>
+            </tr>
+            {rAbierto && r.categorias.map((l, i) => (
+              <tr className="fila-cat" key={kr + l.categoria + i}>
+                <td>{l.categoria}</td>
+                <td className="num">{fmtPesos(l.total)}</td>
+                <td className="num col-pct"><Pct v={pyl.pct(l.total)} /></td>
+                <td className="num">{fmtPesos(l.fiscal)}</td>
+                <td className="num">{fmtPesos(l.efectivo)}</td>
+              </tr>
+            ))}
+          </Fragment>
+        )
+      })}
     </>
   )
 }
 
-function Resultado({ cls, label, val, pct }) {
+function Resultado({ cls, label, ayuda, val, pct }) {
   return (
     <tr className={`fila-res ${cls}`}>
-      <td>{label}</td>
+      <td>{label}{ayuda && <span className="pyl-res-ayuda">{ayuda}</span>}</td>
       <td className="num"><span className="pyl-res-val">{fmtPesos(val)}</span></td>
       <td className="num col-pct">{fmtPct(pct)}</td>
       <td /><td />
     </tr>
+  )
+}
+
+// Indicadores de inflación (Trello #374): mensual e interanual del nivel general y la tabla de las divisiones del
+// IPC que le corresponden al tipo de local (Gastronomía: alimentos, bebidas alcohólicas, restaurantes; Indumentaria:
+// prendas). INDEC publica a mediados del mes siguiente: si el mes elegido todavía no salió, se muestra el último.
+const MES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const nombreMes = (m) => { const [y, mm] = m.split('-').map(Number); return `${MES_LARGO[mm - 1]} ${y}` }
+const mesPrevioCorto = (m) => { const [, mm] = m.split('-').map(Number); return MES_LARGO[(mm + 10) % 12].slice(0, 3) }
+const pct1 = (v) => (v == null ? '—' : `${v.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`)
+const pp = (a, b) => {
+  if (a == null || b == null) return null
+  const d = Math.round((a - b) * 10) / 10
+  return `${d > 0 ? '+' : ''}${d.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.`
+}
+const VS = { sobre: { txt: 'Sobre promedio', cls: 'sobre', ico: '▲' }, bajo: { txt: 'Bajo promedio', cls: 'bajo', ico: '▼' }, promedio: { txt: 'En promedio', cls: 'prom', ico: '●' } }
+
+function IndicadoresIpc({ ipc, mes }) {
+  const g = ipc.general
+  const mesDato = ipc.mes_dato
+  const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1)
+  return (
+    <section className="pyl-ipc">
+      <div className="pyl-ipc-tarjetas">
+        <div className="pyl-ipc-tarjeta">
+          <span className="pyl-ipc-label">Inflación mensual</span>
+          <span className="pyl-ipc-valor">{pct1(g.mensual)}</span>
+          <span className="pyl-ipc-sub">{capital(nombreMes(mesDato))}{pp(g.mensual, g.mensual_previo) ? ` (${pp(g.mensual, g.mensual_previo)} vs ${mesPrevioCorto(mesDato)})` : ''}</span>
+        </div>
+        <div className="pyl-ipc-tarjeta">
+          <span className="pyl-ipc-label">Inflación interanual</span>
+          <span className="pyl-ipc-valor">{pct1(g.interanual)}</span>
+          <span className="pyl-ipc-sub">{capital(nombreMes(mesDato))}{pp(g.interanual, g.interanual_previo) ? ` (${pp(g.interanual, g.interanual_previo)} vs ${mesPrevioCorto(mesDato)})` : ''}</span>
+        </div>
+      </div>
+      {ipc.divisiones.length > 0 && (
+        <div className="pyl-ipc-tabla-wrap">
+          <table className="pyl-ipc-tabla">
+            <thead>
+              <tr><th>Cód.</th><th>División del IPC</th><th className="num">Índice</th><th className="num">Var. mensual</th><th className="num">Var. interanual</th><th>vs. nivel general</th></tr>
+            </thead>
+            <tbody>
+              {ipc.divisiones.map((d) => {
+                const vs = VS[d.vs_general]
+                return (
+                  <tr key={d.codigo}>
+                    <td>{d.codigo}</td>
+                    <td>{d.nombre}</td>
+                    <td className="num">{d.indice == null ? '—' : d.indice.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="num">{pct1(d.mensual)}</td>
+                    <td className="num">{pct1(d.interanual)}</td>
+                    <td>{vs ? <span className={`pyl-ipc-vs ${vs.cls}`}>{vs.ico} {vs.txt}</span> : '—'}</td>
+                  </tr>
+                )
+              })}
+              <tr className="general">
+                <td>0</td>
+                <td>Nivel general</td>
+                <td className="num">{g.indice == null ? '—' : g.indice.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="num">{pct1(g.mensual)}</td>
+                <td className="num">{pct1(g.interanual)}</td>
+                <td>Nacional</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="pyl-ipc-pie">
+        IPC de INDEC (nacional, base dic. 2016){mesDato !== mes ? `. ${capital(nombreMes(mes))} todavía no se publicó: se muestra ${nombreMes(mesDato)}, el último dato` : ''}.
+        {ipc.divisiones.length > 0 ? ' Las divisiones son las del tipo de local.' : ''}
+      </div>
+    </section>
   )
 }
