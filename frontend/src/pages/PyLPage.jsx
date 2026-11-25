@@ -445,10 +445,14 @@ export default function PyLPage() {
                   <SeccionP clave="Gastos Operativos" pyl={pyl} abiertas={abiertas} alternar={alternar} />
                   <SeccionP clave="Sin Clasificación P&L" pyl={pyl} abiertas={abiertas} alternar={alternar} />
                   <Resultado cls={`econ ${t.ebitda >= 0 ? 'pos' : 'neg'}`} label="EBITDA" ayuda="Resultado Bruto − Labor − Gastos Operativos" val={t.ebitda} pct={pyl.pct(t.ebitda)} />
-                  <tr className="fila-sec fila-da">
-                    <td><span className="pyl-toggle sin-chev">Depreciaciones y Amortizaciones <span className="pyl-nota">falta clasificar</span></span></td>
-                    <td className="num">—</td><td className="num col-pct" /><td /><td />
-                  </tr>
+                  {pyl.sec('Depreciaciones y Amortizaciones').lineas.length > 0
+                    ? <SeccionP clave="Depreciaciones y Amortizaciones" pyl={pyl} abiertas={abiertas} alternar={alternar} />
+                    : (
+                      <tr className="fila-sec fila-da">
+                        <td><span className="pyl-toggle sin-chev">Depreciaciones y Amortizaciones <span className="pyl-nota">ningún rubro clasificado así</span></span></td>
+                        <td className="num">—</td><td className="num col-pct" /><td /><td />
+                      </tr>
+                    )}
                   <Resultado cls="bruto" label="EBIT" ayuda="EBITDA − Depreciaciones y Amortizaciones" val={t.ebit} pct={pyl.pct(t.ebit)} />
                   <SeccionP clave="Resultado Financiero" pyl={pyl} abiertas={abiertas} alternar={alternar} />
                   <Resultado cls="bruto" label="RFN · Resultado Financiero Neto" ayuda="EBIT − Resultado Financiero" val={t.rfn} pct={pyl.pct(t.rfn)} />

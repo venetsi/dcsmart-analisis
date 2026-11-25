@@ -1239,7 +1239,7 @@ function Area({ informe, m, pagina }) {
       <td>{f.concepto}{f.eraEstimado ? <span className="im-estimado" title="Se había estimado con el mes previo"> ⚠️</span> : null}</td>
       <td className={esNum(f.estimado) && f.estimado !== 0 ? '' : 'n'}>{f.estimado ? fmtNumIm(f.estimado) : '—'}</td>
       <td>{fmtNumIm(f.real)}</td>
-      <td className={f.diferencia > 0 ? 'up' : 'dn'}>{f.diferencia > 0 ? '+' : '−'}{fmtNumIm(Math.abs(f.diferencia))}</td>
+      <td className={f.diferencia > 0 ? 'up' : f.diferencia < 0 ? 'dn' : 'n'}>{f.diferencia > 0 ? '+' : f.diferencia < 0 ? '−' : ''}{fmtNumIm(Math.abs(f.diferencia))}</td>
     </tr>
   )
   const fijos = a.filas.filter((f) => f.seccion === 'alquiler')

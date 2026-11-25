@@ -548,6 +548,18 @@ test('A.R.E.A.: sin el mes anterior cerrado, o sin cambios, no hay hoja', () => 
   assert.ok(!ids(paginasDe(igual)).includes('area:L1'))
 })
 
+test('A.R.E.A.: lo estimado que llegó por el mismo monto se muestra con ajuste 0', () => {
+  const inf = informeDe(['L1'], (im) => {
+    im.cierres = [{ mes: '2026-01', cerrado: true, snapshot: fotoEnero([lineaFoto('Edenor', 100, { estimado: true }), lineaFoto('Aysa', 40, { estimado: true })]) }]
+    im.auto.L1['2026-01'].gastos.push(g('Fijos/Variables', 'Edenor', 'A', 100), g('Fijos/Variables', 'Aysa', 'A', 50))
+    return im
+  })
+  const feb = inf.locales[0].meses['2026-02']
+  assert.deepEqual(feb.area.filas.map((f) => [f.concepto, f.diferencia, f.eraEstimado]).sort(), [['Aysa', 10, true], ['Edenor', 0, true]])
+  assert.equal(feb.area.fijos, 10)
+  assert.ok(ids(paginasDe(inf)).includes('area:L1'))
+})
+
 test('la foto del cierre guarda la marca de estimado y el A.R.E.A. del mes', () => {
   const inf = informeDe(['L1'], (im) => { im.auto.L1['2026-01'].gastos.push(g('Fijos/Variables', 'Edenor', 'A', 100)); return im })
   const foto = snapshotIm(inf).locales.L1

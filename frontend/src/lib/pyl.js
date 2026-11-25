@@ -3,7 +3,7 @@
 // Rubro › Categoría. Los totales siguen el orden que pidió el usuario:
 //   Resultado Bruto = Ventas − CMV
 //   EBITDA          = Resultado Bruto − Labor − Gastos Operativos (− lo que todavía no tiene clasificación)
-//   EBIT            = EBITDA − Depreciaciones y Amortizaciones (hoy 0: esa clasificación no existe todavía)
+//   EBIT            = EBITDA − Depreciaciones y Amortizaciones (clasificación creada el 25/11; sin rubros, 0)
 //   RFN             = EBIT − Resultado Financiero
 //   Utilidad        = RFN − Impuesto a las Ganancias
 //   Remanente       = Utilidad − Capex − Retiro Socios + Aportes de Capital − Impuestos
@@ -14,6 +14,7 @@ export const SECCIONES = [
   { key: 'Labor', titulo: 'Labor', corto: 'Labor', op: true, labor: true },
   { key: 'Gastos Operativos', titulo: 'Gastos Operativos', corto: 'Gastos op.', op: true },
   { key: 'Sin Clasificación P&L', titulo: 'Sin Clasificación P&L', corto: 'Sin clasif.', op: true, sinClasif: true },
+  { key: 'Depreciaciones y Amortizaciones', titulo: 'Depreciaciones y Amortizaciones', corto: 'D&A' },
   { key: 'Resultado Financiero', titulo: 'Resultado Financiero', corto: 'Financiero' },
   { key: 'Imp. Ganancias', titulo: 'Impuesto a las Ganancias', corto: 'Ganancias' },
   { key: 'Capex', titulo: 'Capex', corto: 'Capex' },
@@ -90,7 +91,7 @@ export function buildPyl(data) {
   const resultadoBruto = ventas - cmv
   const gastosOperativos = labor + sec('Gastos Operativos').total + sec('Sin Clasificación P&L').total
   const ebitda = resultadoBruto - gastosOperativos
-  const depreciaciones = 0
+  const depreciaciones = sec('Depreciaciones y Amortizaciones').total
   const ebit = ebitda - depreciaciones
   const financiero = sec('Resultado Financiero').total
   const rfn = ebit - financiero

@@ -55,6 +55,17 @@ test('totales en el orden del pedido, con D&A en 0 y No P&L afuera', () => {
   assert.equal(t.primeCostPct, 55)
 })
 
+test('Depreciaciones y Amortizaciones resta entre el EBITDA y el EBIT', () => {
+  const conDa = { ...datos, gastos: [...datos.gastos, { clasificacion: 'Depreciaciones y Amortizaciones', rubro: 'Amortizaciones', categoria: 'Equipos', total: 40, fiscal: 40, efectivo: 0 }] }
+  const t = buildPyl(conDa).totales
+  assert.equal(t.ebitda, 340)
+  assert.equal(t.depreciaciones, 40)
+  assert.equal(t.ebit, 300)
+  assert.equal(t.rfn, 260)
+  assert.equal(t.remanente, 230 - 25 - 60 + 15 - 5)
+  assert.equal(claseDe({ clasificacion: 'Depreciaciones y Amortizaciones' }), 'Depreciaciones y Amortizaciones')
+})
+
 test('cada sección agrupa por rubro y adentro por categoría', () => {
   const p = buildPyl(datos)
   const cmv = p.sec('CMV')

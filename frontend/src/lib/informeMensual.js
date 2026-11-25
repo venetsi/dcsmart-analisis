@@ -341,7 +341,9 @@ export function areaDe({ local, mes, im }) {
     const estimado = r2(n0(x?.total))
     const real = r2(n0(y?.total))
     const diferencia = r2(real - estimado)
-    if (Math.abs(diferencia) < 1) continue
+    // Sin diferencia no hay ajuste, salvo que se hubiera estimado y la factura ya llegó: queda a la vista que
+    // coincidió (pedido del usuario, 25/11).
+    if (Math.abs(diferencia) < 1 && !(x?.estimado && y)) continue
     filas.push({ clave: k, concepto: (x || y).concepto, seccion: (x || y).seccion, estimado, real, diferencia, eraEstimado: !!x?.estimado })
   }
   filas.sort((p, q) => (p.seccion === q.seccion ? Math.abs(q.diferencia) - Math.abs(p.diferencia) : p.seccion === 'alquiler' ? -1 : 1))
