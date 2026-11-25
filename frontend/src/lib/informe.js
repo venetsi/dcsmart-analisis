@@ -182,6 +182,8 @@ export function construirInforme({ auto = {}, reglas = [], datos = {} } = {}) {
       continue
     }
     agregar(seccion, concepto, col ?? 1, monto, { rubro: g.rubro, categoria: g.categoria, sub: seccion === 'cmv' ? subCmv(g.rubro) : undefined })
+    // Trello #374: un Fijos/Variables sin factura al cierre, estimado con el mes anterior (⚠️ en el informe).
+    if (g.estimado) lineas.get(claveLinea(seccion, concepto)).estimado = true
   }
 
   // 2) Ajustes a mano sobre las automáticas: un monto corregido pisa el de

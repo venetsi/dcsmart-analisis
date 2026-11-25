@@ -243,10 +243,12 @@ export function fotoDeMes(m) {
         lineas: s.lineas.filter((l) => !l.oculto).map((l) => ({
           clave: l.clave, seccion: l.seccion, concepto: l.concepto, sub: l.sub ?? null, origen: l.origen,
           col1: l.col1, col2: l.col2, total: l.total, ...(l.huerfana ? { huerfana: true } : {}),
+          ...(l.estimado ? { estimado: true } : {}), ...(l.area ? { area: true } : {}),
         })),
       }))
       .filter((s) => s.lineas.length),
     canales: m.canales,
+    ...(m.area?.filas?.length ? { area: m.area } : {}),
   }
 }
 
@@ -264,14 +266,116 @@ function desdeFoto({ local, mes, foto }) {
       l.origen = orig.origen || 'auto'
       l.id = orig.origen === 'manual' ? Number(String(orig.clave).slice('manual:'.length)) || undefined : undefined
       if (orig.huerfana) l.huerfana = true
+      if (orig.estimado) l.estimado = true
+      if (orig.area) l.area = true
     }
     ordenar(s.lineas)
   }
-  return completar(inf, { local, mes, cerrado: true, canales: foto.canales })
+  return { ...completar(inf, { local, mes, cerrado: true, canales: foto.canales }), area: foto.area || null }
 }
 
 const cierreDe = (im, mes) => (im.cierres || []).find((c) => c.mes === mes && c.cerrado !== false)
 const valorMano = (im, local, mes, dato) => num((im.valores || []).find((v) => v.local === local && v.mes === mes && v.dato === dato)?.valor)
+
+// ── Gastos pendientes y A.R.E.A. (Trello #374) ───────────────────────────────
+//
+// Pedido del usuario (24/11/2026, "Gestión de Gastos Pendientes y Módulo A.R.E.A."):
+//   - Solo Fijos/Variables, concepto por concepto (la categoría: Edesur, Aysa, Alquiler…). Si el mes no tiene
+//     factura pero el anterior sí, se usa el monto del anterior, marcado como estimado (⚠️ y nota al pie). Si no
+//     hay ni en el mes ni en el anterior, no aparece. Los demás rubros van solo con lo cargado.
+//   - Impositivo/IVA: el IVA del costo impositivo (débito − crédito), no lo que se cargó como pago.
+//   - A.R.E.A.: el mes cerrado no se toca. En el mes siguiente se compara lo que se informó (la foto del cierre)
+//     con lo que hay hoy en gestión para ese mes; la diferencia se imputa al mes en curso (Fijos/Variables; la del
+//     IVA, a Impositivos) y se lista en una hoja antes del resumen ejecutivo.
+
+const esFijos = (rubro) => /^fijos\s*\/\s*variables?$/.test(norm(rubro))
+const esIva = (g) => norm(g.rubro).startsWith('impositivo') && norm(g.categoria) === 'iva'
+const nombreMesCorto = (mes) => {
+  const M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+  return `${M[Number(mes.slice(5, 7)) - 1]} ${mes.slice(0, 4)}`
+}
+
+// Gastos de gestión de un mes: el IVA reemplazado por el del costo impositivo (si se pudo calcular) y, con
+// `estimar`, los Fijos/Variables que faltan copiados del mes anterior con `estimado: true`.
+export function gastosConEstimados({ gastos, ivaAp = null, gastosAnterior = [], estimar = false }) {
+  let out = (gastos || []).filter((x) => n0(x.total) !== 0)
+  if (num(ivaAp) != null) {
+    out = out.filter((g) => !esIva(g))
+    if (num(ivaAp) !== 0) out.push({ rubro: 'Impositivo', categoria: 'IVA', tipo: 'A', total: num(ivaAp) })
+  }
+  if (!estimar) return out
+  const hay = new Set(out.filter((g) => esFijos(g.rubro)).map((g) => norm(g.categoria)))
+  for (const g of gastosAnterior || []) {
+    if (!esFijos(g.rubro) || n0(g.total) === 0 || hay.has(norm(g.categoria))) continue
+    out.push({ ...g, estimado: true })
+  }
+  return out
+}
+
+// Las líneas que entran al A.R.E.A.: las automáticas de Fijos/Variables y la del IVA.
+const lineasArea = (secciones) => (secciones || []).flatMap((s) => (s.lineas || []))
+  .filter((l) => !l.oculto && l.origen !== 'manual' && !l.area
+    && (l.seccion === 'alquiler' || (l.seccion === 'impositivos' && norm(l.concepto) === 'iva')))
+
+// A.R.E.A. de `mes`: el mes anterior cerrado, lo informado contra lo de hoy. null si el anterior no está cerrado.
+//   { mesAnterior, filas: [{ clave, concepto, seccion, estimado, real, diferencia, eraEstimado }], fijos, iva, total }
+export function areaDe({ local, mes, im }) {
+  const previo = mesPrevio(mes)
+  const cierre = cierreDe(im, previo)
+  const foto = cierre?.snapshot?.locales?.[local]
+  if (!foto) return null
+  // Lo de hoy para el mes anterior: gestión (con el IVA del costo impositivo) y las correcciones a mano, sin estimar.
+  const a = im.auto?.[local]?.[previo] || {}
+  const datos = datosDeLineas(im.lineas, local, previo)
+  const hoy = construirInforme({
+    auto: { ventas: { lineas: [] }, gastos: gastosConEstimados({ gastos: a.gastos, ivaAp: a.ivaAp }) },
+    reglas: im.reglas || [],
+    datos: { ajustes: datos.ajustes, manuales: [] },
+  })
+  const antes = new Map(lineasArea(foto.secciones).map((l) => [l.clave, l]))
+  const ahora = new Map(lineasArea(hoy.secciones).map((l) => [l.clave, l]))
+  const filas = []
+  for (const k of new Set([...antes.keys(), ...ahora.keys()])) {
+    const x = antes.get(k)
+    const y = ahora.get(k)
+    const estimado = r2(n0(x?.total))
+    const real = r2(n0(y?.total))
+    const diferencia = r2(real - estimado)
+    if (Math.abs(diferencia) < 1) continue
+    filas.push({ clave: k, concepto: (x || y).concepto, seccion: (x || y).seccion, estimado, real, diferencia, eraEstimado: !!x?.estimado })
+  }
+  filas.sort((p, q) => (p.seccion === q.seccion ? Math.abs(q.diferencia) - Math.abs(p.diferencia) : p.seccion === 'alquiler' ? -1 : 1))
+  const suma = (sec) => r2(filas.filter((f) => f.seccion === sec).reduce((t, f) => t + f.diferencia, 0))
+  const fijos = suma('alquiler')
+  const iva = suma('impositivos')
+  return { mesAnterior: previo, filas, fijos, iva, total: r2(fijos + iva) }
+}
+
+// Las diferencias del A.R.E.A. como líneas del mes en curso (una por sección).
+function lineasDeArea(area) {
+  if (!area?.filas?.length) return []
+  const out = []
+  const nombre = nombreMesCorto(area.mesAnterior)
+  if (area.fijos) out.push({ id: 'area:fijos', seccion: 'alquiler', concepto: `Ajuste A.R.E.A. (${nombre})`, col1: area.fijos, col2: 0 })
+  if (area.iva) out.push({ id: 'area:iva', seccion: 'impositivos', concepto: `Ajuste A.R.E.A. IVA (${nombre})`, col1: area.iva, col2: 0 })
+  return out
+}
+
+// Las líneas del A.R.E.A. no se editan desde el panel: salen del cálculo, como las de gestión.
+function marcarArea(inf) {
+  for (const s of inf.secciones) {
+    for (const l of s.lineas) {
+      if (!String(l.clave).startsWith('manual:area:')) continue
+      Object.assign(l, { clave: String(l.clave).slice('manual:'.length), origen: 'auto', id: undefined, area: true })
+    }
+  }
+}
+
+// Hoja del A.R.E.A. de un local en el mes del informe.
+export function areaHojaDe(informe, local) {
+  const m = (informe?.locales || []).find((l) => l.local === local)?.meses?.[informe.mes]
+  return m?.area?.filas?.length ? m.area : null
+}
 
 // P&L de un local en un mes. `rv` = { rvLocal: LocalMes del Reporte de Ventas (con porMes) }.
 //   cerrado → la foto de im_cierre; abierto → construirInforme con gestión + líneas + pax/días.
@@ -287,9 +391,14 @@ export function pylMes({ local, mes, im, rv = {} }) {
   const a = im.auto?.[local]?.[mes] || {}
   const rvMes = rv.rvLocal?.porMes?.[mes]
   const ventas = ventasDeLocal({ rvMes, efectivo: a.efectivo })
-  const gastos = (a.gastos || []).filter((x) => n0(x.total) !== 0)
+  const reales = gastosConEstimados({ gastos: a.gastos, ivaAp: a.ivaAp })
   const datos = datosDeLineas(im.lineas, local, mes)
-  if (!ventas.lineas.length && !gastos.length && !datos.manuales.length && !Object.keys(datos.ajustes).length) return null
+  if (!ventas.lineas.length && !reales.length && !datos.manuales.length && !Object.keys(datos.ajustes).length) return null
+  // Trello #374: Fijos/Variables sin factura en el mes → el monto del mes anterior, marcado como estimado.
+  const gastos = gastosConEstimados({ gastos: a.gastos, ivaAp: a.ivaAp, gastosAnterior: im.auto?.[local]?.[mesPrevio(mes)]?.gastos, estimar: true })
+  // y el A.R.E.A.: lo que cambió del mes anterior (cerrado) después de su cierre, imputado a este mes.
+  const area = areaDe({ local, mes, im })
+  const lineasArea = lineasDeArea(area)
 
   // Pax = los cubiertos resueltos del Reporte de Ventas (el mismo dato en los dos reportes).
   const cub = rvMes?.cubiertos
@@ -300,7 +409,7 @@ export function pylMes({ local, mes, im, rv = {} }) {
     reglas: im.reglas || [],
     datos: { ajustes: datos.ajustes, manuales, ...(pax != null ? { pax } : {}), ...(dias != null ? { dias } : {}) },
   })
-  let inf = construirInforme(entrada(datos.manuales))
+  let inf = construirInforme(entrada([...datos.manuales, ...lineasArea]))
 
   // Correcciones de líneas que gestión ya no trae: se siguen viendo y sumando
   // con el monto corregido, marcadas como huérfanas (Review Focus 2).
@@ -312,7 +421,7 @@ export function pylMes({ local, mes, im, rv = {} }) {
   if (huerfanas.length) {
     const extra = huerfanas.filter((h) => !h.aj.oculto)
       .map((h) => ({ id: `huerfana:${h.clave}`, seccion: h.seccion, concepto: h.concepto, col1: n0(h.aj.col1), col2: n0(h.aj.col2), sub: h.aj.sub }))
-    if (extra.length) inf = construirInforme(entrada([...datos.manuales, ...extra]))
+    if (extra.length) inf = construirInforme(entrada([...datos.manuales, ...lineasArea, ...extra]))
     const porClave = new Map(huerfanas.map((h) => [`manual:huerfana:${h.clave}`, h]))
     for (const s of inf.secciones) {
       for (const l of s.lineas) {
@@ -331,6 +440,7 @@ export function pylMes({ local, mes, im, rv = {} }) {
       }
     }
   }
+  marcarArea(inf)
   for (const s of inf.secciones) ordenar(s.lineas)
 
   // Quién tocó cada línea (para el editor): clave de la línea → fila de im_linea.
@@ -349,7 +459,9 @@ export function pylMes({ local, mes, im, rv = {} }) {
     if (!hayCmv(inf.valores)) avisos.push({ tipo: 'cmv', texto: 'Falta cargar el CMV del mes: no hay compras de mercadería en gestión ni cargadas a mano. CMV sale "—" en el informe.' })
     if (!hayLabor(inf.valores)) avisos.push({ tipo: 'labor', texto: 'Faltan cargar los sueldos del mes: Labor sale "—" en el informe y el resultado no los descuenta.' })
   }
-  return completar(inf, { local, mes, cerrado: false, editadoEnLineas, avisos })
+  const estimados = inf.secciones.flatMap((s) => s.lineas.filter((l) => l.estimado && !l.oculto))
+  if (estimados.length) avisos.push({ tipo: 'estimado', texto: `Sin factura del mes en Fijos/Variables: ${estimados.map((l) => l.concepto).join(', ')}. Se usó el monto del mes anterior (⚠️ en el informe).` })
+  return { ...completar(inf, { local, mes, cerrado: false, editadoEnLineas, avisos }), area }
 }
 
 // ── Acumulado y consolidado ──────────────────────────────────────────────────
@@ -494,6 +606,7 @@ export const HOJAS_DEFECTO = [
   { clave: 'apertura', titulo: 'Apertura por rubro', alcance: 'seccion', ocultaConVariosLocales: true },
   { clave: 'cashflow', titulo: 'Cash flow', alcance: 'cliente' },
   { clave: 'deuda', titulo: 'Deuda corriente', alcance: 'cliente' },
+  { clave: 'area', titulo: 'A.R.E.A. · Ajuste de resultados de ejercicios anteriores', alcance: 'local' },
   { clave: 'resumen', titulo: 'Resumen ejecutivo', alcance: 'local' },
   { clave: 'contraportada', titulo: 'Contraportada', alcance: 'cliente' },
 ]
@@ -556,6 +669,7 @@ function conceptosDe(m, grupo) {
       if (l.oculto) continue
       const k = claveLinea(l.seccion, l.concepto)
       const c = out.get(k) || { clave: k, concepto: l.concepto, seccion: l.seccion, bloque: bloqueDe(grupo, l), total: 0, col1: 0, col2: 0 }
+      if (l.estimado) c.estimado = true
       c.total = r2(c.total + n0(l.total))
       c.col1 = r2(c.col1 + n0(l.col1))
       c.col2 = r2(c.col2 + n0(l.col2))
@@ -575,7 +689,8 @@ export function hojasDe(informe, config) {
   const lista = Array.isArray(config) ? config : config?.hojas ?? informe?.hojasConfig
   const guardada = new Map((Array.isArray(lista) ? lista : []).filter((h) => h?.clave).map((h) => [h.clave, h]))
   const varios = (informe?.locales?.length || 0) > 1
-  const vacia = { cashflow: !cashflowDe(informe).tieneDatos, deuda: !deudaDe(informe).tieneDatos }
+  const vacia = { cashflow: !cashflowDe(informe).tieneDatos, deuda: !deudaDe(informe).tieneDatos,
+    area: !(informe?.locales || []).some((l) => l.meses?.[informe.mes]?.area?.filas?.length) }
   return HOJAS_DEFECTO
     .map((h, i) => {
       const g = guardada.get(h.clave) || {}
@@ -604,7 +719,7 @@ export function paginasDe(informe, config) {
     if (!h.visible || !h.aplica) continue
     const base = { clave: h.clave, titulo: h.titulo }
     if (h.alcance === 'local') {
-      for (const l of locales) paginas.push({ id: `${h.clave}:${l.local}`, ...base, local: l.local, nombre: l.nombre })
+      for (const l of locales) if (h.clave !== 'area' || l.meses?.[informe.mes]?.area?.filas?.length) paginas.push({ id: `${h.clave}:${l.local}`, ...base, local: l.local, nombre: l.nombre })
     } else if (h.alcance === 'localGrupo') {
       for (const l of locales) {
         for (const parte of [1, 2]) paginas.push({ id: `${h.clave}:${l.local}:${parte}`, ...base, local: l.local, nombre: l.nombre, parte, partes: 2 })
@@ -660,7 +775,7 @@ export function detalleDe(informe, local, seccionGrupo) {
     const anterior = sinCero(p?.total ?? null)
     if (actual == null && anterior == null) continue
     const c = a || p
-    filas.push({ clave: k, concepto: c.concepto, seccion: c.seccion, bloque: c.bloque, ...renglon(actual, anterior) })
+    filas.push({ clave: k, concepto: c.concepto, seccion: c.seccion, bloque: c.bloque, ...(a?.estimado ? { estimado: true } : {}), ...renglon(actual, anterior) })
   }
   const pos = posBloque(grupo)
   filas.sort((x, y) => pos(x) - pos(y) || (y.actual ?? 0) - (x.actual ?? 0) || (y.anterior ?? 0) - (x.anterior ?? 0)
@@ -708,7 +823,7 @@ export function aperturaDe(informe, local, seccionGrupo) {
   const cs = [...conceptosDe(act, grupo).values()]
   const pos = posBloque(grupo)
   const filas = cs
-    .map((c) => ({ clave: c.clave, concepto: c.concepto, seccion: c.seccion, bloque: c.bloque, ...conReparto(montos(c)) }))
+    .map((c) => ({ clave: c.clave, concepto: c.concepto, seccion: c.seccion, bloque: c.bloque, ...(c.estimado ? { estimado: true } : {}), ...conReparto(montos(c)) }))
     .filter((f) => f.total != null || f.col1 != null || f.col2 != null)
     .sort((x, y) => pos(x) - pos(y) || x.concepto.localeCompare(y.concepto, 'es'))
   const suma = (k) => r2(cs.reduce((t, c) => t + c[k], 0))

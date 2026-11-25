@@ -311,7 +311,7 @@ const ids = (pags) => pags.map((p) => p.id)
 
 test('HOJAS_DEFECTO en el orden del spec; GRUPOS_SECCION con las secciones del P&L', () => {
   assert.deepEqual(HOJAS_DEFECTO.map((h) => h.clave), ['portada', 'indice', 'indicadores', 'ind_locales', 'historico', 'pyl_acumulado',
-    'pyl_historico', 'consolidado', 'cmv', 'detalle', 'apertura', 'cashflow', 'deuda', 'resumen', 'contraportada'])
+    'pyl_historico', 'consolidado', 'cmv', 'detalle', 'apertura', 'cashflow', 'deuda', 'area', 'resumen', 'contraportada'])
   assert.deepEqual(GRUPOS_SECCION.map((x) => x.key), ['cmv', 'fijos', 'generales', 'financieros', 'sueldos', 'impositivos'])
   assert.deepEqual(GRUPOS_SECCION.find((x) => x.key === 'generales').secciones, ['publicidad', 'descartables', 'instalaciones', 'representacion'])
   assert.deepEqual(GRUPOS_SECCION.find((x) => x.key === 'sueldos').secciones, ['sueldos', 'sueldos_socios', 'desvinculaciones', 'honorarios'])
@@ -460,11 +460,99 @@ test('cmvDe: total, partes con pts vs mes anterior y categorías de mayor a meno
 })
 
 test('paginasDe: sección con datos solo en el mes anterior → detalle sí, apertura no', () => {
-  const inf = informeDe(['L1'], (im) => { im.auto.L1['2026-01'].gastos.push(g('Fijos / Variables', 'Edenor', 'A', 100)); return im })
+  const inf = informeDe(['L1'], (im) => { im.auto.L1['2026-01'].gastos.push(g('Publicidad', 'Instagram', 'A', 100)); return im })
   const p = ids(paginasDe(inf))
-  assert.ok(p.includes('detalle:L1:fijos'))
-  assert.ok(!p.includes('apertura:L1:fijos'))
-  assert.deepEqual(detalleDe(inf, 'L1', 'fijos').filas.map((f) => [f.concepto, f.anterior, f.actual, f.diferencia]), [['Edenor', 100, null, -100]])
+  assert.ok(p.includes('detalle:L1:generales'))
+  assert.ok(!p.includes('apertura:L1:generales'))
+  assert.deepEqual(detalleDe(inf, 'L1', 'generales').filas.map((f) => [f.concepto, f.anterior, f.actual, f.diferencia]), [['Instagram', 100, null, -100]])
+})
+
+// ── Trello #374: gastos pendientes (estimados) y A.R.E.A. ──
+
+test('Fijos/Variables sin factura en el mes: se estima con el anterior y queda marcado; otros rubros no', () => {
+  const inf = informeDe(['L1'], (im) => {
+    im.auto.L1['2026-01'].gastos.push(g('Fijos / Variables', 'Edenor', 'A', 100), g('Fijos/Variables', 'Aysa', 'B', 40), g('Publicidad', 'Instagram', 'A', 70))
+    im.auto.L1['2026-02'].gastos.push(g('Fijos/Variables', 'Aysa', 'B', 45))
+    return im
+  })
+  const feb = inf.locales[0].meses['2026-02']
+  const edenor = linea('alquiler', 'Edenor', feb)
+  assert.equal(edenor.total, 100)
+  assert.equal(edenor.estimado, true)
+  const aysa = linea('alquiler', 'Aysa', feb)
+  assert.equal(aysa.total, 45) // tiene factura: va la real
+  assert.ok(!aysa.estimado)
+  assert.equal(linea('publicidad', 'Instagram', feb), undefined) // solo Fijos/Variables se estima
+  assert.ok(feb.avisos.some((a) => a.tipo === 'estimado' && a.texto.includes('Edenor')))
+  const det = detalleDe(inf, 'L1', 'fijos').filas.find((f) => f.concepto === 'Edenor')
+  assert.equal(det.estimado, true)
+})
+
+test('sin factura en el mes ni en el anterior: el concepto no aparece', () => {
+  const inf = informeDe(['L1'], (im) => { im.auto.L1['2025-12'].gastos.push(g('Fijos/Variables', 'Metrogas', 'A', 60)); return im })
+  assert.equal(linea('alquiler', 'Metrogas', inf.locales[0].meses['2026-02']), undefined)
+})
+
+test('IVA: el del costo impositivo reemplaza al cargado como pago', () => {
+  const inf = informeDe(['L1'], (im) => {
+    im.auto.L1['2026-02'].gastos.push(g('Impositivo', 'IVA', 'A', 30), g('Impositivo', 'IIBB', 'A', 10))
+    im.auto.L1['2026-02'].ivaAp = 80
+    return im
+  })
+  const feb = inf.locales[0].meses['2026-02']
+  assert.equal(linea('impositivos', 'IVA', feb).total, 80)
+  assert.equal(linea('impositivos', 'IIBB', feb).total, 10)
+})
+
+const fotoEnero = (lineasAlquiler) => ({
+  locales: { L1: { valores: {}, canales: [], secciones: [{ key: 'alquiler', lineas: lineasAlquiler }] } },
+})
+const lineaFoto = (concepto, total, extra = {}) => ({ clave: claveLinea('alquiler', concepto), seccion: 'alquiler', concepto, origen: 'auto', col1: total, col2: 0, total, ...extra })
+
+test('A.R.E.A.: lo estimado al cierre contra la factura que llegó después; la diferencia va al mes en curso', () => {
+  const inf = informeDe(['L1'], (im) => {
+    // Enero se cerró con Edenor estimado en 100 y sin Metrogas; después llegaron las facturas reales.
+    im.cierres = [{ mes: '2026-01', cerrado: true, snapshot: fotoEnero([lineaFoto('Edenor', 100, { estimado: true })]) }]
+    im.auto.L1['2026-01'].gastos.push(g('Fijos/Variables', 'Edenor', 'A', 115), g('Fijos/Variables', 'Metrogas', 'A', 50))
+    im.auto.L1['2026-02'].gastos.push(g('Fijos/Variables', 'Edenor', 'A', 120), g('Fijos/Variables', 'Metrogas', 'A', 55))
+    return im
+  })
+  const feb = inf.locales[0].meses['2026-02']
+  assert.deepEqual(feb.area.filas.map((f) => [f.concepto, f.estimado, f.real, f.diferencia, f.eraEstimado]),
+    [['Metrogas', 0, 50, 50, false], ['Edenor', 100, 115, 15, true]])
+  assert.equal(feb.area.fijos, 65)
+  const ajuste = feb.secciones.find((s) => s.key === 'alquiler').lineas.find((l) => l.area)
+  assert.equal(ajuste.total, 65)
+  assert.equal(ajuste.origen, 'auto')
+  assert.match(ajuste.concepto, /A\.R\.E\.A\. \(enero 2026\)/)
+  // El total de Fijos/Variables del mes suma el ajuste.
+  assert.equal(feb.secciones.find((s) => s.key === 'alquiler').total, 120 + 55 + 65)
+  // El mes cerrado no cambia.
+  assert.equal(linea('alquiler', 'Edenor', inf.locales[0].mesAnterior).total, 100)
+  // Hoja propia, antes del resumen.
+  const p = ids(paginasDe(inf))
+  assert.ok(p.includes('area:L1'))
+  assert.ok(p.indexOf('area:L1') < p.indexOf('resumen:L1'))
+})
+
+test('A.R.E.A.: sin el mes anterior cerrado, o sin cambios, no hay hoja', () => {
+  const abierto = informeDe(['L1'], (im) => { im.auto.L1['2026-01'].gastos.push(g('Fijos/Variables', 'Edenor', 'A', 115)); return im })
+  assert.equal(abierto.locales[0].meses['2026-02'].area, null)
+  assert.ok(!ids(paginasDe(abierto)).includes('area:L1'))
+  const igual = informeDe(['L1'], (im) => {
+    im.cierres = [{ mes: '2026-01', cerrado: true, snapshot: fotoEnero([lineaFoto('Edenor', 115)]) }]
+    im.auto.L1['2026-01'].gastos.push(g('Fijos/Variables', 'Edenor', 'A', 115))
+    return im
+  })
+  assert.deepEqual(igual.locales[0].meses['2026-02'].area.filas, [])
+  assert.ok(!ids(paginasDe(igual)).includes('area:L1'))
+})
+
+test('la foto del cierre guarda la marca de estimado y el A.R.E.A. del mes', () => {
+  const inf = informeDe(['L1'], (im) => { im.auto.L1['2026-01'].gastos.push(g('Fijos/Variables', 'Edenor', 'A', 100)); return im })
+  const foto = snapshotIm(inf).locales.L1
+  const ed = foto.secciones.find((x) => x.key === 'alquiler').lineas.find((l) => l.concepto === 'Edenor')
+  assert.equal(ed.estimado, true)
 })
 
 test('paginasDe: un concepto que da total 0 (+5 / −5) no arma una hoja de detalle vacía', () => {
