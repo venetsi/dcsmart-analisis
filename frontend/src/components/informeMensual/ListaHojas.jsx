@@ -21,7 +21,10 @@ const Flecha = ({ arriba }) => (
   </svg>
 )
 
-export default function ListaHojas({ hojas, paginas, claveActiva, interno, ocupado, onElegir, onGuardar }) {
+// También la usa el Reporte de Ventas: `nombre` ('informe' | 'reporte') y `nota` cambian los textos.
+const NOTA_IM = 'Las hojas por local salen una vez por cada local. Con varios locales se suman los indicadores por local y el consolidado del grupo.'
+
+export default function ListaHojas({ hojas, paginas, claveActiva, interno, ocupado, onElegir, onGuardar, nombre = 'informe', nota = NOTA_IM }) {
   const cuenta = useMemo(() => {
     const c = {}
     for (const p of paginas || []) c[p.clave] = (c[p.clave] || 0) + 1
@@ -39,8 +42,8 @@ export default function ListaHojas({ hojas, paginas, claveActiva, interno, ocupa
   }
 
   return (
-    <nav className="ime-hojas" aria-label="Hojas del informe">
-      <div className="rve-k ime-hojas-tit">Hojas del informe</div>
+    <nav className="ime-hojas" aria-label={`Hojas del ${nombre}`}>
+      <div className="rve-k ime-hojas-tit">Hojas del {nombre}</div>
       <ul>
         {hojas.map((h, i) => {
           const n = cuenta[h.clave] || 0
@@ -50,8 +53,8 @@ export default function ListaHojas({ hojas, paginas, claveActiva, interno, ocupa
             <li key={h.clave} className={`ime-hj${activa ? ' on' : ''}${motivo ? ' apagada' : ''}`}>
               <button type="button" role="switch" aria-checked={!!h.visible} className={`ime-switch${h.visible ? ' si' : ''}`}
                 disabled={!interno || ocupado} onClick={() => alternar(h.clave)}
-                aria-label={`${h.titulo}: ${h.visible ? 'sale en el informe' : 'no sale en el informe'}`}
-                title={interno ? (h.visible ? 'Sacarla del informe' : 'Ponerla en el informe') : 'Solo el equipo DC puede cambiar las hojas'} />
+                aria-label={`${h.titulo}: ${h.visible ? `sale en el ${nombre}` : `no sale en el ${nombre}`}`}
+                title={interno ? (h.visible ? `Sacarla del ${nombre}` : `Ponerla en el ${nombre}`) : 'Solo el equipo DC puede cambiar las hojas'} />
               <button type="button" className="ime-hj-nom" onClick={() => onElegir(h.clave)} aria-current={activa || undefined}>
                 <span className="ime-hj-tit">{h.titulo}{n > 1 && <em>{n}</em>}</span>
                 {motivo && <small>{motivo}</small>}
@@ -66,9 +69,7 @@ export default function ListaHojas({ hojas, paginas, claveActiva, interno, ocupa
           )
         })}
       </ul>
-      <p className="ime-hojas-nota">
-        Las hojas por local salen una vez por cada local. Con varios locales se suman los indicadores por local y el consolidado del grupo.
-      </p>
+      {nota && <p className="ime-hojas-nota">{nota}</p>}
     </nav>
   )
 }

@@ -11,12 +11,14 @@ import { Hoja, Mazo, mesEnPalabras } from '../components/reporteVentas/Paginas.j
 import { msgError } from '../components/reporteVentas/errores.js'
 import PanelDatos from '../components/reporteVentas/PanelDatos.jsx'
 import ConfigCliente from '../components/reporteVentas/ConfigCliente.jsx'
-import { armarPorLocal, armarReporte, snapshotDe } from '../lib/reporteVentas.js'
+import ListaHojas from '../components/informeMensual/ListaHojas.jsx'
+import { armarPorLocal, armarReporte, snapshotDe, HOJAS_RV } from '../lib/reporteVentas.js'
 import '../styles/reporte-editor.css'
+import '../styles/informe-editor.css'
 
 const ANCHO = 1456
 const ALTO = 819
-const ANCHO_MINI = 150
+const ANCHO_MINI = 132
 
 function mesAnterior() {
   const d = new Date()
@@ -32,11 +34,20 @@ function moverMes(mes, delta) {
 const mesActual = () => moverMes(mesAnterior(), 1)
 const fecha = (iso) => (iso ? new Date(iso).toLocaleDateString('es-AR') : '')
 
+// Una hoja que hoy no genera páginas (apagada o sin datos): se puede elegir igual en la lista.
+function paginaSinDatos(reporte, clave) {
+  const h = HOJAS_RV.find((x) => x.clave === clave)
+  if (!h) return null
+  const l = h.alcance === 'local' ? reporte.locales[0] : null
+  return { id: l ? `${clave}:${l.local}` : clave, tipo: clave, clave, titulo: h.titulo, virtual: true, ...(l ? { local: l.local } : {}) }
+}
+
 // Miniatura: la hoja real escalada con CSS.
 const Miniatura = memo(function Miniatura({ pagina, reporte, numero, etiqueta, activa, onElegir }) {
   const escala = ANCHO_MINI / ANCHO
   return (
-    <button type="button" className={`rve-thumb${activa ? ' on' : ''}`} onClick={() => onElegir(pagina.id)} aria-label={`Hoja ${numero}: ${etiqueta}`} aria-current={activa}>
+    <button type="button" className={`rve-thumb ime-thumb${activa ? ' on' : ''}`} onClick={() => onElegir(pagina.id)}
+      aria-label={`Hoja ${numero}: ${etiqueta}`} aria-current={activa || undefined} title={etiqueta}>
       <span className="rve-thumb-marco" style={{ width: ANCHO_MINI, height: Math.round(ALTO * escala) }}>
         <span className="rve-thumb-hoja" style={{ transform: `scale(${escala})` }} aria-hidden="true">
           <Hoja pagina={pagina} reporte={reporte} numero={numero} />
@@ -62,10 +73,15 @@ function HojaGrande({ pagina, reporte }) {
   }, [])
   return (
     <div ref={ref} className="rve-centro-marco">
-      <div className="rve-hoja-caja" style={{ width: ANCHO * escala, height: ALTO * escala }}>
-        <div className="rve-hoja-esc" style={{ transform: `scale(${escala})` }}>
-          <Hoja pagina={pagina} reporte={reporte} />
-        </div>
+      <div className="rve-hoja-caja ime-hoja-caja" style={{ width: ANCHO * escala, height: ALTO * escala }}>
+        {pagina.virtual
+          ? <div className="ime-sin-hoja">
+              <strong>{pagina.titulo}</strong>
+              <span>Esta hoja no sale en el PDF este mes. Mirá en la lista de la izquierda por qué.</span>
+            </div>
+          : <div className="rve-hoja-esc" style={{ transform: `scale(${escala})` }}>
+              <Hoja pagina={pagina} reporte={reporte} />
+            </div>}
       </div>
     </div>
   )
@@ -80,7 +96,7 @@ export default function ReporteVentasPage() {
   const [clienteId, setClienteId] = useState(null)
   const [mes, setMes] = useState(mesAnterior)
   const [data, setData] = useState(null)
-  const [paginaId, setPaginaId] = useState(null)
+  const [sel, setSel] = useState(null) // { id } de una página o { clave } de una hoja
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [config, setConfig] = useState(false)
@@ -118,15 +134,21 @@ export default function ReporteVentasPage() {
     if (!data) return null
     return armarReporte({
       cliente: data.cliente, mes: data.mes, porLocal: armarPorLocal(data), hoy: new Date(),
-      ipc: data.ipc || {}, observaciones: data.observaciones || {},
+      ipc: data.ipc || {}, observaciones: data.observaciones || {}, hojas: data.hojas || [],
     })
   }, [data])
 
   const pagina = useMemo(() => {
     if (!reporte) return null
-    return reporte.paginas.find((p) => p.id === paginaId)
-      || reporte.paginas.find((p) => p.tipo === 'mes') || reporte.paginas[0]
-  }, [reporte, paginaId])
+    if (sel?.id) {
+      const p = reporte.paginas.find((x) => x.id === sel.id)
+      if (p) return p
+    }
+    const clave = sel?.clave || (sel?.id ? sel.id.split(':')[0] : null)
+    if (clave) return reporte.paginas.find((x) => x.clave === clave) || paginaSinDatos(reporte, clave)
+    return reporte.paginas.find((p) => p.tipo === 'mes') || reporte.paginas[0] || paginaSinDatos(reporte, 'portada')
+  }, [reporte, sel])
+  const numero = pagina && !pagina.virtual ? reporte.paginas.findIndex((p) => p.id === pagina.id) + 1 : 0
 
   const cierre = data?.cierres.find((c) => c.mes === mes) || null
   const cerrado = !!cierre
@@ -140,8 +162,11 @@ export default function ReporteVentasPage() {
     const n = p.local ? nombreLocal(p.local) : ''
     return { portada: 'Portada', sintesis: 'Síntesis', consolidado: 'Venta por local', consolidadoHist: 'Histórico del grupo',
       mes: `${n} · indicadores`, canales: `${n} · canales`, comparativo: `${n} · mes a mes`, historico: `${n} · histórico`,
-      delivery: `${n} · delivery`, acumulado: 'Acumulado del año', contraportada: 'Contraportada' }[p.tipo]
+      delivery: `${n} · delivery`, medios: `${n} · medios de pago`, turnos: `${n} · turnos`,
+      acumulado: 'Acumulado del año', contraportada: 'Contraportada' }[p.tipo]
   }
+  // En la tira todas las miniaturas son de la misma hoja: alcanza con el local.
+  const etiquetaCorta = (p) => (p.local ? nombreLocal(p.local) : etiquetaHoja(p))
   const conNombres = (txt) => {
     let t = txt.replace(/\d{4}-\d{2}/g, (m) => mesEnPalabras(m))
     for (const l of data?.cliente?.locales || []) t = t.split(`${l}:`).join(`${nombreLocal(l)}:`)
@@ -166,6 +191,14 @@ export default function ReporteVentasPage() {
     try { await api.rvPutObs(clienteId, { mes, pagina: paginaObs, texto }); await recargar() }
     catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
   }, [clienteId, mes, recargar])
+
+  // ── qué hojas lleva el reporte y en qué orden (siempre la lista completa) ──
+  const guardarHojas = useCallback(async (lista) => {
+    setError('')
+    setOcupado(true)
+    try { await api.rvPutHojas(clienteId, { hojas: lista }); await recargar() }
+    catch (e) { setError(msgError(e)) } finally { setOcupado(false) }
+  }, [clienteId, recargar])
 
   // ── inflación de un mes (null = volver a la de INDEC) ──
   const guardarIpc = useCallback(async (mesIpc, variacion) => {
@@ -331,15 +364,29 @@ export default function ReporteVentasPage() {
           {!data && !error && <div className="rve-aviso">Cargando…</div>}
 
           {reporte && pagina && (
-            <div className="rve-grid">
-              <nav className="rve-thumbs" aria-label="Hojas del reporte">
-                {reporte.paginas.map((p, i) => (
-                  <Miniatura key={p.id} pagina={p} reporte={reporte} numero={i + 1} etiqueta={etiquetaHoja(p)}
-                    activa={p.id === pagina.id} onElegir={setPaginaId} />
-                ))}
-              </nav>
-              <div className="rve-centro">
+            <div className="ime-grid">
+              <ListaHojas hojas={reporte.hojas} paginas={reporte.paginas} claveActiva={pagina.clave ?? pagina.tipo} interno={interno}
+                ocupado={ocupado} onElegir={(clave) => setSel({ clave })} onGuardar={guardarHojas} nombre="reporte"
+                nota="Las hojas por local salen una vez por cada local. Las que quedan seguidas en la lista van juntas para cada local." />
+              <div className="ime-centro">
+                <div className="ime-centro-cab">
+                  <span>{numero ? `Hoja ${numero} de ${reporte.paginas.length}` : 'No sale en el PDF'} · {pagina.virtual ? pagina.titulo : etiquetaHoja(pagina)}</span>
+                  {ocupado && <span className="ime-guardando">Guardando…</span>}
+                </div>
                 <HojaGrande pagina={pagina} reporte={reporte} />
+                {/* Miniaturas de la hoja elegida (una por local); las flechas recorren todo el reporte. */}
+                <div className="ime-tira-fila">
+                  <button type="button" className="btn-sec ime-paso" disabled={numero <= 1} onClick={() => setSel({ id: reporte.paginas[numero - 2].id })}
+                    aria-label="Página anterior del reporte" title="Página anterior">‹</button>
+                  <nav className="ime-tira" aria-label="Páginas de esta hoja">
+                    {reporte.paginas.map((p, i) => (p.clave === (pagina.clave ?? pagina.tipo) ? (
+                      <Miniatura key={p.id} pagina={p} reporte={reporte} numero={i + 1} etiqueta={etiquetaCorta(p)}
+                        activa={p.id === pagina.id} onElegir={(id) => setSel({ id })} />
+                    ) : null))}
+                  </nav>
+                  <button type="button" className="btn-sec ime-paso" disabled={!numero || numero >= reporte.paginas.length} onClick={() => setSel({ id: reporte.paginas[numero].id })}
+                    aria-label="Página siguiente del reporte" title="Página siguiente">›</button>
+                </div>
               </div>
               <aside className="rve-panel">
                 <PanelDatos reporte={reporte} pagina={pagina} data={data} interno={interno} cerradoMes={cerrado}
