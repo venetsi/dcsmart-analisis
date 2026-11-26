@@ -296,7 +296,10 @@ function Participacion({ filas, total, frase, grande, abajo, totalNombre = 'Tota
   const max = Math.max(0, ...filas.map((f) => f.valor).filter(esNum))
   const prim = filas[0]
   const alto = filas.length > 3 ? 0 : Math.min(compacto ? 110 : 152, (compacto ? 230 : 300) / Math.max(filas.length, 1))
-  const densidad = filas.length > 6 ? ' rv-part-muchas rv-part-muchisimas' : filas.length > 3 || compacto ? ' rv-part-muchas' : ''
+  // Más de 8 filas (por ejemplo, los medios de pago): dos columnas, para que entren en la hoja.
+  const dos = filas.length > 8
+  const densidad = (filas.length > 6 ? ' rv-part-muchas rv-part-muchisimas' : filas.length > 3 || compacto ? ' rv-part-muchas' : '')
+    + (dos ? ' rv-part-dos' : '')
   return (
     <div className={`rv-part${compacto ? ' rv-part-compacto' : ''}`}>
       <div className="rv-part-izq">
@@ -304,7 +307,7 @@ function Participacion({ filas, total, frase, grande, abajo, totalNombre = 'Tota
         <div className="rv-part-txt">{frase}</div>
         {abajo}
       </div>
-      <div className={`rv-part-lista${densidad}`}>
+      <div className={`rv-part-lista${densidad}`} style={dos ? { gridTemplateRows: `repeat(${Math.ceil(filas.length / 2)}, auto) auto` } : undefined}>
         {filas.map((f, i) => (
           <div key={f.nombre} className="rv-part-fila" style={{ minHeight: alto }}>
             <div className="rv-part-nom"><span>{f.nombre}</span><span><Num v={f.valor} pesos /></span></div>
@@ -437,7 +440,7 @@ function Mes({ reporte, local: l, ...m }) {
   const sec = [
     esNum(l.cubiertos.valor) && <Tarjeta key="cub" k="Cubiertos" clase="rv-card-sec"><Num v={l.cubiertos.valor} /></Tarjeta>,
     esNum(l.ordenes.valor) && <Tarjeta key="ord" k="Órdenes" clase="rv-card-sec"><Num v={l.ordenes.valor} /></Tarjeta>,
-    esNum(l.cubiertos.valor) && <Tarjeta key="pcub" k="Prom. por cubierto" clase="rv-card-sec"><Num v={l.promCubierto} pesos /></Tarjeta>,
+    esNum(l.cubiertos.valor) && <Tarjeta key="pcub" k="Prom. por cubierto" clase="rv-card-sec" sub="Venta del local / cubiertos"><Num v={l.promCubierto} pesos /></Tarjeta>,
     esNum(l.ordenes.valor) && <Tarjeta key="pord" k="Prom. por orden" clase="rv-card-sec"><Num v={l.promOrden} pesos /></Tarjeta>,
   ].filter(Boolean)
   return (
@@ -566,8 +569,8 @@ function Historico({ reporte, local: l, ...m }) {
       td: (h) => <ConFlecha act={h.cubiertos.valor} ant={h.cubiertosAnt}><Num v={h.cubiertos.valor} /></ConFlecha>,
       tot: <ConFlecha act={totCub} ant={cubAnt}><Num v={totCub} /></ConFlecha> },
     hayCub && { k: 'pc', th: 'Prom. cub.',
-      td: (h) => <ConFlecha act={h.promCubierto} ant={prom(h.anterior, h.cubiertosAnt)}><Num v={h.promCubierto} /></ConFlecha>,
-      tot: <ConFlecha act={a.promCubierto} ant={prom(a.anterior, cubAnt)}><Num v={a.promCubierto} /></ConFlecha> },
+      td: (h) => <ConFlecha act={h.promCubierto} ant={h.promCubiertoAnt}><Num v={h.promCubierto} /></ConFlecha>,
+      tot: <ConFlecha act={a.promCubierto} ant={prom(suma(hist.map((h) => h.localAnt)), cubAnt)}><Num v={a.promCubierto} /></ConFlecha> },
     hayOrd && { k: 'o', th: 'Órdenes',
       td: (h) => <ConFlecha act={h.ordenes.valor} ant={h.ordenesAnt}><Num v={h.ordenes.valor} /></ConFlecha>,
       tot: <ConFlecha act={totOrd} ant={ordAnt}><Num v={totOrd} /></ConFlecha> },
@@ -577,7 +580,7 @@ function Historico({ reporte, local: l, ...m }) {
   ].filter(Boolean)
   return (
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Histórico ${anio}`)} titulo="Detalle mensual de ventas y operación"
-      notaPie={`MA = mes anterior · Flechas: contra el mismo mes de ${anio - 1}`}>
+      notaPie={`MA = mes anterior · Prom. cub. = venta del local (sin apps ni eventos) / cubiertos · Flechas: contra el mismo mes de ${anio - 1}`}>
       <div className="rv-cuerpo">
         <TablaMensual filas={hist} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
       </div>
@@ -742,10 +745,45 @@ function Acumulado({ reporte, ...m }) {
   )
 }
 
+// Medios de pago del mes: el efectivo de las cajas y cada medio de cobro, de mayor a menor.
+function Medios({ reporte, local: l, ...m }) {
+  const { filas = [], total = null } = l.medios || {}
+  const top = filas.find((f) => !f.resto)
+  return (
+    <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Medios de pago · ${mesEnPalabras(reporte.mes)}`)}
+      titulo={top ? `${top.nombre} fue el medio de pago más usado` : 'Venta por medio de pago'}
+      notaPie="Efectivo: el de las cajas · Los demás medios: los cobros cargados en cada caja">
+      <div className="rv-cuerpo">
+        <Participacion filas={filas} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
+          frase={<>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se cobró con {top?.nombre ?? '—'}.</>} />
+      </div>
+    </Marco>
+  )
+}
+
+// Venta por turno de caja (Mañana, Noche, Evento…); las cajas sin turno cargado, aparte.
+function Turnos({ reporte, local: l, ...m }) {
+  const { filas = [], total = null } = l.turnos || {}
+  const top = filas.find((f) => f.turno !== 'Sin turno')
+  const lista = filas.map((f) => ({
+    nombre: f.turno, valor: f.venta, inc: f.inc,
+    pie: `${esNum(f.inc) ? `${fmtAR(f.inc, 2)}% del total` : '—'} · ${fmtAR(f.cajas)} ${f.cajas === 1 ? 'caja' : 'cajas'}`,
+  }))
+  return (
+    <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Turnos · ${mesEnPalabras(reporte.mes)}`)}
+      titulo={top ? `El turno ${top.turno} fue el que más vendió` : 'Venta por turno'}>
+      <div className="rv-cuerpo">
+        <Participacion filas={lista} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
+          frase={top ? <>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se vendió en el turno {top.turno}.</> : <>Las cajas del mes no tienen turno cargado.</>} />
+      </div>
+    </Marco>
+  )
+}
+
 const HOJAS = {
   portada: Portada, sintesis: Sintesis, consolidado: Consolidado, consolidadoHist: ConsolidadoHist,
   mes: Mes, canales: Canales, comparativo: Comparativo, historico: Historico, delivery: Delivery,
-  acumulado: Acumulado, contraportada: Contraportada,
+  medios: Medios, turnos: Turnos, acumulado: Acumulado, contraportada: Contraportada,
 }
 
 // Una hoja según pagina.tipo. `local` (LocalMes) es opcional: si no viene se busca

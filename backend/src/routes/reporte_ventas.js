@@ -10,7 +10,7 @@ import { crearLogosLocales } from '../lib/logosLocales.js'
 import { crearIpc } from '../lib/ipc.js'
 import {
   okMes, rangoReporte, esInterno, normalizarDato, mesCerrable, nombresOk, logosOk, snapshotOk, datoEnSnapshot, okOrigenRegla,
-  datoLibre, datoRestaurable, obsOk, paginaOk, ipcOk, OBS_MAX,
+  datoLibre, datoRestaurable, obsOk, paginaOk, ipcOk, OBS_MAX, hojasRvOk,
 } from '../lib/reporteVentas.js'
 
 const txt = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -121,7 +121,7 @@ export default async function (fastify) {
 
     // BigQuery no acepta un arreglo vacío como parámetro: sin locales no hay nada que consultar.
     const bq = cli.locales.length ? (q) => fastify.bq.query(q) : async () => [[]]
-    const [[ventasRows], [detRows], [origRows], [idsRows], valores, cierres, reglas, historial, observaciones, inflacion] = await Promise.all([
+    const [[ventasRows], [detRows], [origRows], [idsRows], [turnoRows], valores, cierres, reglas, historial, observaciones, inflacion, hojas] = await Promise.all([
       // SUM sin COALESCE: si todo es NULL el dato no existe (null, no 0).
       // cajas / sinCubiertos / sinOrdenes: cuántas cajas hubo y cuántas no informaron
       // (NULL o 0). ventaConCubiertos / ventaConOrdenes: la venta de las cajas que sí
@@ -129,6 +129,7 @@ export default async function (fastify) {
       bq({
         query: `SELECT local, FORMAT_DATE('%Y-%m', fecha_dia) mes,
                        CAST(ROUND(SUM(total)) AS INT64) venta, SUM(comensales) cubiertos, SUM(tickets) ordenes,
+                       CAST(ROUND(SUM(efectivo)) AS INT64) efectivo,
                        CAST(ROUND(SUM(IF(comensales > 0, total, 0))) AS INT64) ventaConCubiertos,
                        CAST(ROUND(SUM(IF(tickets > 0, total, 0))) AS INT64) ventaConOrdenes,
                        COUNT(*) cajas,
@@ -152,6 +153,17 @@ export default async function (fastify) {
         query: `SELECT id, local, FORMAT_DATE('%Y-%m', fecha_dia) mes FROM ${DS}.vw_cajas WHERE ${where}`,
         params
       }),
+      // Venta por tipo de turno de la caja (Mañana, Noche, Evento…): las cajas de turno
+      // Evento son el canal Eventos. vw_cajas no trae el turno: sale de la réplica de gestión.
+      bq({
+        query: `SELECT c.local, FORMAT_DATE('%Y-%m', c.fecha_dia) mes, TRIM(pc.tipo_turno) turno,
+                       CAST(ROUND(SUM(c.total)) AS INT64) venta, SUM(c.comensales) cubiertos, SUM(c.tickets) ordenes,
+                       COUNT(*) cajas
+                  FROM (SELECT id, local, fecha_dia, total, comensales, tickets FROM ${DS}.vw_cajas WHERE ${where}) c
+                  LEFT JOIN (SELECT id, tipo_turno FROM ${fastify.bqDatasetCdc}.public_cajas) pc ON pc.id = c.id
+                 GROUP BY 1, 2, 3`,
+        params
+      }),
       db.query(`SELECT local, mes, dato, valor, original, actualizado_por, actualizado_at
                   FROM rv_valor WHERE cliente_id = $1 AND mes >= $2 AND mes <= $3
                  ORDER BY local, mes, dato`, [id, desde.slice(0, 7), mes]),
@@ -166,13 +178,22 @@ export default async function (fastify) {
       db.query(`SELECT pagina, texto, actualizado_por, actualizado_at FROM rv_observacion
                  WHERE cliente_id = $1 AND mes = $2 AND reporte = 'ventas'`, [id, mes]),
       ipcDe(desde.slice(0, 7), mes),
+      db.query(`SELECT hojas FROM reporte_hojas WHERE cliente_id = $1 AND reporte = 'ventas'`, [id]),
     ])
 
-    const auto = Object.fromEntries(cli.locales.map((l) => [l, { meses: {}, detalles: {}, cajasOrigen: {} }]))
+    const auto = Object.fromEntries(cli.locales.map((l) => [l, { meses: {}, detalles: {}, cajasOrigen: {}, turnos: {} }]))
+    for (const r of plainRows(turnoRows)) {
+      if (!auto[r.local]) continue
+      ;(auto[r.local].turnos[r.mes] ||= []).push({
+        turno: r.turno || null, venta: numOrNull(r.venta), cubiertos: numOrNull(r.cubiertos),
+        ordenes: numOrNull(r.ordenes), cajas: numOrNull(r.cajas),
+      })
+    }
     for (const r of plainRows(ventasRows)) {
       if (!auto[r.local]) continue
       auto[r.local].meses[r.mes] = {
         venta: numOrNull(r.venta), cubiertos: numOrNull(r.cubiertos), ordenes: numOrNull(r.ordenes),
+        efectivo: numOrNull(r.efectivo),
         ventaConCubiertos: numOrNull(r.ventaConCubiertos), ventaConOrdenes: numOrNull(r.ventaConOrdenes),
         cajas: numOrNull(r.cajas), sinCubiertos: numOrNull(r.sinCubiertos), sinOrdenes: numOrNull(r.sinOrdenes),
       }
@@ -199,6 +220,7 @@ export default async function (fastify) {
       historial: historial.rows.map((h) => ({ ...h, antes: numOrNull(h.antes), despues: numOrNull(h.despues) })),
       observaciones: Object.fromEntries(observaciones.rows.map((o) => [o.pagina, o])),
       ipc: inflacion,
+      hojas: hojas.rows[0]?.hojas ?? [],
     }
   })
 
@@ -412,6 +434,21 @@ export default async function (fastify) {
   })
 
   // ---- Reglas de canal ----
+  // Qué hojas lleva el reporte del cliente y en qué orden (como en el Informe mensual).
+  fastify.put('/:id/hojas', pre, async (req, reply) => {
+    const id = idDe(req)
+    if (!id) return reply.code(400).send({ error: 'El cliente no es válido.' })
+    if (!(await getCli(id))) return reply.code(404).send({ error: 'Cliente no encontrado' })
+    const hojas = hojasRvOk(req.body?.hojas)
+    if (!hojas) return reply.code(400).send({ error: 'La lista de hojas no es válida.' })
+    await db.query(
+      `INSERT INTO reporte_hojas (cliente_id, reporte, hojas, actualizado_por) VALUES ($1,'ventas',$2,$3)
+       ON CONFLICT (cliente_id, reporte)
+       DO UPDATE SET hojas = EXCLUDED.hojas, actualizado_por = EXCLUDED.actualizado_por, actualizado_at = now()`,
+      [id, JSON.stringify(hojas), quien(req)])
+    return { ok: true }
+  })
+
   fastify.put('/:id/regla', pre, async (req, reply) => {
     const id = idDe(req)
     const b = req.body || {}

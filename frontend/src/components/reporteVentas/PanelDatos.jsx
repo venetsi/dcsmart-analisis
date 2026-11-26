@@ -114,7 +114,7 @@ function Fuente({ d, nota }) {
       )}
       {d.fuente === 'falta' && d.parcial && <small className="rve-parcial">{textoParcial(d.parcial)}</small>}
       {d.fuente === 'auto' && d.sinInformar > 0 && (
-        <small>sin {fmtAR(d.sinInformar)} {d.sinInformar === 1 ? 'caja que no lo informó' : 'cajas que no lo informaron'}; el promedio usa la venta de las demás</small>
+        <small>sin {fmtAR(d.sinInformar)} {d.sinInformar === 1 ? 'caja que no lo informó' : 'cajas que no lo informaron'}</small>
       )}
       {nota && <small>{nota}</small>}
     </div>
@@ -135,7 +135,7 @@ export default function PanelDatos(props) {
   const { pagina, reporte, interno, ocupado, onGuardarObs } = props
   return (
     <>
-      {pagina && (
+      {pagina && !pagina.virtual && (
         <EditorObs key={pagina.id} texto={reporte.observaciones?.[pagina.id]?.texto || ''} interno={interno} ocupado={ocupado}
           por={reporte.observaciones?.[pagina.id]?.actualizado_por} onGuardar={(t) => onGuardarObs(pagina.id, t)} />
       )}
@@ -242,6 +242,15 @@ function DatosHoja({ reporte, pagina, data, interno, cerradoMes, ocupado, onGuar
   const tocable = (mes, d, dato) => d.fuente !== 'calc'
     && (datoLibre(dato) || (abierto(mes) ? ['auto', 'mano', 'falta'] : ['mano', 'falta']).includes(d.fuente))
 
+  if (pagina?.virtual) {
+    return <PanelVacio texto={`${pagina.titulo}: esta hoja no sale en el PDF este mes. En la lista de la izquierda dice por qué.`} />
+  }
+  if (pagina?.tipo === 'medios') {
+    return <PanelVacio texto="Sale de las cajas del mes en gestión: el efectivo de cada caja y sus cobros por medio de pago. Si los medios no suman la venta, la diferencia va en su propia fila. No se corrige acá: se corrige la caja en gestión." />
+  }
+  if (pagina?.tipo === 'turnos') {
+    return <PanelVacio texto="Sale del turno de cada caja en gestión. Las cajas sin turno cargado van en “Sin turno”. No se corrige acá: se corrige la caja en gestión." />
+  }
   if (!pagina || pagina.tipo === 'portada' || pagina.tipo === 'contraportada') {
     return <PanelVacio texto="Esta hoja no tiene datos para editar." />
   }

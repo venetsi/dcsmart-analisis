@@ -106,6 +106,7 @@ export const api = {
   rvGuardarCliente: (id, body) => request(`/reporte-ventas/clientes/${id}`, { method: 'PUT', body }),
   rvPutRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'PUT', body }),
   rvDelRegla: (id, body) => request(`/reporte-ventas/${id}/regla`, { method: 'DELETE', body }),
+  rvPutHojas: (id, body) => request(`/reporte-ventas/${id}/hojas`, { method: 'PUT', body }),
   // Informe Mensual
   imClientes: (grupo) => request(`/informe-mensual/clientes${toQueryString({ grupo })}`),
   imGet: (id, mes) => request(`/informe-mensual/${id}${toQueryString({ mes })}`),

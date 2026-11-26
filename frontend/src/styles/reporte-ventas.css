@@ -86,6 +86,9 @@
 .rv-part-muchisimas .rv-part-nom, .rv-part-muchisimas .rv-part-total { font-size: 19px; }
 .rv-part-muchisimas .rv-part-pista { height: 8px; }
 .rv-part-muchisimas .rv-part-pct { font-size: 14px; }
+/* Dos columnas (más de 8 filas): se llenan de arriba hacia abajo; el total ocupa todo el ancho. */
+.rv-part-dos { display: grid; grid-auto-flow: column; grid-template-columns: 1fr 1fr; column-gap: 36px; }
+.rv-part-dos .rv-part-total { grid-column: 1 / -1; grid-row: -1; }
 
 /* tablas */
 .rv-hoja table.rv-tabla { width: 100%; border-collapse: collapse; font-size: 20px; margin: 0; border: 1px solid #363e48; }

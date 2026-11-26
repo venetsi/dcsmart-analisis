@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNumeroAR, fmtAR, canalesAuto, armarLocal, armarReporte, snapshotDe, ticketsAuto, autoDeLocal, armarPorLocal } from './reporteVentas.js'
+import { parseNumeroAR, fmtAR, canalesAuto, armarLocal, armarReporte, snapshotDe, ticketsAuto, autoDeLocal, armarPorLocal, mediosDePago, turnosDe, hojasRv, paginasRv } from './reporteVentas.js'
 
 test('parseNumeroAR lee los formatos de los decks', () => {
   assert.equal(parseNumeroAR('55.114.440'), 55114440)
@@ -323,13 +323,14 @@ test('histórico: cubiertos y órdenes del mismo mes del año anterior', () => {
   assert.equal(l.historico.find((h) => h.mes === '2026-01').cubiertosAnt, null)
 })
 
-test('cubiertos: suma de las cajas que informan y promedio con la venta de esas cajas (878 sep-26)', () => {
+test('cubiertos: suma de las cajas que informan; el promedio va con la venta del canal Local (878 sep-26)', () => {
   const auto = { canales: {}, meses: { '2026-09': {
     venta: 77298668, cubiertos: 1520, ordenes: 868, cajas: 32, sinCubiertos: 6, sinOrdenes: 6,
     ventaConCubiertos: 46018668, ventaConOrdenes: 46018668 } } }
   const l = armarLocal({ local: 'X', mes: '2026-09', auto, valores: [], cierres: [] })
   assert.deepEqual([l.cubiertos.valor, l.cubiertos.fuente, l.cubiertos.sinInformar], [1520, 'auto', 6])
-  assert.equal(Math.round(l.promCubierto), Math.round(46018668 / 1520))
+  // Sin otros canales, Local es la venta entera.
+  assert.equal(Math.round(l.promCubierto), Math.round(77298668 / 1520))
   assert.equal(Math.round(l.promOrden), Math.round(46018668 / 868))
   // Mes cerrado sin cubiertos en la foto: los toma de lo automático.
   const cierres = [{ mes: '2026-09', origen: 'reporte', snapshot: { locales: { X: { venta: 77298668, cubiertos: null } } } }]
@@ -357,14 +358,14 @@ test('tickets de cada app desde la cantidad de cobros; las líneas sin cantidad,
   assert.deepEqual(t.base, { 'Pedidos Ya': 700 }) // MP Delivery tiene todas: usa su venta entera
 })
 
-test('mes cerrado con cubiertos guardados sin su venta: si coinciden con lo automático, el promedio usa la venta de esas cajas', () => {
+test('mes cerrado: el promedio por cubierto va con la venta Local; el de órdenes, con la venta de las cajas si coinciden', () => {
   const auto = { canales: {}, meses: { '2026-09': {
     venta: 77298668, cubiertos: 1520, ordenes: 868, cajas: 32, sinCubiertos: 6, sinOrdenes: 6,
     ventaConCubiertos: 46013668, ventaConOrdenes: 46013668 } } }
   const foto = (cub, ord) => [{ mes: '2026-09', origen: 'deck', snapshot: { locales: { X: { venta: 77298668, cubiertos: cub, ordenes: ord } } } }]
   const l = armarLocal({ local: 'X', mes: '2026-09', auto, valores: [], cierres: foto(1520, 886) })
   assert.equal(l.cubiertos.fuente, 'cerrado')
-  assert.equal(Math.round(l.promCubierto), Math.round(46013668 / 1520))
+  assert.equal(Math.round(l.promCubierto), Math.round(77298668 / 1520))
   // Órdenes distintas a las automáticas: no se sabe qué cajas son, va con la venta entera.
   assert.equal(Math.round(l.promOrden), Math.round(77298668 / 886))
 })
@@ -445,4 +446,88 @@ test('porMes no entra en la foto del cierre del Reporte de Ventas', () => {
   const l = armarLocal({ local: 'X', mes: '2026-09', auto: { meses: { '2026-09': { venta: 100, cubiertos: 10 } }, canales: {} }, valores: [], cierres: [] })
   const r = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: l }, hoy: HOY })
   assert.deepEqual(Object.keys(snapshotDe(r).locales.X).sort(), ['canales', 'cubiertos', 'delivery', 'ordenes', 'tickets', 'venta'])
+})
+
+test('promedio por cubierto: venta Local (sin apps ni eventos) / cubiertos, también el del año anterior y el acumulado', () => {
+  const auto = {
+    meses: {
+      '2025-02': { venta: 500, cubiertos: 10, cajas: 2, sinCubiertos: 0 },
+      '2026-01': { venta: 1000, cubiertos: 20, cajas: 4, sinCubiertos: 0 },
+      '2026-02': { venta: 1200, cubiertos: 30, cajas: 5, sinCubiertos: 1 },
+    },
+    canales: {
+      '2025-02': [{ nombre: 'Rappi', valor: 100, delivery: true }],
+      '2026-01': [{ nombre: 'Rappi', valor: 200, delivery: true }],
+      '2026-02': [{ nombre: 'Rappi', valor: 150, delivery: true }, { nombre: 'Eventos', valor: 450, delivery: false }],
+    },
+  }
+  const l = armarLocal({ local: 'X', mes: '2026-02', auto, valores: [], cierres: [] })
+  assert.equal(l.promCubierto, (1200 - 150 - 450) / 30)
+  const feb = l.historico.find((h) => h.mes === '2026-02')
+  assert.equal(feb.local, 600)
+  assert.equal(feb.promCubiertoAnt, 400 / 10)
+  assert.equal(l.acumulado.promCubierto, (800 + 600) / 50)
+})
+
+test('canal Eventos: la venta de las cajas de turno Evento', () => {
+  const c = canalesAuto({ detalles: [{ metodo: 'Rappi', monto: 100 }], turnos: [
+    { turno: 'Noche', venta: 1000 }, { turno: 'Evento', venta: 300 }, { turno: ' evento ', venta: 50 }, { turno: null, venta: 70 },
+  ] })
+  assert.deepEqual(c, [{ nombre: 'Rappi', valor: 100, delivery: true }, { nombre: 'Eventos', valor: 350, delivery: false }])
+})
+
+test('medios de pago: efectivo + cada medio, grafías juntas, y lo que no suma la venta en su fila', () => {
+  const m = mediosDePago({
+    detalles: [
+      { metodo: 'MP POINT CREDITO', monto: 300 }, { metodo: 'MP Point Crédito', monto: 100 }, { metodo: 'Mp Point Credito', monto: 50 },
+      { metodo: 'Online Rappi', monto: 150 }, { metodo: null, monto: 20 }, { metodo: 'Credito', monto: 0 },
+    ],
+    efectivo: 200, venta: 1000,
+  })
+  assert.deepEqual(m.filas.map((f) => [f.nombre, f.valor]), [
+    ['MP POINT CREDITO', 450], ['Efectivo', 200], ['Online Rappi', 150], ['Sin nombre', 20], ['Sin detalle del medio de pago', 180],
+  ])
+  assert.equal(m.filas.find((f) => f.nombre === 'Online Rappi').app, true)
+  assert.equal(m.total, 1000)
+  assert.equal(m.filas[0].inc, 45)
+  // Si los medios suman más que la venta, la diferencia resta.
+  const d = mediosDePago({ detalles: [{ metodo: 'Debito', monto: 120 }], efectivo: 0, venta: 100 })
+  assert.deepEqual(d.filas.at(-1), { nombre: 'Diferencia con la venta', valor: -20, resto: true, inc: -20 })
+  assert.deepEqual(mediosDePago({}), { filas: [], total: null })
+})
+
+test('turnos: grafías juntas, mayúsculas prolijas y "Sin turno" al final', () => {
+  const t = turnosDe([
+    { turno: 'Noche', venta: 500, cajas: 5 }, { turno: 'NOCHE', venta: 100, cajas: 1 }, { turno: null, venta: 900, cajas: 9 },
+    { turno: 'MATINEE', venta: 200, cajas: 2 }, { turno: 'Evento', venta: 300, cajas: 1 },
+  ])
+  assert.deepEqual(t.filas.map((f) => [f.turno, f.venta, f.cajas]), [
+    ['Noche', 600, 6], ['Evento', 300, 1], ['Matinee', 200, 2], ['Sin turno', 900, 9],
+  ])
+  assert.equal(t.total, 2000)
+  assert.equal(t.filas[0].inc, 30)
+})
+
+test('hojas: se apagan y se ordenan por cliente; las de cada local salen juntas por local', () => {
+  const loc = (local) => ({
+    local, venta: { valor: 100 }, cubiertos: { valor: null }, ordenes: { valor: null },
+    canales: [{ nombre: 'Local', valor: 100, delivery: false }],
+    historico: [{ venta: { valor: 100 } }], delivery: [],
+    medios: { filas: [{ nombre: 'Efectivo', valor: 100 }] }, turnos: { filas: [] },
+  })
+  const locales = [loc('A'), loc('B')]
+  const consolidado = {}
+  const ids = (config) => paginasRv({ locales, consolidado, mes: '2026-10', config }).map((p) => p.id)
+  assert.deepEqual(ids([]), ['portada', 'sintesis', 'consolidado', 'consolidadoHist',
+    'mes:A', 'comparativo:A', 'historico:A', 'medios:A', 'mes:B', 'comparativo:B', 'historico:B', 'medios:B', 'acumulado', 'contraportada'])
+  // Apagar el histórico del grupo y llevar Medios de pago antes de los indicadores.
+  const orden = hojasRv({ locales, mes: '2026-10' }).map((h) => h.clave).filter((c) => c !== 'medios')
+  orden.splice(orden.indexOf('mes'), 0, 'medios')
+  const config = orden.map((clave, i) => ({ clave, visible: clave !== 'consolidadoHist', orden: i }))
+  assert.deepEqual(ids(config).slice(0, 6), ['portada', 'sintesis', 'consolidado', 'medios:A', 'mes:A', 'comparativo:A'])
+  // Turnos sin datos y consolidado con un local: no aplican, con su motivo.
+  const h = hojasRv({ locales: [loc('A')], mes: '2026-01' })
+  assert.equal(h.find((x) => x.clave === 'turnos').aplica, false)
+  assert.equal(h.find((x) => x.clave === 'consolidado').motivo, 'Solo para clientes con más de un local.')
+  assert.equal(h.find((x) => x.clave === 'acumulado').aplica, false)
 })

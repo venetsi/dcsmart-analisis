@@ -27,7 +27,7 @@ export default fp(async (fastify) => {
   // (pedido del usuario, 26/10/2026).
   const gestionLectura = process.env.GESTION_RO_HOST
     ? new pg.Pool({
-      host: process.env.GESTION_RO_HOST, database: process.env.GESTION_RO_DB || 'postgres',
+      host: process.env.GESTION_RO_HOST, port: process.env.GESTION_RO_PORT || undefined, database: process.env.GESTION_RO_DB || 'postgres',
       user: process.env.GESTION_RO_USER || 'analytics_ro', password: process.env.GESTION_RO_PASSWORD,
       options: '-c default_transaction_read_only=on',
       max: 3, statement_timeout: 15000

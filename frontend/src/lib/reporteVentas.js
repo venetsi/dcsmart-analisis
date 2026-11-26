@@ -93,9 +93,14 @@ function mismoTexto(a, b) {
   return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase()
 }
 
+// Canal de la venta de las cajas de turno Evento.
+export const EVENTOS = 'Eventos'
+export const esTurnoEvento = (turno) => String(turno ?? '').trim().toLowerCase() === 'evento'
+
 // Canales automáticos del mes a partir de los cobros y de las cajas.
 // Lo que no tiene regla ni es app queda dentro de "Local" (no se lista).
-export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [] }) {
+//   turnos: [{ turno, venta }]: las cajas de turno Evento van al canal Eventos.
+export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [], turnos = [] }) {
   const out = new Map()
   const sumar = (nombre, valor, delivery) => {
     const v = num(valor)
@@ -114,6 +119,7 @@ export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [] }) {
     const regla = reglas.find((r) => r.match === 'origen' && mismoTexto(r.valor, c.origin))
     if (regla) sumar(regla.canal, c.total, regla.delivery)
   }
+  for (const t of turnos) if (esTurnoEvento(t.turno)) sumar(EVENTOS, t.venta, false)
   return [...out.values()]
 }
 
@@ -167,6 +173,71 @@ function mesSiguiente(mes) {
 function mesAnioAnterior(mes) {
   const [a, m] = mes.split('-').map(Number)
   return mesDe(a - 1, m)
+}
+
+// Clave para juntar grafías del mismo medio ('MP Point Crédito' = 'MP POINT CREDITO').
+const claveTexto = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+// Medios de pago del mes: el efectivo de las cajas y cada medio de cobro (las grafías
+// distintas del mismo medio van juntas, con el nombre de la que más vendió). Si los
+// medios no suman la venta, la diferencia va en su propia fila. Mayor a menor.
+//   detalles: [{ metodo, monto }]; efectivo y venta: de las cajas.
+//   → { filas: [{ nombre, valor, inc, app?, resto? }], total }
+export function mediosDePago({ detalles = [], efectivo = null, venta = null }) {
+  const grupos = new Map()
+  for (const d of detalles) {
+    const v = num(d.monto)
+    if (v == null || v === 0) continue
+    const nombre = String(d.metodo ?? '').trim() || 'Sin nombre'
+    const k = claveTexto(nombre)
+    const g = grupos.get(k) || { valor: 0, grafias: new Map() }
+    g.valor += v
+    g.grafias.set(nombre, (g.grafias.get(nombre) || 0) + v)
+    grupos.set(k, g)
+  }
+  const filas = [...grupos.values()].map((g) => {
+    const nombre = [...g.grafias.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]
+    return { nombre, valor: r2(g.valor), ...(esApp(nombre) ? { app: true } : {}) }
+  })
+  const efvo = num(efectivo)
+  if (efvo != null && efvo !== 0) filas.push({ nombre: 'Efectivo', valor: r2(efvo) })
+  filas.sort((a, b) => b.valor - a.valor || a.nombre.localeCompare(b.nombre))
+  const sumados = filas.reduce((t, f) => t + f.valor, 0)
+  const vta = num(venta)
+  const resto = vta != null && filas.length ? r2(vta - sumados) : null
+  if (resto != null && Math.abs(resto) >= 1) {
+    filas.push({ nombre: resto > 0 ? 'Sin detalle del medio de pago' : 'Diferencia con la venta', valor: resto, resto: true })
+  }
+  const total = filas.length ? r2(filas.reduce((t, f) => t + f.valor, 0)) : null
+  return { filas: filas.map((f) => ({ ...f, inc: pct(f.valor, total) })), total }
+}
+
+// Venta por turno de caja (Mañana, Noche, Evento…). Las grafías del mismo turno van
+// juntas ('NOCHE' = 'Noche'); las cajas sin turno cargado, en "Sin turno", al final.
+//   lista: [{ turno, venta, cajas }] → { filas: [{ turno, venta, cajas, inc }], total }
+export const SIN_TURNO = 'Sin turno'
+export function turnosDe(lista = []) {
+  const grupos = new Map()
+  for (const t of lista) {
+    const nombre = String(t.turno ?? '').trim()
+    const k = nombre ? claveTexto(nombre) : ''
+    const g = grupos.get(k) || { venta: 0, cajas: 0, grafias: new Map() }
+    g.venta += num(t.venta) ?? 0
+    g.cajas += num(t.cajas) ?? 0
+    if (nombre) g.grafias.set(nombre, (g.grafias.get(nombre) || 0) + (num(t.cajas) ?? 0))
+    grupos.set(k, g)
+  }
+  // Nombre: la grafía más usada; si está toda en mayúsculas, con mayúscula inicial.
+  const lindo = (n) => (n === n.toUpperCase() ? n.charAt(0) + n.slice(1).toLowerCase() : n)
+  const filas = [...grupos.entries()]
+    .filter(([, g]) => g.cajas > 0 || g.venta !== 0)
+    .map(([k, g]) => ({
+      turno: k ? lindo([...g.grafias.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]) : SIN_TURNO,
+      venta: r2(g.venta), cajas: g.cajas,
+    }))
+    .sort((a, b) => (a.turno === SIN_TURNO) - (b.turno === SIN_TURNO) || b.venta - a.venta || a.turno.localeCompare(b.turno))
+  const total = filas.length ? r2(filas.reduce((t, f) => t + f.venta, 0)) : null
+  return { filas: filas.map((f) => ({ ...f, inc: pct(f.venta, total) })), total }
 }
 
 // Arma un local para el mes: venta, cubiertos, órdenes, canales con incidencia,
@@ -308,6 +379,10 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
   const hasta = Number(mes.slice(5, 7))
   const meses = Array.from({ length: hasta }, (_, i) => mesDe(anio, i + 1))
 
+  // Venta del canal Local (sin apps, eventos ni otros canales): la base del promedio por
+  // cubierto, porque los cubiertos son del salón (pedido del usuario, 26/11/2026).
+  const ventaLocal = (m, venta = datoBase(m, 'venta')) => canalesDe(m, venta).find((c) => c.nombre === LOCAL)?.valor ?? null
+
   const historico = meses.map((m) => {
     const venta = datoBase(m, 'venta')
     const cubiertos = datoBase(m, 'cubiertos')
@@ -317,13 +392,16 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     // Cubiertos y órdenes del mismo mes del año anterior, para las flechas de la hoja histórico.
     const cubiertosAnt = datoBase(mesAnioAnterior(m), 'cubiertos').valor
     const ordenesAnt = datoBase(mesAnioAnterior(m), 'ordenes').valor
+    const local = ventaLocal(m, venta)
+    const localAnt = ventaLocal(mesAnioAnterior(m))
     return {
-      mes: m, venta, anterior, previo, cubiertosAnt, ordenesAnt,
+      mes: m, venta, anterior, previo, cubiertosAnt, ordenesAnt, local, localAnt,
       varPesos: venta.valor != null && previo != null ? r2(venta.valor - previo) : null,
       varPct: variacion(venta.valor, previo),
       varAnual: variacion(venta.valor, anterior),
       cubiertos, ordenes,
-      promCubierto: dividir(cubiertos.base ?? venta.valor, cubiertos.valor),
+      promCubierto: dividir(local, cubiertos.valor),
+      promCubiertoAnt: dividir(localAnt, cubiertosAnt),
       promOrden: dividir(ordenes.base ?? venta.valor, ordenes.valor),
     }
   })
@@ -355,7 +433,7 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
   const canales = canalesDe(mes, actual.venta)
   const acumulado = acumuladoDe(historico.map((h) => ({
     venta: h.venta.valor, anterior: h.anterior, cubiertos: h.cubiertos.valor, ordenes: h.ordenes.valor,
-    baseCubiertos: h.cubiertos.base ?? h.venta.valor, baseOrdenes: h.ordenes.base ?? h.venta.valor,
+    baseCubiertos: h.local, baseOrdenes: h.ordenes.base ?? h.venta.valor,
   })))
   const alertas = []
   if (actual.venta.valor == null) alertas.push(`${local}: falta la venta del mes`)
@@ -372,11 +450,15 @@ export function armarLocal({ local, mes, auto = {}, valores = [], cierres = [] }
     porMes[m] = { mes: m, venta, cubiertos: datoBase(m, 'cubiertos'), canales: m === mes ? canales : canalesDe(m, venta) }
   }
 
+  // Medios de pago y turnos del mes: de gestión al día (no entran en la foto del cierre).
+  const medios = mediosDePago({ detalles: auto.detalles?.[mes] || [], efectivo: autoMeses[mes]?.efectivo, venta: autoMeses[mes]?.venta })
+  const turnos = turnosDe(auto.turnos?.[mes] || [])
+
   return {
     local,
     venta: actual.venta, cubiertos: actual.cubiertos, ordenes: actual.ordenes,
     promCubierto: actual.promCubierto, promOrden: actual.promOrden,
-    canales, historico, delivery, acumulado, alertas, porMes,
+    canales, historico, delivery, acumulado, alertas, porMes, medios, turnos,
   }
 }
 
@@ -409,7 +491,7 @@ function sumaEstricta(vals) {
 // páginas y si se puede cerrar el mes. `hoy` decide si el mes terminó.
 // También acepta `cierres` (parte de la interfaz), pero no lo usa: los cierres
 // ya entran en cada LocalMes por armarLocal.
-export function armarReporte({ cliente, mes, porLocal, hoy = new Date(), ipc = {}, observaciones = {} }) {
+export function armarReporte({ cliente, mes, porLocal, hoy = new Date(), ipc = {}, observaciones = {}, hojas = [] }) {
   const nombres = (cliente?.locales?.length ? cliente.locales : Object.keys(porLocal)).filter((l) => porLocal[l])
   const locales = nombres.map((l) => porLocal[l])
 
@@ -434,32 +516,7 @@ export function armarReporte({ cliente, mes, porLocal, hoy = new Date(), ipc = {
     consolidado = { filas, total, historico, acumulado }
   }
 
-  // Orden de las hojas (diseño de oct-26): portada, síntesis, consolidado del grupo
-  // (si hay más de un local), por local indicadores → canales → evolución → histórico
-  // → delivery, acumulado del año y contraportada.
-  const paginas = [{ id: 'portada', tipo: 'portada' }, { id: 'sintesis', tipo: 'sintesis' }]
-  if (consolidado) {
-    paginas.push({ id: 'consolidado', tipo: 'consolidado' })
-    paginas.push({ id: 'consolidadoHist', tipo: 'consolidadoHist' })
-  }
-  for (const l of locales) {
-    paginas.push({ id: `mes:${l.local}`, tipo: 'mes', local: l.local })
-    // Canales solo si hay alguno además de "Local" que no sea de delivery: un 100% Local
-    // no dice nada y las apps ya tienen su hoja (con su peso sobre la venta).
-    if (l.canales.some((c) => c.nombre !== LOCAL && !c.delivery && c.valor != null && c.valor !== 0)) {
-      paginas.push({ id: `canales:${l.local}`, tipo: 'canales', local: l.local })
-    }
-    // Venta mes a mes (contra el año anterior si lo hay): solo si hay alguna venta del año.
-    if (l.historico.some((h) => h.venta.valor != null)) {
-      paginas.push({ id: `comparativo:${l.local}`, tipo: 'comparativo', local: l.local })
-    }
-    paginas.push({ id: `historico:${l.local}`, tipo: 'historico', local: l.local })
-    const hayDelivery = l.delivery.some((d) => Object.values(d.apps).some((a) => a.venta != null && a.venta !== 0))
-    if (hayDelivery) paginas.push({ id: `delivery:${l.local}`, tipo: 'delivery', local: l.local })
-  }
-  // El acumulado de enero sería el mismo mes otra vez.
-  if (Number(mes.slice(5, 7)) > 1) paginas.push({ id: 'acumulado', tipo: 'acumulado' })
-  paginas.push({ id: 'contraportada', tipo: 'contraportada' })
+  const paginas = paginasRv({ locales, consolidado, mes, config: hojas })
 
   const motivos = []
   if (!(mes < mesDeFecha(hoy))) motivos.push(`El mes ${mes} todavía no terminó`)
@@ -468,7 +525,83 @@ export function armarReporte({ cliente, mes, porLocal, hoy = new Date(), ipc = {
     if (c && c.valor != null && c.valor < 0) motivos.push(`${l.local}: Local queda negativo`)
   }
 
-  return { cliente, mes, locales, consolidado, paginas, ipc, observaciones, puedeCerrar: motivos.length === 0, motivos }
+  return {
+    cliente, mes, locales, consolidado, paginas, hojas: hojasRv({ locales, mes, config: hojas }),
+    ipc, observaciones, puedeCerrar: motivos.length === 0, motivos,
+  }
+}
+
+// Hojas del reporte, en el orden por defecto (diseño de oct-26). alcance: 'cliente' (una
+// vez), 'grupo' (una vez, con más de un local) o 'local' (una por local).
+// `hay(local)`: si la hoja de ese local tiene algo que mostrar.
+export const HOJAS_RV = [
+  { clave: 'portada', titulo: 'Portada', alcance: 'cliente' },
+  { clave: 'sintesis', titulo: 'Síntesis', alcance: 'cliente' },
+  { clave: 'consolidado', titulo: 'Venta por local', alcance: 'grupo' },
+  { clave: 'consolidadoHist', titulo: 'Histórico del grupo', alcance: 'grupo' },
+  { clave: 'mes', titulo: 'Indicadores del mes', alcance: 'local' },
+  // Canales solo si hay alguno además de "Local" que no sea de delivery: un 100% Local
+  // no dice nada y las apps ya tienen su hoja (con su peso sobre la venta).
+  { clave: 'canales', titulo: 'Canales', alcance: 'local',
+    hay: (l) => l.canales.some((c) => c.nombre !== LOCAL && !c.delivery && c.valor != null && c.valor !== 0) },
+  { clave: 'comparativo', titulo: 'Mes a mes', alcance: 'local', hay: (l) => l.historico.some((h) => h.venta.valor != null) },
+  { clave: 'historico', titulo: 'Histórico', alcance: 'local' },
+  { clave: 'delivery', titulo: 'Delivery', alcance: 'local',
+    hay: (l) => l.delivery.some((d) => Object.values(d.apps).some((a) => a.venta != null && a.venta !== 0)) },
+  { clave: 'medios', titulo: 'Medios de pago', alcance: 'local', hay: (l) => (l.medios?.filas?.length ?? 0) > 0 },
+  { clave: 'turnos', titulo: 'Turnos', alcance: 'local', hay: (l) => (l.turnos?.filas?.length ?? 0) > 0 },
+  { clave: 'acumulado', titulo: 'Acumulado del año', alcance: 'cliente' },
+  { clave: 'contraportada', titulo: 'Contraportada', alcance: 'cliente' },
+]
+
+// Lista de hojas con lo que eligió el cliente: [{ clave, titulo, alcance, visible, aplica, motivo }]
+// en su orden. config: [{ clave, visible, orden }] (lo que no está va prendido y en su lugar).
+export function hojasRv({ locales = [], mes, config = [] }) {
+  const guardada = new Map((Array.isArray(config) ? config : []).filter((h) => h?.clave).map((h) => [h.clave, h]))
+  const varios = locales.length > 1
+  return HOJAS_RV
+    .map((h, i) => {
+      const g = guardada.get(h.clave) || {}
+      let motivo = null
+      if (h.alcance === 'grupo' && !varios) motivo = 'Solo para clientes con más de un local.'
+      else if (h.clave === 'acumulado' && Number(String(mes).slice(5, 7)) === 1) motivo = 'En enero sería el mismo mes otra vez.'
+      else if (h.hay && !locales.some(h.hay)) motivo = 'Sin datos este mes: no sale en el PDF.'
+      return {
+        clave: h.clave, titulo: h.titulo, alcance: h.alcance,
+        visible: typeof g.visible === 'boolean' ? g.visible : true,
+        orden: Number.isInteger(g.orden) ? g.orden : i,
+        aplica: !motivo, motivo, i,
+      }
+    })
+    .sort((a, b) => a.orden - b.orden || a.i - b.i)
+    .map(({ i, ...h }) => h)
+}
+
+// Páginas del PDF en orden. Las hojas por local que quedan seguidas en la lista salen
+// juntas para cada local (local 1: indicadores, canales…; local 2: indicadores…).
+export function paginasRv({ locales = [], consolidado = null, mes, config = [] }) {
+  const lista = hojasRv({ locales, mes, config }).filter((h) => h.visible && h.aplica)
+  const def = Object.fromEntries(HOJAS_RV.map((h) => [h.clave, h]))
+  const paginas = []
+  for (let i = 0; i < lista.length; i++) {
+    const h = lista[i]
+    if (h.alcance !== 'local') {
+      if (h.alcance === 'grupo' && !consolidado) continue
+      paginas.push({ id: h.clave, tipo: h.clave, clave: h.clave })
+      continue
+    }
+    let j = i
+    while (j + 1 < lista.length && lista[j + 1].alcance === 'local') j++
+    const tramo = lista.slice(i, j + 1)
+    for (const l of locales) {
+      for (const t of tramo) {
+        if (def[t.clave].hay && !def[t.clave].hay(l)) continue
+        paginas.push({ id: `${t.clave}:${l.local}`, tipo: t.clave, clave: t.clave, local: l.local })
+      }
+    }
+    i = j
+  }
+  return paginas
 }
 
 // Foto del mes para guardar al cerrar: solo valores, sin fuentes.
@@ -504,11 +637,12 @@ export function autoDeLocal(data, local) {
   const a = data.auto[local]
   if (!a) return null
   const reglas = data.reglas.filter((r) => r.local === local)
-  const meses = new Set([...Object.keys(a.detalles), ...Object.keys(a.cajasOrigen)])
+  const turnos = a.turnos || {}
+  const meses = new Set([...Object.keys(a.detalles), ...Object.keys(a.cajasOrigen), ...Object.keys(turnos)])
   const canales = {}
   // Mayor a menor: el orden de BigQuery no es estable entre consultas.
   for (const m of meses) {
-    canales[m] = canalesAuto({ detalles: a.detalles[m], cajasOrigen: a.cajasOrigen[m], reglas })
+    canales[m] = canalesAuto({ detalles: a.detalles[m], cajasOrigen: a.cajasOrigen[m], reglas, turnos: turnos[m] })
       .sort((x, y) => (y.valor ?? 0) - (x.valor ?? 0) || x.nombre.localeCompare(y.nombre))
   }
   // Tickets de cada app: la cantidad de cobros que trae gestión, por mes.
@@ -516,7 +650,7 @@ export function autoDeLocal(data, local) {
   for (const [m, cantidades] of Object.entries(a.cantidades || {})) {
     mesesAuto[m] = { ...mesesAuto[m], ...ticketsDelMes(cantidades, reglas) }
   }
-  return { meses: mesesAuto, canales }
+  return { meses: mesesAuto, canales, detalles: a.detalles, turnos }
 }
 
 // Datos de la API → un LocalMes por local.

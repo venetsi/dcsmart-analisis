@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla, datoLibre, obsOk, paginaOk, ipcOk, variacionesIpc, datoRestaurable } from './reporteVentas.js'
+import { esInterno, okDato, normalizarDato, mesCerrable, okMes, rangoReporte, nombresOk, snapshotOk, datoEnSnapshot, okOrigenRegla, datoLibre, obsOk, paginaOk, ipcOk, variacionesIpc, datoRestaurable, hojasRvOk } from './reporteVentas.js'
 
 test('esInterno: el is_admin externo no alcanza', () => {
   assert.equal(esInterno({ roles: ['dcsmart'] }), true)
@@ -120,4 +120,12 @@ test('IPC: variación mensual desde el índice de INDEC, sin saltar huecos', () 
 test('datoRestaurable: "Restaurar originales" del RV solo toca los datos del RV, no los del informe', () => {
   for (const d of ['venta', 'cubiertos', 'ordenes', 'canal:Eventos', 'tickets:Rappi']) assert.equal(datoRestaurable(d), true, d)
   for (const d of ['dias', 'ind:r50', 'pax', 'otra', '', null, undefined, 5]) assert.equal(datoRestaurable(d), false, String(d))
+})
+
+test('hojasRvOk: solo hojas conocidas del Reporte de Ventas, sin repetir', () => {
+  assert.deepEqual(hojasRvOk([{ clave: 'turnos', visible: false, orden: 2 }, { clave: 'medios' }]),
+    [{ clave: 'turnos', visible: false, orden: 2 }, { clave: 'medios', visible: true, orden: 1 }])
+  assert.equal(hojasRvOk([{ clave: 'cmv' }]), null)
+  assert.equal(hojasRvOk([{ clave: 'mes' }, { clave: 'mes' }]), null)
+  assert.equal(hojasRvOk('x'), null)
 })
