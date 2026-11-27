@@ -143,8 +143,9 @@ test('un mes que no terminó no se puede cerrar', () => {
   assert.equal(r.puedeCerrar, false)
   assert.equal(r.motivos.length, 1); assert.match(r.motivos[0], /no terminó/)
   assert.equal(r.consolidado, null)
+  // Todas las hojas por local salen siempre, con o sin datos (pedido del usuario, 27/11).
   assert.deepEqual(r.paginas.map((p) => p.tipo),
-    ['portada', 'sintesis', 'mes', 'comparativo', 'historico', 'acumulado', 'contraportada'])
+    ['portada', 'sintesis', 'mes', 'canales', 'comparativo', 'historico', 'delivery', 'deliveryHist', 'medios', 'turnos', 'acumulado', 'contraportada'])
 })
 test('consolidado de Grupo Perros sep-26', () => {
   // Setup: Togni's Café con Rappi (delivery), Togni's Pizza con Rappi y Pedidos Ya (delivery),
@@ -160,9 +161,9 @@ test('consolidado de Grupo Perros sep-26', () => {
     [['TOGNIS-CAFE', 80003001, 10.10], ['TOGNIS-PIZZA', 316106840, 39.90], ['EVELIA', 396160370, 50.00]])
   assert.deepEqual(r.paginas.map((p) => [p.tipo, p.local]), [
     ['portada', undefined], ['sintesis', undefined], ['consolidado', undefined], ['consolidadoHist', undefined],
-    ['mes', 'TOGNIS-CAFE'], ['canales', 'TOGNIS-CAFE'], ['comparativo', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'], ['deliveryHist', 'TOGNIS-CAFE'],
-    ['mes', 'TOGNIS-PIZZA'], ['canales', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'], ['deliveryHist', 'TOGNIS-PIZZA'],
-    ['mes', 'EVELIA'], ['comparativo', 'EVELIA'], ['historico', 'EVELIA'],
+    ['mes', 'TOGNIS-CAFE'], ['canales', 'TOGNIS-CAFE'], ['comparativo', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'], ['deliveryHist', 'TOGNIS-CAFE'], ['medios', 'TOGNIS-CAFE'], ['turnos', 'TOGNIS-CAFE'],
+    ['mes', 'TOGNIS-PIZZA'], ['canales', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'], ['deliveryHist', 'TOGNIS-PIZZA'], ['medios', 'TOGNIS-PIZZA'], ['turnos', 'TOGNIS-PIZZA'],
+    ['mes', 'EVELIA'], ['canales', 'EVELIA'], ['comparativo', 'EVELIA'], ['historico', 'EVELIA'], ['delivery', 'EVELIA'], ['deliveryHist', 'EVELIA'], ['medios', 'EVELIA'], ['turnos', 'EVELIA'],
     ['acumulado', undefined], ['contraportada', undefined]])
   assert.equal(new Set(r.paginas.map((p) => p.id)).size, r.paginas.length)
   assert.equal(r.puedeCerrar, true); assert.deepEqual(r.motivos, [])
@@ -259,14 +260,15 @@ test('cada local tiene su hoja de evolución mes a mes antes del histórico', ()
   const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: { '2025-09': { venta: 1 }, '2026-09': { venta: 200 } }, canales: {} },
     valores: [], cierres: [{ mes: '2025-09', origen: 'deck', snapshot: { locales: { P: { venta: 100 } } } }] })
   const r = armarReporte({ cliente: { nombre: 'P', locales: ['P'] }, mes: '2026-09', porLocal: { P: l }, cierres: [], hoy: HOY })
+  // Todas las hojas por local salen siempre, con o sin datos (pedido del usuario, 27/11).
   assert.deepEqual(r.paginas.map((p) => p.tipo),
-    ['portada', 'sintesis', 'mes', 'comparativo', 'historico', 'acumulado', 'contraportada'])
+    ['portada', 'sintesis', 'mes', 'canales', 'comparativo', 'historico', 'delivery', 'deliveryHist', 'medios', 'turnos', 'acumulado', 'contraportada'])
   assert.equal(new Set(r.paginas.map((p) => p.id)).size, r.paginas.length)
 })
-test('sin ninguna venta en el año no hay hoja de evolución; en enero no hay acumulado', () => {
+test('sin ninguna venta en el año la hoja de evolución sale igual (el local existe); en enero no hay acumulado', () => {
   const l = armarLocal({ local: 'P', mes: '2026-09', auto: { meses: {}, canales: {} }, valores: [], cierres: [] })
   const r = armarReporte({ cliente: { nombre: 'P', locales: ['P'] }, mes: '2026-09', porLocal: { P: l }, cierres: [], hoy: HOY })
-  assert.ok(!r.paginas.some((p) => p.tipo === 'comparativo'))
+  assert.ok(r.paginas.some((p) => p.tipo === 'comparativo'))
   const e = armarLocal({ local: 'P', mes: '2026-01', auto: { meses: { '2026-01': { venta: 5 } }, canales: {} }, valores: [], cierres: [] })
   const re = armarReporte({ cliente: { nombre: 'P', locales: ['P'] }, mes: '2026-01', porLocal: { P: e }, cierres: [], hoy: HOY })
   assert.ok(!re.paginas.some((p) => p.tipo === 'acumulado'))
@@ -298,7 +300,8 @@ test("canales: hoja propia con cualquier canal además de Local, apps incluidas 
   assert.ok(r1.paginas.some((p) => p.tipo === 'deliveryHist'))
   const soloLocal = armarLocal({ local: 'X', mes: '2026-09', valores: [], cierres: [], auto: { meses: { '2026-09': { venta: 1000 } }, canales: {} } })
   const r0 = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: soloLocal }, hoy: HOY })
-  assert.ok(!r0.paginas.some((p) => ['canales', 'delivery', 'deliveryHist'].includes(p.tipo)))
+  // Un local 100% salón también tiene sus hojas (pedido del usuario, 27/11): dicen que no hubo apps.
+  assert.ok(['canales', 'delivery', 'deliveryHist'].every((t) => r0.paginas.some((p) => p.tipo === t)))
   const conBigBox = armarLocal({ local: 'X', mes: '2026-09', cierres: [], auto: { meses: { '2026-09': { venta: 1000 } }, canales: {} },
     valores: [{ local: 'X', mes: '2026-09', dato: 'canal:Big Box', valor: 50 }] })
   const r2 = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: conBigBox }, hoy: HOY })
@@ -539,15 +542,16 @@ test('hojas: se apagan y se ordenan por cliente; las de cada local salen juntas 
   const consolidado = {}
   const ids = (config) => paginasRv({ locales, consolidado, mes: '2026-10', config }).map((p) => p.id)
   assert.deepEqual(ids([]), ['portada', 'sintesis', 'consolidado', 'consolidadoHist',
-    'mes:A', 'comparativo:A', 'historico:A', 'medios:A', 'mes:B', 'comparativo:B', 'historico:B', 'medios:B', 'acumulado', 'contraportada'])
+    'mes:A', 'canales:A', 'comparativo:A', 'historico:A', 'delivery:A', 'deliveryHist:A', 'medios:A', 'turnos:A',
+    'mes:B', 'canales:B', 'comparativo:B', 'historico:B', 'delivery:B', 'deliveryHist:B', 'medios:B', 'turnos:B', 'acumulado', 'contraportada'])
   // Apagar el histórico del grupo y llevar Medios de pago antes de los indicadores.
   const orden = hojasRv({ locales, mes: '2026-10' }).map((h) => h.clave).filter((c) => c !== 'medios')
   orden.splice(orden.indexOf('mes'), 0, 'medios')
   const config = orden.map((clave, i) => ({ clave, visible: clave !== 'consolidadoHist', orden: i }))
-  assert.deepEqual(ids(config).slice(0, 6), ['portada', 'sintesis', 'consolidado', 'medios:A', 'mes:A', 'comparativo:A'])
-  // Turnos sin datos y consolidado con un local: no aplican, con su motivo.
+  assert.deepEqual(ids(config).slice(0, 6), ['portada', 'sintesis', 'consolidado', 'medios:A', 'mes:A', 'canales:A'])
+  // Las hojas por local aplican siempre, aunque no tengan datos; el consolidado con un local no.
   const h = hojasRv({ locales: [loc('A')], mes: '2026-01' })
-  assert.equal(h.find((x) => x.clave === 'turnos').aplica, false)
+  assert.equal(h.find((x) => x.clave === 'turnos').aplica, true)
   assert.equal(h.find((x) => x.clave === 'consolidado').motivo, 'Solo para clientes con más de un local.')
   assert.equal(h.find((x) => x.clave === 'acumulado').aplica, false)
 })

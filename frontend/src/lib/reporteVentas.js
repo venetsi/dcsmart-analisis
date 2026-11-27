@@ -548,26 +548,22 @@ export function armarReporte({ cliente, mes, porLocal, hoy = new Date(), ipc = {
 
 // Hojas del reporte, en el orden por defecto (diseño de oct-26). alcance: 'cliente' (una
 // vez), 'grupo' (una vez, con más de un local) o 'local' (una por local).
-// `hay(local)`: si la hoja de ese local tiene algo que mostrar.
-// ¿El local vendió por alguna app en el año?
-const hayDelivery = (l) => l.delivery.some((d) => Object.values(d.apps).some((a) => a.venta != null && a.venta !== 0))
-
+// Las de cada local salen SIEMPRE para todos los locales del cliente, tengan o no datos (pedido
+// del usuario, 27/11: "si el local existe y está activo debería tener su pantalla"); sin datos,
+// la hoja lo dice. Se apagan por cliente desde la lista de hojas.
 export const HOJAS_RV = [
   { clave: 'portada', titulo: 'Portada', alcance: 'cliente' },
   { clave: 'sintesis', titulo: 'Síntesis', alcance: 'cliente' },
   { clave: 'consolidado', titulo: 'Venta por local', alcance: 'grupo' },
   { clave: 'consolidadoHist', titulo: 'Histórico del grupo', alcance: 'grupo' },
   { clave: 'mes', titulo: 'Indicadores del mes', alcance: 'local' },
-  // Canales si hay alguno además de "Local" (apps incluidas, pedido del usuario 27/11: en
-  // Grupo Perros solo salía en EVELIA, la única con un canal que no era app). 100% Local no dice nada.
-  { clave: 'canales', titulo: 'Canales', alcance: 'local',
-    hay: (l) => l.canales.some((c) => c.nombre !== LOCAL && c.valor != null && c.valor !== 0) },
-  { clave: 'comparativo', titulo: 'Mes a mes', alcance: 'local', hay: (l) => l.historico.some((h) => h.venta.valor != null) },
+  { clave: 'canales', titulo: 'Canales', alcance: 'local' },
+  { clave: 'comparativo', titulo: 'Mes a mes', alcance: 'local' },
   { clave: 'historico', titulo: 'Histórico', alcance: 'local' },
-  { clave: 'delivery', titulo: 'Delivery', alcance: 'local', hay: hayDelivery },
-  { clave: 'deliveryHist', titulo: 'Histórico de apps', alcance: 'local', hay: hayDelivery },
-  { clave: 'medios', titulo: 'Medios de pago', alcance: 'local', hay: (l) => (l.medios?.filas?.length ?? 0) > 0 },
-  { clave: 'turnos', titulo: 'Turnos', alcance: 'local', hay: (l) => (l.turnos?.filas?.length ?? 0) > 0 },
+  { clave: 'delivery', titulo: 'Delivery', alcance: 'local' },
+  { clave: 'deliveryHist', titulo: 'Histórico de apps', alcance: 'local' },
+  { clave: 'medios', titulo: 'Medios de pago', alcance: 'local' },
+  { clave: 'turnos', titulo: 'Turnos', alcance: 'local' },
   { clave: 'acumulado', titulo: 'Acumulado del año', alcance: 'cliente' },
   { clave: 'contraportada', titulo: 'Contraportada', alcance: 'cliente' },
 ]
@@ -583,7 +579,6 @@ export function hojasRv({ locales = [], mes, config = [] }) {
       let motivo = null
       if (h.alcance === 'grupo' && !varios) motivo = 'Solo para clientes con más de un local.'
       else if (h.clave === 'acumulado' && Number(String(mes).slice(5, 7)) === 1) motivo = 'En enero sería el mismo mes otra vez.'
-      else if (h.hay && !locales.some(h.hay)) motivo = 'Sin datos este mes: no sale en el PDF.'
       return {
         clave: h.clave, titulo: h.titulo, alcance: h.alcance,
         visible: typeof g.visible === 'boolean' ? g.visible : true,
@@ -599,7 +594,6 @@ export function hojasRv({ locales = [], mes, config = [] }) {
 // juntas para cada local (local 1: indicadores, canales…; local 2: indicadores…).
 export function paginasRv({ locales = [], consolidado = null, mes, config = [] }) {
   const lista = hojasRv({ locales, mes, config }).filter((h) => h.visible && h.aplica)
-  const def = Object.fromEntries(HOJAS_RV.map((h) => [h.clave, h]))
   const paginas = []
   for (let i = 0; i < lista.length; i++) {
     const h = lista[i]
@@ -613,7 +607,6 @@ export function paginasRv({ locales = [], consolidado = null, mes, config = [] }
     const tramo = lista.slice(i, j + 1)
     for (const l of locales) {
       for (const t of tramo) {
-        if (def[t.clave].hay && !def[t.clave].hay(l)) continue
         paginas.push({ id: `${t.clave}:${l.local}`, tipo: t.clave, clave: t.clave, local: l.local })
       }
     }

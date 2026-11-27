@@ -328,6 +328,11 @@ function Participacion({ filas, total, frase, grande, abajo, totalNombre = 'Tota
   )
 }
 
+// Hoja de un local sin datos de lo que muestra: lo dice, en vez de quedar vacía.
+function SinDatos({ children }) {
+  return <div className="rv-sin-datos">{children}</div>
+}
+
 // ---------------------------------------------------------------------------
 // Hojas
 
@@ -481,7 +486,9 @@ function Canales({ reporte, local: l, ...m }) {
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, 'Ventas por canal')} titulo={titularCanales(filas)}>
       <div className="rv-cuerpo">
         <Participacion filas={filas} total={l.venta.valor} compacto={!!m.obs}
-          frase={<>de los {esNum(l.venta.valor) ? texto(l.venta.valor, { pesos: true }) : '—'} del mes se vendió por el canal {top?.nombre}.</>} />
+          frase={filas.length === 1
+            ? <>de los {esNum(l.venta.valor) ? texto(l.venta.valor, { pesos: true }) : '—'} del mes se vendió en el local: no hubo apps, eventos ni otros canales.</>
+            : <>de los {esNum(l.venta.valor) ? texto(l.venta.valor, { pesos: true }) : '—'} del mes se vendió por el canal {top?.nombre}.</>} />
       </div>
     </Marco>
   )
@@ -701,7 +708,9 @@ function DeliveryHist({ reporte, local: l, ...m }) {
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Histórico ${anio} · apps de delivery`)}
       titulo="Venta por aplicación mes a mes" notaPie="Millones de $ · MA = mes anterior">
       <div className="rv-cuerpo">
-        <TablaMensual filas={filas} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
+        {apps.length
+          ? <TablaMensual filas={filas} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
+          : <SinDatos>El local no tuvo ventas por aplicaciones de delivery en {anio}.</SinDatos>}
       </div>
     </Marco>
   )
@@ -781,8 +790,10 @@ function Medios({ reporte, local: l, ...m }) {
       titulo={top ? `${top.nombre} fue el medio de pago más usado` : 'Venta por medio de pago'}
       notaPie="Efectivo: el de las cajas · Los demás medios: los cobros cargados en cada caja">
       <div className="rv-cuerpo">
-        <Participacion filas={filas} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
-          frase={<>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se cobró con {top?.nombre ?? '—'}.</>} />
+        {filas.length
+          ? <Participacion filas={filas} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
+              frase={<>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se cobró con {top?.nombre ?? '—'}.</>} />
+          : <SinDatos>Las cajas de {nombreMes(reporte.mes).toLowerCase()} no tienen cobros ni efectivo cargados.</SinDatos>}
       </div>
     </Marco>
   )
@@ -800,8 +811,8 @@ function Turnos({ reporte, local: l, ...m }) {
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Turnos · ${mesEnPalabras(reporte.mes)}`)}
       titulo={top ? `El turno ${top.turno} fue el que más vendió` : 'Venta por turno'}>
       <div className="rv-cuerpo">
-        <Participacion filas={lista} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
-          frase={top ? <>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se vendió en el turno {top.turno}.</> : <>Las cajas del mes no tienen turno cargado.</>} />
+        {!lista.length ? <SinDatos>No hay cajas cargadas en {nombreMes(reporte.mes).toLowerCase()}.</SinDatos> : <Participacion filas={lista} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
+          frase={top ? <>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se vendió en el turno {top.turno}.</> : <>Las cajas del mes no tienen turno cargado.</>} />}
       </div>
     </Marco>
   )
