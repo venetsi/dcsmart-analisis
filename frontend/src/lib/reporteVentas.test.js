@@ -160,8 +160,8 @@ test('consolidado de Grupo Perros sep-26', () => {
     [['TOGNIS-CAFE', 80003001, 10.10], ['TOGNIS-PIZZA', 316106840, 39.90], ['EVELIA', 396160370, 50.00]])
   assert.deepEqual(r.paginas.map((p) => [p.tipo, p.local]), [
     ['portada', undefined], ['sintesis', undefined], ['consolidado', undefined], ['consolidadoHist', undefined],
-    ['mes', 'TOGNIS-CAFE'], ['comparativo', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'],
-    ['mes', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'],
+    ['mes', 'TOGNIS-CAFE'], ['canales', 'TOGNIS-CAFE'], ['comparativo', 'TOGNIS-CAFE'], ['historico', 'TOGNIS-CAFE'], ['delivery', 'TOGNIS-CAFE'], ['deliveryHist', 'TOGNIS-CAFE'],
+    ['mes', 'TOGNIS-PIZZA'], ['canales', 'TOGNIS-PIZZA'], ['comparativo', 'TOGNIS-PIZZA'], ['historico', 'TOGNIS-PIZZA'], ['delivery', 'TOGNIS-PIZZA'], ['deliveryHist', 'TOGNIS-PIZZA'],
     ['mes', 'EVELIA'], ['comparativo', 'EVELIA'], ['historico', 'EVELIA'],
     ['acumulado', undefined], ['contraportada', undefined]])
   assert.equal(new Set(r.paginas.map((p) => p.id)).size, r.paginas.length)
@@ -289,12 +289,16 @@ test('acumulado del año: sumas estrictas, promedios y variación contra el año
   assert.equal(r.consolidado.historico[1].varPesos, 0)
 })
 
-test('canales: hoja propia solo con un canal que no sea de delivery (las apps van en la de delivery)', () => {
+test("canales: hoja propia con cualquier canal además de Local, apps incluidas (Togni's Café y Pizza, 27/11)", () => {
   const conApps = armarLocal({ local: 'X', mes: '2026-09', valores: [], cierres: [], auto: { meses: { '2026-09': { venta: 1000 } },
     canales: { '2026-09': canalesAuto({ detalles: [{ metodo: 'Rappi', monto: 100 }], cajasOrigen: [], reglas: [] }) } } })
   const r1 = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: conApps }, hoy: HOY })
-  assert.ok(!r1.paginas.some((p) => p.tipo === 'canales'))
+  assert.ok(r1.paginas.some((p) => p.tipo === 'canales'))
   assert.ok(r1.paginas.some((p) => p.tipo === 'delivery'))
+  assert.ok(r1.paginas.some((p) => p.tipo === 'deliveryHist'))
+  const soloLocal = armarLocal({ local: 'X', mes: '2026-09', valores: [], cierres: [], auto: { meses: { '2026-09': { venta: 1000 } }, canales: {} } })
+  const r0 = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: soloLocal }, hoy: HOY })
+  assert.ok(!r0.paginas.some((p) => ['canales', 'delivery', 'deliveryHist'].includes(p.tipo)))
   const conBigBox = armarLocal({ local: 'X', mes: '2026-09', cierres: [], auto: { meses: { '2026-09': { venta: 1000 } }, canales: {} },
     valores: [{ local: 'X', mes: '2026-09', dato: 'canal:Big Box', valor: 50 }] })
   const r2 = armarReporte({ cliente: { nombre: 'X', locales: ['X'] }, mes: '2026-09', porLocal: { X: conBigBox }, hoy: HOY })
@@ -474,6 +478,22 @@ test('canal Eventos: la venta de las cajas de turno Evento', () => {
     { turno: 'Noche', venta: 1000 }, { turno: 'Evento', venta: 300 }, { turno: ' evento ', venta: 50 }, { turno: null, venta: 70 },
   ] })
   assert.deepEqual(c, [{ nombre: 'Rappi', valor: 100, delivery: true }, { nombre: 'Eventos', valor: 350, delivery: false }])
+})
+
+test('turnos a mano del local (No Show, Cheaf…): cada uno es un canal; los demás turnos quedan en Local', () => {
+  const c = canalesAuto({ turnosCanal: ['No Show', 'E-commerce'], turnos: [
+    { turno: 'Noche', venta: 1000 }, { turno: 'No Show', venta: 30 }, { turno: 'NO SHOW', venta: 20 }, { turno: 'e-commerce', venta: 5 },
+    { turno: 'Otros', venta: 7 }, { turno: 'Evento', venta: 300 },
+  ] })
+  assert.deepEqual(c, [
+    { nombre: 'No Show', valor: 50, delivery: false }, { nombre: 'E-commerce', valor: 5, delivery: false }, { nombre: 'Eventos', valor: 300, delivery: false },
+  ])
+  // Con el nombre y la marca de delivery que tenía en los meses cerrados (decks de Perros).
+  const p = canalesAuto({ turnosCanal: ['E-commerce', 'No Show'], previos: [{ nombre: 'Ecommerce', delivery: true }, { nombre: 'NoShow', delivery: false }],
+    turnos: [{ turno: 'E-commerce', venta: 10 }, { turno: 'No Show', venta: 20 }] })
+  assert.deepEqual(p, [{ nombre: 'Ecommerce', valor: 10, delivery: true }, { nombre: 'NoShow', valor: 20, delivery: false }])
+  // Sin turnos a mano configurados, nada cambia.
+  assert.deepEqual(canalesAuto({ turnos: [{ turno: 'No Show', venta: 30 }] }), [])
 })
 
 test('medios de pago: efectivo + cada medio, grafías juntas, y lo que no suma la venta en su fila', () => {

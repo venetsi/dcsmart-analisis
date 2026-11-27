@@ -100,7 +100,12 @@ export const esTurnoEvento = (turno) => String(turno ?? '').trim().toLowerCase()
 // Canales automáticos del mes a partir de los cobros y de las cajas.
 // Lo que no tiene regla ni es app queda dentro de "Local" (no se lista).
 //   turnos: [{ turno, venta }]: las cajas de turno Evento van al canal Eventos.
-export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [], turnos = [] }) {
+//   turnosCanal: los turnos a mano del local en gestión (No Show, Cheaf…): sus cajas van a un
+//   canal con el nombre del turno (pedido del usuario, 27/11).
+//   previos: [{ nombre, delivery }] canales del local en los meses cerrados. Si un turno a mano
+//   es uno de ellos escrito distinto ('E-commerce' = 'Ecommerce', 'No Show' = 'NoShow'), toma
+//   ese nombre y su marca de delivery, para que la serie del año no se parta en dos.
+export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [], turnos = [], turnosCanal = [], previos = [] }) {
   const out = new Map()
   const sumar = (nombre, valor, delivery) => {
     const v = num(valor)
@@ -119,7 +124,15 @@ export function canalesAuto({ detalles = [], cajasOrigen = [], reglas = [], turn
     const regla = reglas.find((r) => r.match === 'origen' && mismoTexto(r.valor, c.origin))
     if (regla) sumar(regla.canal, c.total, regla.delivery)
   }
-  for (const t of turnos) if (esTurnoEvento(t.turno)) sumar(EVENTOS, t.venta, false)
+  const aMano = new Map(turnosCanal.map((n) => {
+    const previo = previos.find((p) => soloLetras(p.nombre) === soloLetras(n))
+    return [soloLetras(n), previo ? { nombre: previo.nombre, delivery: !!previo.delivery } : { nombre: n, delivery: false }]
+  }))
+  for (const t of turnos) {
+    const canal = aMano.get(soloLetras(t.turno))
+    if (esTurnoEvento(t.turno)) sumar(EVENTOS, t.venta, false)
+    else if (canal) sumar(canal.nombre, t.venta, canal.delivery)
+  }
   return [...out.values()]
 }
 
@@ -177,6 +190,8 @@ function mesAnioAnterior(mes) {
 
 // Clave para juntar grafías del mismo medio ('MP Point Crédito' = 'MP POINT CREDITO').
 const claveTexto = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/\s+/g, ' ')
+// Solo letras y números: 'No Show' = 'NoShow', 'E-commerce' = 'Ecommerce'.
+const soloLetras = (t) => claveTexto(t).replace(/[^a-z0-9]/g, '')
 
 // Medios de pago del mes: el efectivo de las cajas y cada medio de cobro (las grafías
 // distintas del mismo medio van juntas, con el nombre de la que más vendió). Si los
@@ -534,20 +549,23 @@ export function armarReporte({ cliente, mes, porLocal, hoy = new Date(), ipc = {
 // Hojas del reporte, en el orden por defecto (diseño de oct-26). alcance: 'cliente' (una
 // vez), 'grupo' (una vez, con más de un local) o 'local' (una por local).
 // `hay(local)`: si la hoja de ese local tiene algo que mostrar.
+// ¿El local vendió por alguna app en el año?
+const hayDelivery = (l) => l.delivery.some((d) => Object.values(d.apps).some((a) => a.venta != null && a.venta !== 0))
+
 export const HOJAS_RV = [
   { clave: 'portada', titulo: 'Portada', alcance: 'cliente' },
   { clave: 'sintesis', titulo: 'Síntesis', alcance: 'cliente' },
   { clave: 'consolidado', titulo: 'Venta por local', alcance: 'grupo' },
   { clave: 'consolidadoHist', titulo: 'Histórico del grupo', alcance: 'grupo' },
   { clave: 'mes', titulo: 'Indicadores del mes', alcance: 'local' },
-  // Canales solo si hay alguno además de "Local" que no sea de delivery: un 100% Local
-  // no dice nada y las apps ya tienen su hoja (con su peso sobre la venta).
+  // Canales si hay alguno además de "Local" (apps incluidas, pedido del usuario 27/11: en
+  // Grupo Perros solo salía en EVELIA, la única con un canal que no era app). 100% Local no dice nada.
   { clave: 'canales', titulo: 'Canales', alcance: 'local',
-    hay: (l) => l.canales.some((c) => c.nombre !== LOCAL && !c.delivery && c.valor != null && c.valor !== 0) },
+    hay: (l) => l.canales.some((c) => c.nombre !== LOCAL && c.valor != null && c.valor !== 0) },
   { clave: 'comparativo', titulo: 'Mes a mes', alcance: 'local', hay: (l) => l.historico.some((h) => h.venta.valor != null) },
   { clave: 'historico', titulo: 'Histórico', alcance: 'local' },
-  { clave: 'delivery', titulo: 'Delivery', alcance: 'local',
-    hay: (l) => l.delivery.some((d) => Object.values(d.apps).some((a) => a.venta != null && a.venta !== 0)) },
+  { clave: 'delivery', titulo: 'Delivery', alcance: 'local', hay: hayDelivery },
+  { clave: 'deliveryHist', titulo: 'Histórico de apps', alcance: 'local', hay: hayDelivery },
   { clave: 'medios', titulo: 'Medios de pago', alcance: 'local', hay: (l) => (l.medios?.filas?.length ?? 0) > 0 },
   { clave: 'turnos', titulo: 'Turnos', alcance: 'local', hay: (l) => (l.turnos?.filas?.length ?? 0) > 0 },
   { clave: 'acumulado', titulo: 'Acumulado del año', alcance: 'cliente' },
@@ -638,11 +656,20 @@ export function autoDeLocal(data, local) {
   if (!a) return null
   const reglas = data.reglas.filter((r) => r.local === local)
   const turnos = a.turnos || {}
+  // Canales de los meses cerrados (el último cierre manda), para los turnos a mano.
+  const porNombre = new Map()
+  for (const c of [...(data.cierres || [])].sort((x, y) => x.mes.localeCompare(y.mes))) {
+    const s = c.snapshot?.locales?.[local]
+    for (const nombre of Object.keys(s?.canales || {})) {
+      if (nombre !== LOCAL) porNombre.set(nombre, { nombre, delivery: Array.isArray(s.delivery) && s.delivery.includes(nombre) })
+    }
+  }
+  const previos = [...porNombre.values()]
   const meses = new Set([...Object.keys(a.detalles), ...Object.keys(a.cajasOrigen), ...Object.keys(turnos)])
   const canales = {}
   // Mayor a menor: el orden de BigQuery no es estable entre consultas.
   for (const m of meses) {
-    canales[m] = canalesAuto({ detalles: a.detalles[m], cajasOrigen: a.cajasOrigen[m], reglas, turnos: turnos[m] })
+    canales[m] = canalesAuto({ detalles: a.detalles[m], cajasOrigen: a.cajasOrigen[m], reglas, turnos: turnos[m], turnosCanal: a.turnosCanal, previos })
       .sort((x, y) => (y.valor ?? 0) - (x.valor ?? 0) || x.nombre.localeCompare(y.nombre))
   }
   // Tickets de cada app: la cantidad de cobros que trae gestión, por mes.

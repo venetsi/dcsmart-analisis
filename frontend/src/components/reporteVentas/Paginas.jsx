@@ -680,6 +680,33 @@ function Delivery({ reporte, local: l, ...m }) {
   )
 }
 
+// Histórico de las apps de delivery (pedido del usuario, 27/11): la venta de cada app mes a
+// mes, el total del delivery, su variación contra el mes anterior y cuánto pesó sobre la venta.
+function DeliveryHist({ reporte, local: l, ...m }) {
+  const anio = Number(reporte.mes.slice(0, 4))
+  const totalApp = (app) => suma(l.delivery.map((d) => d.apps[app]?.venta ?? 0))
+  const apps = [...new Set(l.delivery.flatMap((d) => Object.keys(d.apps)))]
+    .sort((a, b) => (totalApp(b) ?? 0) - (totalApp(a) ?? 0) || a.localeCompare(b))
+  const filas = l.delivery.map((d, i) => ({ ...d, venta: l.historico[i]?.venta.valor ?? null }))
+  const pctVenta = (t, v) => (esNum(t) && esNum(v) && v !== 0 ? (100 * t) / v : null)
+  const totDelivery = suma(filas.map((f) => f.total ?? 0))
+  const cols = [
+    ...apps.map((app) => ({ k: `a:${app}`, th: app, td: (f) => <Mill v={f.apps[app]?.venta ?? null} />, tot: <Mill v={totalApp(app)} /> })),
+    { k: 't', th: 'Total delivery', clase: 'rv-fuerte', td: (f) => <Mill v={f.total} />, tot: <Mill v={totDelivery} /> },
+    { k: 'vpc', th: 'Var. % MA', td: (f) => <Num v={f.varPct} pct signo /> },
+    { k: 'pv', th: '% de la venta', td: (f) => <Num v={pctVenta(f.total, f.venta)} pct />,
+      tot: <Num v={pctVenta(totDelivery, l.acumulado.venta)} pct /> },
+  ]
+  return (
+    <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Histórico ${anio} · apps de delivery`)}
+      titulo="Venta por aplicación mes a mes" notaPie="Millones de $ · MA = mes anterior">
+      <div className="rv-cuerpo">
+        <TablaMensual filas={filas} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
+      </div>
+    </Marco>
+  )
+}
+
 // Acumulado del año: del grupo si hay más de un local, si no del local. Con la
 // inflación de INDEC para comparar: la del mes, la del año y el crecimiento real.
 function Acumulado({ reporte, ...m }) {
@@ -782,7 +809,7 @@ function Turnos({ reporte, local: l, ...m }) {
 
 const HOJAS = {
   portada: Portada, sintesis: Sintesis, consolidado: Consolidado, consolidadoHist: ConsolidadoHist,
-  mes: Mes, canales: Canales, comparativo: Comparativo, historico: Historico, delivery: Delivery,
+  mes: Mes, canales: Canales, comparativo: Comparativo, historico: Historico, delivery: Delivery, deliveryHist: DeliveryHist,
   medios: Medios, turnos: Turnos, acumulado: Acumulado, contraportada: Contraportada,
 }
 

@@ -130,7 +130,7 @@ function mesSiguiente (mes) {
 // Hojas del Reporte de Ventas que se pueden prender, apagar y ordenar por cliente
 // (como en el Informe mensual). Misma lista que HOJAS_RV del frontend.
 export const HOJAS_RV = ['portada', 'sintesis', 'consolidado', 'consolidadoHist', 'mes', 'canales', 'comparativo',
-  'historico', 'delivery', 'medios', 'turnos', 'acumulado', 'contraportada']
+  'historico', 'delivery', 'deliveryHist', 'medios', 'turnos', 'acumulado', 'contraportada']
 
 // Config de hojas: [{ clave, visible, orden }] solo con claves conocidas y sin repetir (null si no sirve).
 export function hojasRvOk (v) {
