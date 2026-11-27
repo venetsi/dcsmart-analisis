@@ -328,6 +328,11 @@ function Participacion({ filas, total, frase, grande, abajo, totalNombre = 'Tota
   )
 }
 
+// Hoja de un local sin datos de lo que muestra: lo dice, en vez de quedar vacía.
+function SinDatos({ children }) {
+  return <div className="rv-sin-datos">{children}</div>
+}
+
 // ---------------------------------------------------------------------------
 // Hojas
 
@@ -481,7 +486,9 @@ function Canales({ reporte, local: l, ...m }) {
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, 'Ventas por canal')} titulo={titularCanales(filas)}>
       <div className="rv-cuerpo">
         <Participacion filas={filas} total={l.venta.valor} compacto={!!m.obs}
-          frase={<>de los {esNum(l.venta.valor) ? texto(l.venta.valor, { pesos: true }) : '—'} del mes se vendió por el canal {top?.nombre}.</>} />
+          frase={filas.length === 1
+            ? <>de los {esNum(l.venta.valor) ? texto(l.venta.valor, { pesos: true }) : '—'} del mes se vendió en el local: no hubo apps, eventos ni otros canales.</>
+            : <>de los {esNum(l.venta.valor) ? texto(l.venta.valor, { pesos: true }) : '—'} del mes se vendió por el canal {top?.nombre}.</>} />
       </div>
     </Marco>
   )
@@ -680,6 +687,35 @@ function Delivery({ reporte, local: l, ...m }) {
   )
 }
 
+// Histórico de las apps de delivery (pedido del usuario, 27/11): la venta de cada app mes a
+// mes, el total del delivery, su variación contra el mes anterior y cuánto pesó sobre la venta.
+function DeliveryHist({ reporte, local: l, ...m }) {
+  const anio = Number(reporte.mes.slice(0, 4))
+  const totalApp = (app) => suma(l.delivery.map((d) => d.apps[app]?.venta ?? 0))
+  const apps = [...new Set(l.delivery.flatMap((d) => Object.keys(d.apps)))]
+    .sort((a, b) => (totalApp(b) ?? 0) - (totalApp(a) ?? 0) || a.localeCompare(b))
+  const filas = l.delivery.map((d, i) => ({ ...d, venta: l.historico[i]?.venta.valor ?? null }))
+  const pctVenta = (t, v) => (esNum(t) && esNum(v) && v !== 0 ? (100 * t) / v : null)
+  const totDelivery = suma(filas.map((f) => f.total ?? 0))
+  const cols = [
+    ...apps.map((app) => ({ k: `a:${app}`, th: app, td: (f) => <Mill v={f.apps[app]?.venta ?? null} />, tot: <Mill v={totalApp(app)} /> })),
+    { k: 't', th: 'Total delivery', clase: 'rv-fuerte', td: (f) => <Mill v={f.total} />, tot: <Mill v={totDelivery} /> },
+    { k: 'vpc', th: 'Var. % MA', td: (f) => <Num v={f.varPct} pct signo /> },
+    { k: 'pv', th: '% de la venta', td: (f) => <Num v={pctVenta(f.total, f.venta)} pct />,
+      tot: <Num v={pctVenta(totDelivery, l.acumulado.venta)} pct /> },
+  ]
+  return (
+    <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Histórico ${anio} · apps de delivery`)}
+      titulo="Venta por aplicación mes a mes" notaPie="Millones de $ · MA = mes anterior">
+      <div className="rv-cuerpo">
+        {apps.length
+          ? <TablaMensual filas={filas} cols={cols} mesActual={reporte.mes} total apretada={!!m.obs} />
+          : <SinDatos>El local no tuvo ventas por aplicaciones de delivery en {anio}.</SinDatos>}
+      </div>
+    </Marco>
+  )
+}
+
 // Acumulado del año: del grupo si hay más de un local, si no del local. Con la
 // inflación de INDEC para comparar: la del mes, la del año y el crecimiento real.
 function Acumulado({ reporte, ...m }) {
@@ -754,8 +790,10 @@ function Medios({ reporte, local: l, ...m }) {
       titulo={top ? `${top.nombre} fue el medio de pago más usado` : 'Venta por medio de pago'}
       notaPie="Efectivo: el de las cajas · Los demás medios: los cobros cargados en cada caja">
       <div className="rv-cuerpo">
-        <Participacion filas={filas} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
-          frase={<>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se cobró con {top?.nombre ?? '—'}.</>} />
+        {filas.length
+          ? <Participacion filas={filas} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
+              frase={<>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se cobró con {top?.nombre ?? '—'}.</>} />
+          : <SinDatos>Las cajas de {nombreMes(reporte.mes).toLowerCase()} no tienen cobros ni efectivo cargados.</SinDatos>}
       </div>
     </Marco>
   )
@@ -773,8 +811,8 @@ function Turnos({ reporte, local: l, ...m }) {
     <Marco m={{ reporte, ...m }} ceja={cejaLocal(reporte, l, `Turnos · ${mesEnPalabras(reporte.mes)}`)}
       titulo={top ? `El turno ${top.turno} fue el que más vendió` : 'Venta por turno'}>
       <div className="rv-cuerpo">
-        <Participacion filas={lista} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
-          frase={top ? <>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se vendió en el turno {top.turno}.</> : <>Las cajas del mes no tienen turno cargado.</>} />
+        {!lista.length ? <SinDatos>No hay cajas cargadas en {nombreMes(reporte.mes).toLowerCase()}.</SinDatos> : <Participacion filas={lista} total={total} compacto={!!m.obs} grande={esNum(top?.inc) ? `${fmtAR(top.inc, 1)}%` : '—'}
+          frase={top ? <>de los {esNum(total) ? texto(total, { pesos: true }) : '—'} del mes se vendió en el turno {top.turno}.</> : <>Las cajas del mes no tienen turno cargado.</>} />}
       </div>
     </Marco>
   )
@@ -782,7 +820,7 @@ function Turnos({ reporte, local: l, ...m }) {
 
 const HOJAS = {
   portada: Portada, sintesis: Sintesis, consolidado: Consolidado, consolidadoHist: ConsolidadoHist,
-  mes: Mes, canales: Canales, comparativo: Comparativo, historico: Historico, delivery: Delivery,
+  mes: Mes, canales: Canales, comparativo: Comparativo, historico: Historico, delivery: Delivery, deliveryHist: DeliveryHist,
   medios: Medios, turnos: Turnos, acumulado: Acumulado, contraportada: Contraportada,
 }
 

@@ -87,6 +87,23 @@ export default async function (fastify) {
       return {}
     }
   }
+  // { local: ['No Show', 'Cheaf'] }: los turnos a mano de cada local en gestión (tabla local_turnos_a_mano de la 2.0,
+  // 27/11). Las cajas con esos turnos son un canal propio, como las de Evento. Sin la tabla, el reporte sale igual.
+  const turnosCanalDe = async (grupo, locales) => {
+    if (!locales.length) return {}
+    try {
+      const { rows } = await fastify.dcsmartRo.query(
+        `SELECT l.nombre AS local, t.nombre FROM local_turnos_a_mano t
+           JOIN locales l ON l.id = t.id_local JOIN apps a ON a.id = l.id_app
+          WHERE a.nombre = $1 AND l.nombre = ANY($2) ORDER BY t.orden, t.nombre`, [grupo, locales])
+      const out = {}
+      for (const r of rows) (out[r.local] ||= []).push(r.nombre)
+      return out
+    } catch (err) {
+      fastify.log.warn({ err }, 'reporte-ventas: no se pudieron leer los turnos a mano de gestión')
+      return {}
+    }
+  }
   // Inflación mensual (IPC de INDEC) para el acumulado; si falla, el reporte sale igual sin ella.
   const ipc = crearIpc({ db, log: fastify.log })
   const ipcDe = async (desde, hasta) => {
@@ -121,7 +138,7 @@ export default async function (fastify) {
 
     // BigQuery no acepta un arreglo vacío como parámetro: sin locales no hay nada que consultar.
     const bq = cli.locales.length ? (q) => fastify.bq.query(q) : async () => [[]]
-    const [[ventasRows], [detRows], [origRows], [idsRows], [turnoRows], valores, cierres, reglas, historial, observaciones, inflacion, hojas] = await Promise.all([
+    const [[ventasRows], [detRows], [origRows], [idsRows], [turnoRows], valores, cierres, reglas, historial, observaciones, inflacion, hojas, turnosCanal] = await Promise.all([
       // SUM sin COALESCE: si todo es NULL el dato no existe (null, no 0).
       // cajas / sinCubiertos / sinOrdenes: cuántas cajas hubo y cuántas no informaron
       // (NULL o 0). ventaConCubiertos / ventaConOrdenes: la venta de las cajas que sí
@@ -179,9 +196,10 @@ export default async function (fastify) {
                  WHERE cliente_id = $1 AND mes = $2 AND reporte = 'ventas'`, [id, mes]),
       ipcDe(desde.slice(0, 7), mes),
       db.query(`SELECT hojas FROM reporte_hojas WHERE cliente_id = $1 AND reporte = 'ventas'`, [id]),
+      turnosCanalDe(cli.grupo, cli.locales),
     ])
 
-    const auto = Object.fromEntries(cli.locales.map((l) => [l, { meses: {}, detalles: {}, cajasOrigen: {}, turnos: {} }]))
+    const auto = Object.fromEntries(cli.locales.map((l) => [l, { meses: {}, detalles: {}, cajasOrigen: {}, turnos: {}, turnosCanal: turnosCanal[l] || [] }]))
     for (const r of plainRows(turnoRows)) {
       if (!auto[r.local]) continue
       ;(auto[r.local].turnos[r.mes] ||= []).push({

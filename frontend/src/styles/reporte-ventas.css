@@ -65,6 +65,8 @@
 /* participación (canales y locales) */
 .rv-part { display: grid; grid-template-columns: 1fr 783px; gap: 60px; align-items: center; min-height: 420px; }
 .rv-part-big { font-size: 128px; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: var(--rv-oro); }
+/* Hoja de un local sin datos (todas las hojas por local salen siempre, 27/11). */
+.rv-sin-datos { display: flex; align-items: center; justify-content: center; min-height: 360px; padding: 40px; border: 1px dashed var(--rv-borde); border-radius: 10px; font-size: 28px; line-height: 1.4; color: var(--rv-tx-2); text-align: center; }
 .rv-part-txt { margin-top: 18px; font-size: 25px; line-height: 1.4; color: var(--rv-tx-2); max-width: 400px; }
 .rv-part-lista { background: var(--rv-card); border: 1px solid var(--rv-borde); border-radius: 10px; padding: 14px 30px 30px; }
 .rv-part-fila { display: flex; flex-direction: column; justify-content: center; gap: 10px; border-bottom: 1px solid #23303e; padding: 18px 0; }

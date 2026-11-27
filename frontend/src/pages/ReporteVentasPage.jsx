@@ -162,7 +162,7 @@ export default function ReporteVentasPage() {
     const n = p.local ? nombreLocal(p.local) : ''
     return { portada: 'Portada', sintesis: 'Síntesis', consolidado: 'Venta por local', consolidadoHist: 'Histórico del grupo',
       mes: `${n} · indicadores`, canales: `${n} · canales`, comparativo: `${n} · mes a mes`, historico: `${n} · histórico`,
-      delivery: `${n} · delivery`, medios: `${n} · medios de pago`, turnos: `${n} · turnos`,
+      delivery: `${n} · delivery`, deliveryHist: `${n} · histórico de apps`, medios: `${n} · medios de pago`, turnos: `${n} · turnos`,
       acumulado: 'Acumulado del año', contraportada: 'Contraportada' }[p.tipo]
   }
   // En la tira todas las miniaturas son de la misma hoja: alcanza con el local.

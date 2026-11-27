@@ -248,6 +248,9 @@ function DatosHoja({ reporte, pagina, data, interno, cerradoMes, ocupado, onGuar
   if (pagina?.tipo === 'medios') {
     return <PanelVacio texto="Sale de las cajas del mes en gestión: el efectivo de cada caja y sus cobros por medio de pago. Si los medios no suman la venta, la diferencia va en su propia fila. No se corrige acá: se corrige la caja en gestión." />
   }
+  if (pagina?.tipo === 'deliveryHist') {
+    return <PanelVacio texto="Esta hoja muestra la venta de cada app mes a mes. Para corregir un número, usá la hoja canales (venta de la app) o delivery (tickets) del mes." />
+  }
   if (pagina?.tipo === 'turnos') {
     return <PanelVacio texto="Sale del turno de cada caja en gestión. Las cajas sin turno cargado van en “Sin turno”. No se corrige acá: se corrige la caja en gestión." />
   }
